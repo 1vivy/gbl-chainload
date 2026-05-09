@@ -1,0 +1,43 @@
+## @file
+#  GblChainload package declaration.
+#
+#  Sibling-pkg replacement for gbl_root_canoe's in-tree QcomModulePkg edits.
+#  All app/lib code lives under this package; edk2 stays unmodified.
+##
+
+[Defines]
+  DEC_SPECIFICATION              = 0x00010005
+  PACKAGE_NAME                   = GblChainloadPkg
+  PACKAGE_GUID                   = a21a823f-997f-4036-bc09-57e6c19553d7
+  PACKAGE_VERSION                = 1.0
+
+[Includes]
+  Include
+
+[LibraryClasses]
+  ## Mount logfs partition + maintain post-GBL log file with rotation.
+  LogFsLib|Include/Library/LogFsLib.h
+  ## Read+unwrap ABL partition into a PE32+ buffer.
+  AblUnwrapLib|Include/Library/AblUnwrapLib.h
+  ## In-memory dynamic patcher for the unwrapped ABL.
+  DynamicPatchLib|Include/Library/DynamicPatchLib.h
+  ## Vtable hooks on Qualcomm protocols (QSEECOM, SCM, VB, SPSS).
+  ProtocolHookLib|Include/Library/ProtocolHookLib.h
+  ## Internal PE scanner used by DynamicPatchLib.
+  ScanLib|Include/Library/ScanLib.h
+
+[Guids]
+  ## Token space GUID for GblChainloadPkg PCDs.
+  gGblChainloadPkgTokenSpaceGuid = { 0xa1b2c3d4, 0xe5f6, 0x0708, { 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10 } }
+
+[Protocols]
+  # (none yet)
+
+[Ppis]
+  # (none yet)
+
+[PcdsFixedAtBuild]
+  # (none yet)
+
+[PcdsFeatureFlag]
+  # (none yet)
