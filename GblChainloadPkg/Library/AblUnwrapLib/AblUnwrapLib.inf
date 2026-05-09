@@ -1,0 +1,35 @@
+## @file AblUnwrapLib.inf
+#  Read abl partition and walk Qualcomm's FV/FFS/section envelope to
+#  extract the inner PE32+. Step 5 of bring-up.
+##
+
+[Defines]
+  INF_VERSION                    = 0x00010006
+  BASE_NAME                      = AblUnwrapLib
+  FILE_GUID                      = 8d2c3a14-9b6e-4f72-bd91-4a76f0e5c8d3
+  MODULE_TYPE                    = BASE
+  VERSION_STRING                 = 0.1
+  LIBRARY_CLASS                  = AblUnwrapLib
+
+[Sources]
+  AblUnwrapLib.c
+
+[Packages]
+  MdePkg/MdePkg.dec
+  MdeModulePkg/MdeModulePkg.dec
+  QcomModulePkg/QcomModulePkg.dec
+  GblChainloadPkg/GblChainloadPkg.dec
+
+[LibraryClasses]
+  BaseLib
+  BaseMemoryLib
+  DebugLib
+  MemoryAllocationLib
+  UefiBootServicesTableLib
+  BootLib
+  ## LZMA decompression for canoe ABL's compressed FFS sections.
+  LzmaDecompressLib
+
+[Protocols]
+  gEfiBlockIoProtocolGuid
+  gEfiPartitionRecordGuid
