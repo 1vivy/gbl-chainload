@@ -4,10 +4,12 @@ dist/
 *.o
 *.obj
 *.efi.unsigned
+tools/abl-patcher/abl-patcher
 
 # Stock OTA partition images — never tracked
 images/
 !images/.gitkeep
+!images/README.md
 
 # Mode-2 profile payloads — gitignored; manifest.json is tracked (Plan 2)
 profiles/*/profile.h
