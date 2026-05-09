@@ -6,7 +6,7 @@ DPL     := $(PROJ)/GblChainloadPkg/Library/DynamicPatchLib
 INCLUDES := -I$(PROJ)/GblChainloadPkg/Include/Library \
             -I$(DPL)/Internal
 
-TESTS := test_patch1
+TESTS := test_patch1 test_patch7
 
 all: $(TESTS)
 	@for t in $(TESTS); do echo "== $$t =="; ./$$t || exit 1; done
@@ -15,6 +15,13 @@ test_patch1: test_patch1.c \
              $(DPL)/Internal/ScanLib.c \
              $(DPL)/Internal/PeSections.c \
              $(DPL)/universal/universal.c
+	$(CC) $(CFLAGS) $(INCLUDES) $^ -o $@
+
+test_patch7: test_patch7.c \
+             $(DPL)/Internal/ScanLib.c \
+             $(DPL)/Internal/PeSections.c \
+             $(DPL)/Internal/Encode.c \
+             $(DPL)/oem/oneplus_canoe.c
 	$(CC) $(CFLAGS) $(INCLUDES) $^ -o $@
 
 clean:
