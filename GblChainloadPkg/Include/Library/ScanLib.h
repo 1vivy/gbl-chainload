@@ -18,11 +18,17 @@ typedef uint8_t  UINT8;
 #ifndef UINT32
 typedef uint32_t UINT32;
 #endif
+#ifndef INT32
+typedef int32_t  INT32;
+#endif
 #ifndef UINTN
 typedef size_t   UINTN;
 #endif
 #ifndef BOOLEAN
 typedef int      BOOLEAN;
+#endif
+#ifndef VOID
+#define VOID void
 #endif
 #ifndef CONST
 #define CONST const
