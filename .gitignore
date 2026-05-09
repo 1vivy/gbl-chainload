@@ -1,0 +1,34 @@
+# Build outputs
+Build/
+dist/
+*.o
+*.obj
+*.efi.unsigned
+
+# Stock OTA partition images — never tracked
+images/
+!images/.gitkeep
+
+# Mode-2 profile payloads — gitignored; manifest.json is tracked (Plan 2)
+profiles/*/profile.h
+profiles/*/[!manifest]*.bin
+
+# Device test logs
+logs/
+
+# RE staging (transient)
+.re-notes-staging/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
