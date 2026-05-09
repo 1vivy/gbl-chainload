@@ -1,0 +1,124 @@
+## @file
+#  GblChainload application — single-mode dispatcher.
+#  GBL_MODE (1/2/3), GBL_AUTO, GBL_DEBUG, GBL_VERBOSE are set via BuildOptions
+#  in the DSC; one binary per mode is produced.
+#
+#  [Packages] / [LibraryClasses] / [Protocols] / [Guids] / [FixedPcd] carried
+#  from the dirty-repo GblChainload.inf (which mirrored LinuxLoader.inf) with
+#  the new v2 library classes added (AblUnwrapLib, DynamicPatchLib,
+#  ProtocolHookLib, LogFsLib).
+##
+
+[Defines]
+  INF_VERSION                    = 0x00010006
+  BASE_NAME                      = GblChainload
+  FILE_GUID                      = 8d67b6a4-2912-4daf-becb-2e9aef6b7a3e
+  MODULE_TYPE                    = UEFI_APPLICATION
+  VERSION_STRING                 = 2.0
+  ENTRY_POINT                    = GblChainloadEntry
+
+[Sources]
+  Entry.c
+  Stubs.c
+  BootFlow.c
+
+[Packages]
+  ArmPkg/ArmPkg.dec
+  MdePkg/MdePkg.dec
+  EmbeddedPkg/EmbeddedPkg.dec
+  MdeModulePkg/MdeModulePkg.dec
+  QcomModulePkg/QcomModulePkg.dec
+  GblChainloadPkg/GblChainloadPkg.dec
+
+[LibraryClasses]
+  UefiApplicationEntryPoint
+  UefiBootServicesTableLib
+  UefiRuntimeServicesTableLib
+  UefiLib
+  DebugLib
+  BaseLib
+  BaseMemoryLib
+  MemoryAllocationLib
+  PrintLib
+  DxeServicesTableLib
+  CacheMaintenanceLib
+  ArmLib
+  ArmSmcLib
+  DevicePathLib
+  HobLib
+  PerformanceLib
+  DebugPrintErrorLevelLib
+  FdtLib
+  LibUfdt
+  TimerLib
+  BootLib
+  StackCanary
+  FastbootLib
+  UbsanLib
+  Lz4Lib
+  LoadFVLib
+  LogFsLib
+  AblUnwrapLib
+  DynamicPatchLib
+  ProtocolHookLib
+
+[LibraryClasses.AARCH64]
+  AesLib
+  OpenDice
+  Lz4Lib
+
+[Guids]
+  gEfiFileInfoGuid
+  gArmMpCoreInfoGuid
+  gEfiSdRemovableGuid
+  gEfiFileSystemInfoGuid
+  gEfiPartitionTypeGuid
+  gEfiEventVirtualAddressChangeGuid
+  gEfiEmmcRpmbPartitionGuid
+  gEfiEmmcGppPartition1Guid
+  gEfiEmmcUserPartitionGuid
+  gEfiNandUserPartitionGuid
+  gEfiPlatPartitionTypeGuid
+  gQcomKeypadDeviceGuid
+  gEfiGlobalVariableGuid
+  gEfiLogFSPartitionGuid
+  gEfiBootImgPartitionGuid
+  gEfiRecoveryImgPartitionGuid
+  gEfiUfsLU0Guid
+  gEfiUfsLU1Guid
+  gEfiUfsLU2Guid
+  gEfiUfsLU3Guid
+  gEfiUfsLU4Guid
+  gEfiUfsLU5Guid
+  gEfiUfsLU6Guid
+  gEfiUfsLU7Guid
+  gEfiNvme0Guid
+
+[Protocols]
+  gEfiSimpleTextInputExProtocolGuid
+  gEfiBlockIoProtocolGuid
+  gEfiLoadedImageProtocolGuid
+  gEfiDevicePathToTextProtocolGuid
+  gEfiDevicePathProtocolGuid
+  gEfiDevicePathFromTextProtocolGuid
+  gEfiSimpleFileSystemProtocolGuid
+  gEfiLoadFileProtocolGuid
+  gEfiDiskIoProtocolGuid
+  gEfiUsbIoProtocolGuid
+  gEfiPlatformInfoProtocolGuid
+  gEfiChipInfoProtocolGuid
+  gQcomPmicVersionProtocolGuid
+  gEfiMemCardInfoProtocolGuid
+  gEfiPrint2ProtocolGuid
+  gEfiPartitionRecordGuid
+  gEfiResetReasonProtocolGuid
+  gQcomRngProtocolGuid
+
+[FixedPcd]
+  gQcomTokenSpaceGuid.EnableMdtpSupport
+
+[BuildOptions]
+  *_*_AARCH64_CC_FLAGS = -DGBL_MODE=$(GBL_MODE) -DGBL_AUTO=$(GBL_AUTO) -DGBL_DEBUG=$(GBL_DEBUG) -DGBL_VERBOSE=$(GBL_VERBOSE)
+
+[Depex]
+  TRUE
