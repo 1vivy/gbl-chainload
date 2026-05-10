@@ -165,10 +165,15 @@ echo
 echo ">>> [1/5] confirming fastboot device"
 device_monitor_fastboot devices
 if ! device_monitor_fastboot devices | grep -q fastboot; then
-  echo "error: no fastboot device detected. Sibling EFISP should land us in" >&2
-  echo "       fastboot by default; if it doesn't, the device may be elsewhere." >&2
+  echo "error: no fastboot device detected. Device should be in bootloader" >&2
+  echo "       fastboot at script start; reboot device into bootloader and rerun." >&2
   exit 1
 fi
+# Note: device may be in stock bootloader fastboot at this point — that's
+# expected. Step 2 issues `fastboot reboot recovery` which (via the
+# flashed chainloader EFI on uefi_a/uefi_b) lands the device in our
+# FastbootLib. The is-our-fastbootlib probe lives in the post-boot-efi
+# state machine, not here.
 
 # Step 2 — stage + oem boot-efi the payload, or escape to recovery --------
 # `fastboot boot` would treat the EFI as an Android boot.img and route
@@ -260,18 +265,20 @@ elif [[ "$ESCAPE_WITH_PAYLOAD" == "1" ]]; then
 else
   echo ">>> [2/5] fastboot stage + oem boot-efi  ($PAYLOAD)"
   device_monitor_fastboot stage "$PAYLOAD"
-# `oem boot-efi` succeeds by NOT returning — StartImage transfers control
-# to the staged payload, the USB endpoint drops, and the fastboot client
-# emits "Status read failed (No such device)" with a non-zero exit. That's
-# the success signature for a clean handoff. Suppress the failure so the
-# script keeps going.
+# Task 9 (edk2 dc32586345): `oem boot-efi` now replies `OKAY started` BEFORE
+# StartImage, so the host fastboot client exits 0 cleanly. The BOOTEFI_LOG
+# will contain "OKAY started"; the USB endpoint drops silently afterwards.
+# We still capture the log for triage and check for a FAILED reply (which
+# means a pre-StartImage error, e.g. no staged buffer).
   BOOTEFI_LOG="$LOG_DIR/fastboot-oem-boot-efi.txt"
   device_monitor_fastboot oem boot-efi 2>&1 \
     | tee "$BOOTEFI_LOG" \
     | grep -v "Status read failed" \
     || true
-  if grep -q "Status read failed" "$BOOTEFI_LOG"; then
-    echo "    (USB drop on StartImage — expected handoff)"
+  if grep -qi "OKAY.*started" "$BOOTEFI_LOG"; then
+    echo "    (oem boot-efi: OKAY started — clean handoff, payload running)"
+  elif grep -q "Status read failed" "$BOOTEFI_LOG"; then
+    echo "    (USB drop on StartImage — old firmware, still a valid handoff)"
   elif grep -q FAILED "$BOOTEFI_LOG"; then
     echo "error: oem boot-efi failed for non-handoff reason. See above." >&2
     exit 1
