@@ -19,22 +19,20 @@
 #define GBL_CHAINLOAD_VERSION  "unknown"
 #endif
 
-#if defined (AUTO_DEBUG_MODE)
-#define GBL_CHAINLOAD_MODE  "AUTO_DEBUG_MODE"
-#elif defined (MODE_DEBUG)
-#define GBL_CHAINLOAD_MODE  "MODE_DEBUG"
-#elif defined (MINIMAL)
-#define GBL_CHAINLOAD_MODE  "MINIMAL"
-#elif defined (MODE_TEMPLATE)
-#define GBL_CHAINLOAD_MODE  "MODE_TEMPLATE"
-#elif defined (FAKELOCKED)
-#define GBL_CHAINLOAD_MODE  "FAKELOCKED"
-#elif defined (FAKELOCKED_DEBUG)
-#define GBL_CHAINLOAD_MODE  "FAKELOCKED_DEBUG"
-#elif defined (MODE_1)
-#define GBL_CHAINLOAD_MODE  "MODE_1"
+#ifndef GBL_MODE
+# define GBL_MODE 0
+#endif
+
+#if (GBL_MODE == 0)
+# define GBL_CHAINLOAD_MODE  "mode-0"
+#elif (GBL_MODE == 1)
+# define GBL_CHAINLOAD_MODE  "mode-1"
+#elif (GBL_MODE == 2)
+# define GBL_CHAINLOAD_MODE  "mode-2"
+#elif (GBL_MODE == 3)
+# define GBL_CHAINLOAD_MODE  "mode-3"
 #else
-#define GBL_CHAINLOAD_MODE  "UNKNOWN_MODE"
+# define GBL_CHAINLOAD_MODE  "unknown-mode"
 #endif
 
 EFI_STATUS
