@@ -125,6 +125,15 @@ BootFlowChainLoad (VOID)
 #endif
 
   /* 4. LoadImage + StartImage. */
+
+  /* Proper transition: release the logfs partition handle so the next EFI in
+     the chain (the patched ABL or further-chained payloads) can mount it
+     if they want.  Without this, the partition stays bound to our driver
+     instance and ConnectController returns EFI_NOT_FOUND for the next caller. */
+  Print (L"BootFlow: LogFs flush+close before LoadImage\n");
+  LogFsFlush ();
+  LogFsClose ();
+
   Status = gBS->LoadImage (FALSE, gImageHandle, NULL, Pe, PeSize, &ImageHandle);
   if (EFI_ERROR (Status)) {
     DEBUG ((DEBUG_ERROR, "BootFlow: LoadImage failed (%r)\n", Status));
@@ -135,7 +144,6 @@ BootFlowChainLoad (VOID)
 
   DEBUG ((DEBUG_INFO, "BootFlow: handing off to patched ABL\n"));
   SCR_PRINT (L"BootFlow: handing off to patched ABL\n");
-  LogFsFlush ();
 
   Status = gBS->StartImage (ImageHandle, NULL, NULL);
 
