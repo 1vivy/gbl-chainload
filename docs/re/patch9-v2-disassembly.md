@@ -239,13 +239,13 @@ Approach B (libavb-internal return-value remap) was deemed unnecessary:
 
 ### Per-fixture expected outcomes
 
-| Fixture | Site V offset | Site G offset | patch9 v2 outcome |
-|---|---|---|---|
-| infiniti (reference) | 0x25388 | 0x25A64 | PATCH_OK |
-| infiniti-EU-16.0.5.703 | 0x253DC | 0x25AB8 | PATCH_OK |
-| infiniti-IN-16.0.7.201 | 0x238C4 | 0x23FF4 | PATCH_OK |
-| fairlady-CN-16.0.7.200 | 0x23654 | 0x23D84 | PATCH_OK |
-| myron | not present | not present | PATCH_MISS (expected — myron has no libavb call path; not a defect) |
+| Fixture | Site V offset | Site G offset | Site C offset | patch9 v2 outcome |
+|---|---|---|---|---|
+| infiniti (reference) | 0x25388 | 0x25A64 | 0x25C44 | PATCH_OK |
+| infiniti-EU-16.0.5.703 | 0x253DC | 0x25AB8 | 0x25C98 | PATCH_OK |
+| infiniti-IN-16.0.7.201 | 0x238C4 | 0x23FF4 | 0x241D4 | PATCH_OK |
+| fairlady-CN-16.0.7.200 | 0x23654 | 0x23D84 | 0x23F64 | PATCH_OK |
+| myron | not present | not present | not present | PATCH_MISS (expected — myron has no libavb call path; not a defect) |
 
 ### Approach B (not selected) — reference for future iterations
 

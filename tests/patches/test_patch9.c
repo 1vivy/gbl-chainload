@@ -30,34 +30,36 @@ typedef struct {
   CONST char *path;
   CONST char *label;
   int         expect_required;   /* 1 = must PATCH_OK; 0 = MISS allowed */
-  /* Per-fixture expected post-byte words at Site V and Site G offsets.
-     Both are little-endian 32-bit values: 0x52800038 (mov w24,#1) at Site V,
-     0xD503201F (nop) at Site G. */
+  /* Per-fixture expected post-byte words at Site V, Site G, and Site C offsets.
+     Site V: 0x52800038 (mov w24,#1)
+     Site G: 0xD503201F (nop)
+     Site C: 0xD503201F (nop) */
   UINT32      site_v_off;
   UINT32      site_g_off;
+  UINT32      site_c_off;
 } fixture_t;
 
 static fixture_t fixtures[] = {
   { .path = "/home/vivy/gbl-chainload/images/infiniti/LinuxLoader_infiniti.efi",
     .label = "infiniti (reference)",
     .expect_required = 1,
-    .site_v_off = 0x25388U, .site_g_off = 0x25A64U },
+    .site_v_off = 0x25388U, .site_g_off = 0x25A64U, .site_c_off = 0x25C44U },
   { .path = "/home/vivy/gbl-chainload/images/pe/infiniti-EU-16.0.5.703.efi",
     .label = "infiniti-EU-16.0.5.703",
     .expect_required = 1,
-    .site_v_off = 0x253DCU, .site_g_off = 0x25AB8U },
+    .site_v_off = 0x253DCU, .site_g_off = 0x25AB8U, .site_c_off = 0x25C98U },
   { .path = "/home/vivy/gbl-chainload/images/pe/infiniti-IN-16.0.7.201.efi",
     .label = "infiniti-IN-16.0.7.201",
     .expect_required = 1,
-    .site_v_off = 0x238C4U, .site_g_off = 0x23FF4U },
+    .site_v_off = 0x238C4U, .site_g_off = 0x23FF4U, .site_c_off = 0x241D4U },
   { .path = "/home/vivy/gbl-chainload/images/pe/fairlady-CN-16.0.7.200.efi",
     .label = "fairlady-CN-16.0.7.200",
     .expect_required = 1,
-    .site_v_off = 0x23654U, .site_g_off = 0x23D84U },
+    .site_v_off = 0x23654U, .site_g_off = 0x23D84U, .site_c_off = 0x23F64U },
   { .path = "/home/vivy/gbl-chainload/images/pe/myron.efi",
     .label = "myron (no libavb path expected)",
     .expect_required = 0,
-    .site_v_off = 0, .site_g_off = 0 },
+    .site_v_off = 0, .site_g_off = 0, .site_c_off = 0 },
 };
 
 #define EXPECTED_SITE_V_WORD  0x52800038U  /* mov w24, #1 */
@@ -100,9 +102,10 @@ int main (void) {
         ++failed;
         free (buf); continue;
       }
-      /* Verify byte-equivalent post-patch at Site V and Site G. */
+      /* Verify byte-equivalent post-patch at Site V, Site G, and Site C. */
       UINT32 vbytes = read_le32 (buf + fx->site_v_off);
       UINT32 gbytes = read_le32 (buf + fx->site_g_off);
+      UINT32 cbytes = read_le32 (buf + fx->site_c_off);
       int byte_check = 1;
       if (vbytes != EXPECTED_SITE_V_WORD) {
         printf ("FAIL %-40s — Site V @0x%x: got 0x%08x expected 0x%08x\n",
@@ -114,8 +117,13 @@ int main (void) {
                 fx->label, fx->site_g_off, gbytes, EXPECTED_SITE_G_WORD);
         byte_check = 0;
       }
+      if (cbytes != EXPECTED_SITE_G_WORD) {
+        printf ("FAIL %-40s — Site C @0x%x: got 0x%08x expected 0x%08x\n",
+                fx->label, fx->site_c_off, cbytes, EXPECTED_SITE_G_WORD);
+        byte_check = 0;
+      }
       if (byte_check) {
-        printf ("ok   %-40s — PATCH_OK + Site V/G post-bytes match\n", fx->label);
+        printf ("ok   %-40s — PATCH_OK + Site V/G/C post-bytes match\n", fx->label);
         ++passed;
       } else {
         ++failed;
