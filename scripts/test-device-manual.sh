@@ -151,9 +151,23 @@ else
   fi
 fi
 
-# /proc/cmdline is always world-readable; adb pull works in both contexts.
-adb pull /proc/cmdline "$LOG_DIR/cmdline" 2>/dev/null \
-  || echo "    /proc/cmdline not present — skipping"
+# /proc/cmdline — try unprivileged pull first; user-build system blocks this so
+# fall back via su, mirroring the /proc/bootconfig logic above.
+if [[ "$DEVICE_CONTEXT" == "recovery" ]]; then
+  adb pull /proc/cmdline "$LOG_DIR/cmdline" 2>/dev/null \
+    || echo "    /proc/cmdline not present — skipping"
+else
+  if ! adb pull /proc/cmdline "$LOG_DIR/cmdline" 2>/dev/null; then
+    adb shell ${SU_PREFIX}'cat /proc/cmdline' > "$LOG_DIR/cmdline" 2>/dev/null || true
+    if [[ -s "$LOG_DIR/cmdline" ]]; then
+      tr -d '\r' < "$LOG_DIR/cmdline" > "$LOG_DIR/cmdline.tmp" \
+        && mv "$LOG_DIR/cmdline.tmp" "$LOG_DIR/cmdline"
+    else
+      rm -f "$LOG_DIR/cmdline"
+      echo "    /proc/cmdline not present — skipping"
+    fi
+  fi
+fi
 
 # Snapshot kernel's flattened device tree view. Pulling the tree directly can
 # be slow/noisy over adb because many properties are binary, so archive it on
@@ -195,11 +209,20 @@ if [[ "$DEVICE_CONTEXT" == "recovery" ]]; then
   fi
 else
   if [[ -n "$SU_PREFIX" ]]; then
-    if adb shell "${SU_PREFIX}sh -c 'mkdir -p /logfs && mount -t vfat /dev/block/by-name/logfs /logfs'" \
-        2>/dev/null; then
+    # Android system mounts / read-only, so /logfs can't be created. Use a
+    # writable path under /data/local/tmp. The compound command must run
+    # entirely under su, so both halves of the && chain go inside one
+    # single-quoted su -c argument (outer double quotes for variable expansion).
+    LOGFS_MOUNTPOINT=/data/local/tmp/logfs
+    LOGFS_MOUNT_LOG="$LOG_DIR/logfs-mount.stderr"
+    adb shell "su -c 'mkdir -p $LOGFS_MOUNTPOINT && mount -t vfat /dev/block/by-name/logfs $LOGFS_MOUNTPOINT'" \
+        >"$LOGFS_MOUNT_LOG" 2>&1 || true
+    if adb shell ${SU_PREFIX}"mountpoint -q $LOGFS_MOUNTPOINT" >/dev/null 2>&1; then
       LOGFS_MOUNTED=true
+      rm -f "$LOGFS_MOUNT_LOG"
     else
-      echo "    WARN: logfs mount failed — skipping logfs pull"
+      echo "    WARN: logfs mount failed — see logfs-mount.stderr (first lines below)"
+      head -3 "$LOGFS_MOUNT_LOG" | sed 's/^/      /'
     fi
   else
     echo "    WARN: su not available — skipping logfs mount and pull"
@@ -212,9 +235,9 @@ if [[ "$LOGFS_MOUNTED" == "true" ]]; then
     adb pull /logfs/. "$LOG_DIR/logfs/" 2>/dev/null \
       || echo "    logfs pull failed — partition unmapped?"
   else
-    # System: adb pull on /logfs requires root ADB; pipe individual files via su.
+    # System: adb pull on $LOGFS_MOUNTPOINT requires root ADB; pipe individual files via su.
     for logfs_file in UefiLog1.txt UefiLog2.txt GblChainload_Boot1.txt GblChainload_Boot2.txt; do
-      adb shell "${SU_PREFIX}cat /logfs/${logfs_file}" \
+      adb shell "su -c 'cat $LOGFS_MOUNTPOINT/${logfs_file}'" \
         > "$LOG_DIR/logfs/${logfs_file}" 2>/dev/null || true
       if [[ -s "$LOG_DIR/logfs/${logfs_file}" ]]; then
         tr -d '\r' < "$LOG_DIR/logfs/${logfs_file}" > "$LOG_DIR/logfs/${logfs_file}.tmp" \
@@ -224,7 +247,11 @@ if [[ "$LOGFS_MOUNTED" == "true" ]]; then
       fi
     done
   fi
-  adb shell ${SU_PREFIX}'umount /logfs && rmdir /logfs' 2>/dev/null || true
+  if [[ "$DEVICE_CONTEXT" == "recovery" ]]; then
+    adb shell 'umount /logfs && rmdir /logfs' 2>/dev/null || true
+  else
+    adb shell "su -c 'umount $LOGFS_MOUNTPOINT && rmdir $LOGFS_MOUNTPOINT'" 2>/dev/null || true
+  fi
 fi
 
 echo
