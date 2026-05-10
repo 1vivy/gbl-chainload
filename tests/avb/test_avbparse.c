@@ -179,8 +179,7 @@ static void test_header_too_small (void) {
      rollback_index_location (u32)
      partition_name_len (u32)
      public_key_len (u32)
-     flags (u32)
-     reserved[60]
+     reserved[64]
      partition_name[partition_name_len]
      public_key[public_key_len]
      padding
@@ -213,15 +212,14 @@ static UINT64 build_hash_descriptor (UINT8 *out, CONST char *name, CONST UINT8 *
 
 static UINT64 build_chain_descriptor (UINT8 *out, CONST char *name, CONST UINT8 *pk, UINT32 pk_len) {
   UINT32 name_len = (UINT32)strlen (name);
-  UINT64 body_size = 16 + 4 + 4 + 4 + 4 + 60 + name_len + pk_len;
+  UINT64 body_size = 16 + 4 + 4 + 4 + 64 + name_len + pk_len;
   body_size = align8 (body_size);
   UINT64 num_bytes_following = body_size - 16;
   put_desc_header (out, 4, num_bytes_following);
   put_u32_be (out + 16, 0);                   /* rollback_index_location */
   put_u32_be (out + 20, name_len);
   put_u32_be (out + 24, pk_len);
-  put_u32_be (out + 28, 0);                   /* flags */
-  /* reserved[60] at offset 32 */
+  /* reserved[64] at offset 28 */
   memcpy (out + 92, name, name_len);
   memcpy (out + 92 + name_len, pk, pk_len);
   return body_size;
@@ -293,6 +291,48 @@ static void test_parse_chain_descriptor (void) {
   printf ("ok test_parse_chain_descriptor\n");
 }
 
+static void test_descriptor_iter_truncated_trailer (void) {
+  /* Aux block ends 8 bytes into a descriptor header — truncation, not EOS. */
+  UINT8 aux[8];
+  memset (aux, 0, sizeof (aux));
+  UINT64 cursor = 0;
+  GBL_AVB_DESCRIPTOR_TAG tag;
+  CONST UINT8 *desc;
+  UINT64 desc_len;
+  EFI_STATUS s = AvbParse_NextDescriptor (aux, sizeof (aux), &cursor, &tag, &desc, &desc_len);
+  assert (s == EFI_INVALID_PARAMETER);
+  printf ("ok test_descriptor_iter_truncated_trailer\n");
+}
+
+static void test_descriptor_iter_nbf_exceeds_aux (void) {
+  /* Header claims 1024-byte body but aux only has 32 bytes total. */
+  UINT8 aux[32];
+  memset (aux, 0, sizeof (aux));
+  put_u64_be (aux, 2);                /* tag = hash */
+  put_u64_be (aux + 8, 1024);         /* num_bytes_following way too large */
+  UINT64 cursor = 0;
+  GBL_AVB_DESCRIPTOR_TAG tag;
+  CONST UINT8 *desc;
+  UINT64 desc_len;
+  EFI_STATUS s = AvbParse_NextDescriptor (aux, sizeof (aux), &cursor, &tag, &desc, &desc_len);
+  assert (s == EFI_INVALID_PARAMETER);
+  printf ("ok test_descriptor_iter_nbf_exceeds_aux\n");
+}
+
+static void test_parse_hash_descriptor_truncated_body (void) {
+  /* Build a real hash descriptor, then pass a DescriptorLen smaller than 132. */
+  UINT8 desc[256];
+  memset (desc, 0, sizeof (desc));
+  UINT8 digest[32]; memset (digest, 0xAB, 32);
+  build_hash_descriptor (desc, "init_boot", digest, 32);
+
+  CONST UINT8 *name; UINT32 name_len;
+  CONST UINT8 *out_digest; UINT32 out_dlen;
+  EFI_STATUS s = AvbParse_HashDescriptor (desc, 100, &name, &name_len, &out_digest, &out_dlen);
+  assert (s == EFI_INVALID_PARAMETER);
+  printf ("ok test_parse_hash_descriptor_truncated_body\n");
+}
+
 int main (void) {
   test_footer_parse_ok ();
   test_footer_no_magic ();
@@ -303,6 +343,9 @@ int main (void) {
   test_descriptor_iterator ();
   test_parse_hash_descriptor ();
   test_parse_chain_descriptor ();
+  test_descriptor_iter_truncated_trailer ();
+  test_descriptor_iter_nbf_exceeds_aux ();
+  test_parse_hash_descriptor_truncated_body ();
   printf ("ALL PASS\n");
   return 0;
 }

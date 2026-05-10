@@ -737,8 +737,7 @@ Append to `tests/avb/test_avbparse.c`:
      rollback_index_location (u32)
      partition_name_len (u32)
      public_key_len (u32)
-     flags (u32)
-     reserved[60]
+     reserved[64]
      partition_name[partition_name_len]
      public_key[public_key_len]
      padding

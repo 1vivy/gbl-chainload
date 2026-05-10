@@ -74,8 +74,9 @@ AvbParse_NextDescriptor (IN CONST UINT8 *AuxBlock, IN UINT64 AuxSize,
       || DescriptorOut == NULL || DescriptorLenOut == NULL) {
     return EFI_INVALID_PARAMETER;
   }
-  if (*Cursor >= AuxSize)                 return EFI_END_OF_MEDIA;
-  if (AuxSize - *Cursor < 16)             return EFI_END_OF_MEDIA;
+  if (*Cursor == AuxSize)                 return EFI_END_OF_MEDIA;
+  if (*Cursor > AuxSize)                  return EFI_INVALID_PARAMETER;
+  if (AuxSize - *Cursor < 16)             return EFI_INVALID_PARAMETER;
   Tag                = AvbReadU64Be (AuxBlock + *Cursor);
   NumBytesFollowing  = AvbReadU64Be (AuxBlock + *Cursor + 8);
   Total              = 16 + NumBytesFollowing;
@@ -103,7 +104,7 @@ AvbParse_HashDescriptor (IN CONST UINT8 *Descriptor, IN UINT64 DescriptorLen,
   SaltLen   = AvbReadU32Be (Descriptor + 60);
   DigestLen = AvbReadU32Be (Descriptor + 64);
   BodyStart = 132;
-  if ((UINT64)NameLen + SaltLen + DigestLen + BodyStart > DescriptorLen) {
+  if ((UINT64)NameLen + (UINT64)SaltLen + (UINT64)DigestLen + BodyStart > DescriptorLen) {
     return EFI_INVALID_PARAMETER;
   }
   *PartitionNameOut    = Descriptor + BodyStart;
@@ -113,6 +114,15 @@ AvbParse_HashDescriptor (IN CONST UINT8 *Descriptor, IN UINT64 DescriptorLen,
   return EFI_SUCCESS;
 }
 
+/* Chain partition descriptor layout (libavb avb_chain_partition_descriptor.h):
+     0   tag(u64)
+     8   num_bytes_following(u64)
+    16   rollback_index_location(u32)
+    20   partition_name_len(u32)
+    24   public_key_len(u32)
+    28   reserved[64]
+    92   partition_name | public_key
+*/
 EFI_STATUS EFIAPI
 AvbParse_ChainPartitionDescriptor (IN CONST UINT8 *Descriptor, IN UINT64 DescriptorLen,
                                     OUT CONST UINT8 **PartitionNameOut, OUT UINT32 *PartitionNameLenOut,
@@ -128,7 +138,7 @@ AvbParse_ChainPartitionDescriptor (IN CONST UINT8 *Descriptor, IN UINT64 Descrip
   NameLen = AvbReadU32Be (Descriptor + 20);
   PkLen   = AvbReadU32Be (Descriptor + 24);
   BodyStart = 92;
-  if ((UINT64)NameLen + PkLen + BodyStart > DescriptorLen) {
+  if ((UINT64)NameLen + (UINT64)PkLen + BodyStart > DescriptorLen) {
     return EFI_INVALID_PARAMETER;
   }
   *PartitionNameOut    = Descriptor + BodyStart;
