@@ -1,16 +1,18 @@
-/* Host test for patch7 (orange-screen) against the infiniti fixture. */
+/* Host test for patch7 (orange-screen) against the infiniti fixture.
+   patch7 is archived from the active mode-1 aggregator table (gated behind
+   -DGBL_PATCH7_ENABLED).  This test exercises ApplyOrangeScreen directly so
+   it remains a valid regression test for the patch logic independent of
+   aggregator membership.  */
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <assert.h>
 
 #include "../../GblChainloadPkg/Include/Library/PatchDesc.h"
 #include "../../GblChainloadPkg/Include/Library/ScanLib.h"
 #include "../../GblChainloadPkg/Library/DynamicPatchLib/oem/Signatures.h"
 
-/* The patch table exported by oneplus_canoe.c. */
-extern CONST PATCH_DESC kOemOneplusPatches[];
-extern CONST UINTN      kOemOneplusPatchesCount;
+/* Call ApplyOrangeScreen directly — patch7 is not in the active table. */
+extern PATCH_OUTCOME ApplyOrangeScreen (UINT8 *Buf, UINT32 Size);
 
 #define INFINITI_FIXTURE \
   "/home/vivy/gbl-chainload/images/infiniti/LinuxLoader_infiniti.efi"
@@ -75,16 +77,7 @@ main (void)
   printf ("ok patch7 pre-patch CBZ word 0x%08x (W%u)\n", cbz, cbz & 0x1f);
 
   /* --- 3. Apply patch7 ----------------------------------------------------- */
-  PATCH_APPLY apply = NULL;
-  for (UINTN i = 0; i < kOemOneplusPatchesCount; ++i) {
-    if (strcmp (kOemOneplusPatches[i].Name, "patch7-orange-screen") == 0) {
-      apply = kOemOneplusPatches[i].Apply;
-      break;
-    }
-  }
-  assert (apply != NULL && "patch7-orange-screen not found in kOemOneplusPatches");
-
-  PATCH_OUTCOME o = apply (buf, size);
+  PATCH_OUTCOME o = ApplyOrangeScreen (buf, size);
   assert (o == PATCH_OK && "patch7 first application failed");
   printf ("ok patch7 PATCH_OK\n");
 
@@ -110,7 +103,7 @@ main (void)
   printf ("ok patch7 B target matches CBZ target (0x%x)\n", b_target);
 
   /* --- 6. Idempotency: anchor still matches, second apply is PATCH_OK ------ */
-  PATCH_OUTCOME o2 = apply (buf, size);
+  PATCH_OUTCOME o2 = ApplyOrangeScreen (buf, size);
   assert (o2 == PATCH_OK && "patch7 second application not idempotent");
   /* B word must be unchanged. */
   assert (read_u32_le (buf, PATCH7_CBZ_OFF) == kPatch7BUnconditionalInsn);

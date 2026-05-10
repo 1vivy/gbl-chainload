@@ -19,7 +19,7 @@
 #include "../Internal/Encode.h"
 #include "Signatures.h"
 
-STATIC PATCH_OUTCOME
+PATCH_OUTCOME
 ApplyOrangeScreen (
   IN OUT UINT8  *Buf,
   IN     UINT32  Size
@@ -40,12 +40,27 @@ ApplyOrangeScreen (
 }
 
 CONST PATCH_DESC kOemOneplusPatches[] = {
+#ifdef GBL_PATCH7_ENABLED
   {
     .Name      = "patch7-orange-screen",
     .Scope     = SCOPE_OEM_ONEPLUS,
     .Mandatory = FALSE,
     .Apply     = ApplyOrangeScreen,
   },
+#else
+  /* patch7 archived from active mode-1 table.
+     Mode-1 fakelocks the protocol view so the orange-screen warning
+     never fires; patch7 is dead at runtime under fakelock.
+     Re-enable as a one-line build flag (-DGBL_PATCH7_ENABLED) if patch7
+     is wanted for diagnostic purposes (e.g., probing ABL's lock-state
+     output behavior when libavb patching needs to be debugged).  */
+  { .Name = NULL, .Scope = 0, .Mandatory = FALSE, .Apply = NULL }, /* sentinel */
+#endif
 };
+
+#ifdef GBL_PATCH7_ENABLED
 CONST UINTN kOemOneplusPatchesCount =
   sizeof (kOemOneplusPatches) / sizeof (kOemOneplusPatches[0]);
+#else
+CONST UINTN kOemOneplusPatchesCount = 0;
+#endif
