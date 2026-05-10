@@ -1,0 +1,23 @@
+## @file AvbParseLib.inf
+#  Minimal AVB structure parser — no external libavb dependency.
+#  Used by AvbFacade (Plan 3a) and fastboot status interface (Plan 3d).
+##
+
+[Defines]
+  INF_VERSION    = 0x00010005
+  BASE_NAME      = AvbParseLib
+  FILE_GUID      = 8a3c9c54-f8c4-47a0-9f6e-00293b61b396
+  MODULE_TYPE    = BASE
+  VERSION_STRING = 1.0
+  LIBRARY_CLASS  = AvbParseLib
+
+[Sources]
+  AvbParse.c
+
+[Packages]
+  MdePkg/MdePkg.dec
+  GblChainloadPkg/GblChainloadPkg.dec
+
+[LibraryClasses]
+  BaseLib
+  BaseMemoryLib

@@ -25,6 +25,8 @@
   ProtocolHookLib|Include/Library/ProtocolHookLib.h
   ## Internal PE scanner used by DynamicPatchLib.
   ScanLib|Include/Library/ScanLib.h
+  ## Minimal AVB structure parser — no external libavb dependency.
+  AvbParseLib|Include/Library/AvbParseLib.h
 
 [Guids]
   ## Token space GUID for GblChainloadPkg PCDs.

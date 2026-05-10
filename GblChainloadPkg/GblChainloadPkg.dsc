@@ -108,6 +108,7 @@
   LogFsLib|GblChainloadPkg/Library/LogFsLib/LogFsLib.inf
   DynamicPatchLib|GblChainloadPkg/Library/DynamicPatchLib/DynamicPatchLib.inf
   ProtocolHookLib|GblChainloadPkg/Library/ProtocolHookLib/ProtocolHookLib.inf
+  AvbParseLib|GblChainloadPkg/Library/AvbParseLib/AvbParseLib.inf
 
 [LibraryClasses.AARCH64]
   ArmLib|ArmPkg/Library/ArmLib/ArmBaseLib.inf
