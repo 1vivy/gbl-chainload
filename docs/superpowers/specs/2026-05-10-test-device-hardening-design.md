@@ -4,7 +4,7 @@
 
 ## Goal
 
-The full automated cycle in `scripts/test-device.sh` runs unattended without
+The full automated cycle in `scripts/test-device-automatic.sh` runs unattended without
 silently moving past a broken step. When it fails, the script tells the
 operator exactly which state the device is in and what to do (hard-reset,
 rerun, etc.) instead of hanging or pulling empty/partial logs.
@@ -27,7 +27,7 @@ bite.
 
 ### Sub-task 1: baseline run
 
-Execute current `scripts/test-device.sh` end-to-end against
+Execute current `scripts/test-device-automatic.sh` end-to-end against
 `dist/mode-1-auto-debug-verbose.efi` already flashed. Capture exactly
 which steps fail or behave unexpectedly (no failure → easy plan: skip
 to sub-task 3 cleanups). Failure modes recorded into the plan as
@@ -58,13 +58,13 @@ For each failure surfaced in sub-task 1:
 The `test-device-manual.sh` recently learned how to mount logfs from
 the system context (`/data/local/tmp/logfs` mountpoint, `"su -c
 '<compound command>'"` quoting). The recovery-context flow in
-`test-device.sh` is simpler (mounts at `/logfs`, no su needed) but
+`test-device-automatic.sh` is simpler (mounts at `/logfs`, no su needed) but
 should be verified intact.
 
 Specifically:
-- Confirm test-device.sh logfs mount works in recovery (single command
+- Confirm test-device-automatic.sh logfs mount works in recovery (single command
   shells, simpler quoting). Don't break.
-- If test-device.sh ever runs in system context (e.g. user opted to
+- If test-device-automatic.sh ever runs in system context (e.g. user opted to
   skip the recovery handoff), it needs the same fixes.
 
 ### Sub-task 4: Phoenix watchdog timer
@@ -90,14 +90,14 @@ Each run must:
 
 ## Out of scope
 
-- Reformatting or refactoring `test-device.sh` (only fix what's broken)
+- Reformatting or refactoring `test-device-automatic.sh` (only fix what's broken)
 - New `test-device-*` variants
 - Recovery-side test orchestration changes (separate concern)
 - Replacing the script with Python or another language
 
 ## Files in scope
 
-- `scripts/test-device.sh` (primary)
+- `scripts/test-device-automatic.sh` (primary)
 - `scripts/test-device-manual.sh` (verify still working after sub-task 3)
 - `scripts/device-monitor.sh` (utility helpers; only modify if a
   helper needs to grow a new state-probe primitive)
