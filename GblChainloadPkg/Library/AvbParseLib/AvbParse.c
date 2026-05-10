@@ -62,6 +62,75 @@ AvbParse_VbmetaHeader (IN CONST UINT8 *Vbmeta, IN UINT64 VbmetaSize, OUT GBL_AVB
 
   return EFI_SUCCESS;
 }
-EFI_STATUS EFIAPI AvbParse_NextDescriptor (CONST UINT8 *A, UINT64 S, UINT64 *C, GBL_AVB_DESCRIPTOR_TAG *T, CONST UINT8 **D, UINT64 *L) { (void)A; (void)S; (void)C; (void)T; (void)D; (void)L; return -1; }
-EFI_STATUS EFIAPI AvbParse_HashDescriptor (CONST UINT8 *D, UINT64 L, CONST UINT8 **N, UINT32 *NL, CONST UINT8 **DG, UINT32 *DGL) { (void)D; (void)L; (void)N; (void)NL; (void)DG; (void)DGL; return -1; }
-EFI_STATUS EFIAPI AvbParse_ChainPartitionDescriptor (CONST UINT8 *D, UINT64 L, CONST UINT8 **N, UINT32 *NL, CONST UINT8 **PK, UINT32 *PKL) { (void)D; (void)L; (void)N; (void)NL; (void)PK; (void)PKL; return -1; }
+EFI_STATUS EFIAPI
+AvbParse_NextDescriptor (IN CONST UINT8 *AuxBlock, IN UINT64 AuxSize,
+                         IN OUT UINT64 *Cursor,
+                         OUT GBL_AVB_DESCRIPTOR_TAG *TagOut,
+                         OUT CONST UINT8 **DescriptorOut,
+                         OUT UINT64 *DescriptorLenOut)
+{
+  UINT64 Tag, NumBytesFollowing, Total;
+  if (AuxBlock == NULL || Cursor == NULL || TagOut == NULL
+      || DescriptorOut == NULL || DescriptorLenOut == NULL) {
+    return EFI_INVALID_PARAMETER;
+  }
+  if (*Cursor >= AuxSize)                 return EFI_END_OF_MEDIA;
+  if (AuxSize - *Cursor < 16)             return EFI_END_OF_MEDIA;
+  Tag                = AvbReadU64Be (AuxBlock + *Cursor);
+  NumBytesFollowing  = AvbReadU64Be (AuxBlock + *Cursor + 8);
+  Total              = 16 + NumBytesFollowing;
+  if (*Cursor + Total > AuxSize)          return EFI_INVALID_PARAMETER;
+  *TagOut            = (GBL_AVB_DESCRIPTOR_TAG)Tag;
+  *DescriptorOut     = AuxBlock + *Cursor;
+  *DescriptorLenOut  = Total;
+  *Cursor           += Total;
+  return EFI_SUCCESS;
+}
+
+EFI_STATUS EFIAPI
+AvbParse_HashDescriptor (IN CONST UINT8 *Descriptor, IN UINT64 DescriptorLen,
+                         OUT CONST UINT8 **PartitionNameOut, OUT UINT32 *PartitionNameLenOut,
+                         OUT CONST UINT8 **DigestOut, OUT UINT32 *DigestLenOut)
+{
+  UINT32 NameLen, SaltLen, DigestLen;
+  UINT64 BodyStart;
+  if (Descriptor == NULL || PartitionNameOut == NULL || PartitionNameLenOut == NULL
+      || DigestOut == NULL || DigestLenOut == NULL) {
+    return EFI_INVALID_PARAMETER;
+  }
+  if (DescriptorLen < 132)                return EFI_INVALID_PARAMETER;
+  NameLen   = AvbReadU32Be (Descriptor + 56);
+  SaltLen   = AvbReadU32Be (Descriptor + 60);
+  DigestLen = AvbReadU32Be (Descriptor + 64);
+  BodyStart = 132;
+  *PartitionNameOut    = Descriptor + BodyStart;
+  *PartitionNameLenOut = NameLen;
+  *DigestOut           = Descriptor + BodyStart + NameLen + SaltLen;
+  *DigestLenOut        = DigestLen;
+  return EFI_SUCCESS;
+}
+
+EFI_STATUS EFIAPI
+AvbParse_ChainPartitionDescriptor (IN CONST UINT8 *Descriptor, IN UINT64 DescriptorLen,
+                                    OUT CONST UINT8 **PartitionNameOut, OUT UINT32 *PartitionNameLenOut,
+                                    OUT CONST UINT8 **PublicKeyOut, OUT UINT32 *PublicKeyLenOut)
+{
+  UINT32 NameLen, PkLen;
+  UINT64 BodyStart;
+  if (Descriptor == NULL || PartitionNameOut == NULL || PartitionNameLenOut == NULL
+      || PublicKeyOut == NULL || PublicKeyLenOut == NULL) {
+    return EFI_INVALID_PARAMETER;
+  }
+  if (DescriptorLen < 92)                 return EFI_INVALID_PARAMETER;
+  NameLen = AvbReadU32Be (Descriptor + 20);
+  PkLen   = AvbReadU32Be (Descriptor + 24);
+  BodyStart = 92;
+  if ((UINT64)NameLen + PkLen + BodyStart > DescriptorLen) {
+    return EFI_INVALID_PARAMETER;
+  }
+  *PartitionNameOut    = Descriptor + BodyStart;
+  *PartitionNameLenOut = NameLen;
+  *PublicKeyOut        = Descriptor + BodyStart + NameLen;
+  *PublicKeyLenOut     = PkLen;
+  return EFI_SUCCESS;
+}

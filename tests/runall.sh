@@ -3,6 +3,10 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+echo "== tests/avb =="
+make -C tests/avb clean >/dev/null
+make -C tests/avb
+
 echo "== 045_mode_taxonomy_lint =="
 bash tests/045_mode_taxonomy_lint.sh
 echo "== 046_mode1_protocol_hook_lint =="
