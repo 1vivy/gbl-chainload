@@ -91,42 +91,50 @@ MountLogFsRoot (
   HandleFilter.PartitionLabel = L"logfs";
   MaxHandles = ARRAY_SIZE (HandleInfoList);
 
+  Print (L"LogFs: [1/5] calling GetBlkIOHandles (label='logfs')\n");
   Status = GetBlkIOHandles (BlkIoAttrib, &HandleFilter,
                             HandleInfoList, &MaxHandles);
+  Print (L"LogFs: [1/5] GetBlkIOHandles returned %r handles=%u\n",
+         Status, MaxHandles);
   if (EFI_ERROR (Status) || MaxHandles != 1) {
-    DEBUG ((DEBUG_INFO,
-            "LogFs: logfs partition lookup: %r handles=%u\n",
-            Status, MaxHandles));
+    Print (L"LogFs: [1/5] FAIL — no logfs partition found (want 1 handle)\n");
     return EFI_NOT_FOUND;
   }
 
   Handle = HandleInfoList[0].Handle;
   if (Handle == NULL) {
-    DEBUG ((DEBUG_INFO, "LogFs: logfs partition handle missing\n"));
+    Print (L"LogFs: [1/5] FAIL — handle pointer is NULL\n");
     return EFI_NOT_FOUND;
   }
+  Print (L"LogFs: [1/5] handle=%p OK\n", Handle);
 
+  Print (L"LogFs: [2/5] calling gBS->ConnectController\n");
   Status = gBS->ConnectController (Handle, NULL, NULL, TRUE);
+  Print (L"LogFs: [2/5] ConnectController returned %r\n", Status);
   if (EFI_ERROR (Status) && Status != EFI_ALREADY_STARTED) {
-    DEBUG ((DEBUG_WARN, "LogFs: ConnectController failed: %r\n", Status));
+    Print (L"LogFs: [2/5] FAIL — ConnectController failed (not EFI_ALREADY_STARTED)\n");
     return Status;
   }
 
+  Print (L"LogFs: [3/5] calling gBS->HandleProtocol (SimpleFileSystem)\n");
   Status = gBS->HandleProtocol (Handle,
                                 &gEfiSimpleFileSystemProtocolGuid,
                                 (VOID **)&Fs);
+  Print (L"LogFs: [3/5] HandleProtocol(SimpleFS) returned %r\n", Status);
   if (EFI_ERROR (Status)) {
-    DEBUG ((DEBUG_WARN, "LogFs: SimpleFileSystem unavailable: %r\n", Status));
+    Print (L"LogFs: [3/5] FAIL — SimpleFileSystem protocol unavailable\n");
     return Status;
   }
 
+  Print (L"LogFs: [4/5] calling Fs->OpenVolume\n");
   Status = Fs->OpenVolume (Fs, &Root);
+  Print (L"LogFs: [4/5] OpenVolume returned %r\n", Status);
   if (EFI_ERROR (Status)) {
-    DEBUG ((DEBUG_WARN, "LogFs: OpenVolume failed: %r\n", Status));
+    Print (L"LogFs: [4/5] FAIL — OpenVolume failed\n");
     return Status;
   }
 
-  DEBUG ((DEBUG_INFO, "LogFs: mounted logfs successfully\n"));
+  Print (L"LogFs: [5/5] mount succeeded — root=%p\n", Root);
   *OutRoot = Root;
   return EFI_SUCCESS;
 }
