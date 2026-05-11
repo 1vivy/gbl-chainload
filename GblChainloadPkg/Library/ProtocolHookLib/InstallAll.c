@@ -7,8 +7,8 @@
     themselves -- they're called inline from HookedVBRwDeviceState etc.  This
     dispatcher just ensures the slot wrappers themselves are installed.
 
-    Mode-1 overlay (Mode1Overlay.c) -- same pattern.  Mode-2/3 overlays land
-    in plans 2/3.
+    Mode-1 overlay (Mode1Overlay.c) -- same pattern.  Mode-2/3 overlays
+    are TBD.
 
     EbsHook is declared in HookCommon.h but not yet implemented; it is not
     called here until its source file lands.
@@ -91,8 +91,8 @@ ProtocolHook_InstallAll (
   Result->QseecomInstalledSlots = 1;
   Result->QseecomExpectedSlots  = 1;
 
-  /* 4. SPSS -- optional in plan 1 (observation only).  Failure is logged
-        but does not abort. */
+  /* 4. SPSS -- optional (observation-only).  Failure is logged but does
+        not abort. */
   Status = InstallSpssHook ();
   if (EFI_ERROR (Status)) {
     Print (L"ProtocolHookLib: SPSS install failed (%r) - continuing (observation-only)\n",
@@ -114,7 +114,7 @@ ProtocolHook_InstallAll (
     return EFI_NOT_READY;
   }
 
-  Result->ModeOverlayOk = TRUE;   /* Mode-1 overlay inline; 2/3 land in later plans. */
+  Result->ModeOverlayOk = TRUE;   /* Mode-1 overlay inline; mode-2/3 overlays TBD. */
 
   Print (
     L"ProtocolHookLib: installed (mode=%d,"

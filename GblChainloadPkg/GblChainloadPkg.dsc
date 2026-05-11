@@ -1,5 +1,5 @@
 ## @file
-#  GblChainload platform description — v2 rewrite, plan 1 (mode-1 only).
+#  GblChainload platform description — v2, modes 0 and 1.
 #
 #  Library mappings mirror QcomModulePkg.dsc so we get the same dep graph as
 #  LinuxLoader.efi. Feature flags are passed as integer PCDs via GBL_MODE /
@@ -57,7 +57,7 @@
   DEFINE TARGET_SUPPORTS_EARLY_USB_INIT   = 0
   # BootLib's UpdateCmdLine.c hard-references INIT_BIN; value is cosmetic.
   DEFINE INIT_BIN                         = /init
-  DEFINE GBL_CHAINLOAD_VERSION            = 2.0-plan1
+  DEFINE GBL_CHAINLOAD_VERSION            = 2.0
 
   # v2 mode flags — overridden at build time via -D from build-inside-docker.sh.
   # These are integer flags, not legacy mode-name strings.
