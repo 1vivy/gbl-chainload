@@ -1,5 +1,5 @@
 /** @file Entry.c — gbl-chainload entry point.
-    Single dispatcher: GBL_MODE selects the mode (1/2/3); AUTO/DEBUG/VERBOSE
+    Single dispatcher: GBL_MODE selects the mode (0 or 1); AUTO/DEBUG/VERBOSE
     are orthogonal flags. **/
 
 #include <Uefi.h>
@@ -23,7 +23,7 @@ EFI_STATUS FastbootInitialize (VOID);
 EFI_STATUS EFIAPI BootFlowChainLoad (VOID);
 
 #ifndef GBL_MODE
-# error "GBL_MODE (0, 1, 2, or 3) must be defined at build time"
+# error "GBL_MODE (0 or 1) must be defined at build time"
 #endif
 #ifndef GBL_AUTO
 # define GBL_AUTO 0

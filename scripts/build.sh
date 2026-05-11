@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # scripts/build.sh — wrap docker EDK-II build with mode/flag selection.
 #
-# Usage: scripts/build.sh --mode {0|1|2|3} [--auto] [--debug] [--verbose]
-#                         [--embed <abl.bin>] [--profile <name>]
+# Usage: scripts/build.sh --mode {0|1} [--auto] [--debug] [--verbose]
 #
 # Output: dist/mode-<N>[flags].efi
 set -euo pipefail
@@ -14,8 +13,6 @@ MODE=1
 AUTO=0
 DEBUG=0
 VERBOSE=0
-EMBED=""        # Plan 3 placeholder
-PROFILE=""      # Plan 2 placeholder
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -23,17 +20,12 @@ while [[ $# -gt 0 ]]; do
     --auto)    AUTO=1;       shift   ;;
     --debug)   DEBUG=1;      shift   ;;
     --verbose) VERBOSE=1;    shift   ;;
-    --embed)   EMBED="$2";   shift 2 ;;
-    --profile) PROFILE="$2"; shift 2 ;;
     -h|--help)
       cat <<EOF
-Usage: $0 --mode {0|1|2|3} [--auto] [--debug] [--verbose]
-              [--embed <abl.bin>] [--profile <dev>/<ota>]
+Usage: $0 --mode {0|1} [--auto] [--debug] [--verbose]
 
 Mode 0: pass-through (no overlay, no patch9 v2, no protocol hooks).
 Mode 1: fakelocked chainload (default).
-Mode 2/3: reserved for future plans.
---embed and --profile are placeholders for plan 3 / plan 2.
 EOF
       exit 0 ;;
     *) echo "unknown flag: $1" >&2; exit 2 ;;
@@ -42,8 +34,7 @@ done
 
 case "$MODE" in
   0|1) ;;
-  2|3) echo "WARN: mode $MODE not yet supported in plan 1; building anyway" >&2 ;;
-  *) echo "--mode must be 0, 1, 2, or 3" >&2; exit 2 ;;
+  *) echo "--mode $MODE not yet supported (valid: 0, 1)" >&2; exit 2 ;;
 esac
 
 # Artifact name reflects active flags. This same string is also passed to the

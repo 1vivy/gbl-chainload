@@ -39,7 +39,7 @@ ProtocolHook_InstallAll (
   return EFI_SUCCESS;
 }
 
-#elif (GBL_MODE == 1 || GBL_MODE == 2 || GBL_MODE == 3)
+#elif (GBL_MODE == 1)
 
 /* Existing slot installers (defined in their respective .c files). */
 EFI_STATUS InstallVerifiedBootHook (VOID);
@@ -129,5 +129,5 @@ ProtocolHook_InstallAll (
 }
 
 #else
-# error "GBL_MODE must be 0, 1, 2, or 3"
+# error "GBL_MODE must be 0 or 1"
 #endif
