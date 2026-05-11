@@ -2,7 +2,7 @@
 
 These rules apply to **every** Claude session in this project. They override
 default and auto-mode behavior. They are also enforced at the tool layer by
-`.claude/hooks/block-non-hlos-flash.sh` (PreToolUse Bash hook) and declared
+`.claude/hooks/block-non-hlos-flash.py` (PreToolUse Python hook) and declared
 in `.claude/settings.json` `autoMode.hard_deny`.
 
 ## Safety: never flash non-HLOS images
