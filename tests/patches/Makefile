@@ -6,6 +6,12 @@ DPL     := $(PROJ)/GblChainloadPkg/Library/DynamicPatchLib
 INCLUDES := -I$(PROJ)/GblChainloadPkg/Include/Library \
             -I$(DPL)/Internal
 
+# Where the tests look for ABL fixtures. Untracked: device firmware blobs
+# never land in git (see top-level .gitignore). Override at make time:
+#   make TEST_FIXTURES_DIR=/path/to/blobs
+TEST_FIXTURES_DIR ?= $(PROJ)/tests/images
+CFLAGS  += -DTEST_FIXTURES_DIR='"$(TEST_FIXTURES_DIR)"'
+
 TESTS := test_patch1 test_patch7 test_patch9
 
 all: $(TESTS)

@@ -72,47 +72,46 @@ if [[ -z "$PAYLOAD" || ! -f "$PAYLOAD" ]]; then
   exit 1
 fi
 
-LABEL="$(basename "$PAYLOAD" .efi)"
-VERSION=$(strings "$PAYLOAD" 2>/dev/null \
-            | grep -E '^[0-9]+\.[0-9]+(-[0-9a-z]+)?$' \
-            | head -1 || true)
-[[ -z "$VERSION" ]] && VERSION=$(git -C "$REPO_ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)
-
 TS="$(date +%Y%m%d-%H%M%S)"
+
+# ---------------------------------------------------------------------------
+# Step 1 — confirm device is in OUR FastbootLib (no log dir yet; we read the
+# build name from the device and use IT to name the log dir).
+
+echo "======================================================================"
+echo "  test-device-automatic.sh"
+echo "  payload  : $PAYLOAD ($(stat -c%s "$PAYLOAD") bytes)"
+echo "  return   : $RETURN_TO_FASTBOOT"
+echo "======================================================================"
+
+echo
+echo ">>> [1/4] confirming device is in our FastbootLib (via getvar build-name)"
+if ! device_monitor_in_fastboot_quick; then
+  echo "error: no fastboot device detected. Power on into bootloader and rerun." >&2
+  exit 1
+fi
+DEVICE_BUILD_NAME="$(device_monitor_build_name)"
+if [[ -z "$DEVICE_BUILD_NAME" ]]; then
+  echo "error: device responded but is NOT our FastbootLib (getvar build-name" >&2
+  echo "       returned nothing recognizable). Recovery options:" >&2
+  echo "         1) \`fastboot reboot bootloader\` — our flashed chainloader EFI" >&2
+  echo "            should auto-boot into FastbootLib." >&2
+  echo "         2) If our EFI isn't flashed: flash a mode-* build to uefi_a/uefi_b" >&2
+  echo "            and try again." >&2
+  exit 1
+fi
+
+# Log dir derives its label from the device's build-name (single source of
+# truth). version from git for traceability.
+LABEL="$DEVICE_BUILD_NAME"
+VERSION=$(git -C "$REPO_ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)
 LOG_DIR="$REPO_ROOT/logs/${TS}_auto_${LABEL}_v${VERSION}"
 mkdir -p "$LOG_DIR"
 device_monitor_start "$LOG_DIR" "test-device-automatic"
 trap 'device_monitor_stop' EXIT INT TERM
 
-echo "======================================================================"
-echo "  test-device-automatic.sh"
-echo "  payload  : $PAYLOAD ($(stat -c%s "$PAYLOAD") bytes)"
-echo "  label    : $LABEL"
-echo "  version  : $VERSION"
-echo "  log dir  : $LOG_DIR"
-echo "  return   : $RETURN_TO_FASTBOOT"
-echo "======================================================================"
-
-# ---------------------------------------------------------------------------
-# Step 1 — confirm device is in OUR FastbootLib
-
-echo
-echo ">>> [1/4] confirming device is in our FastbootLib (via getvar boot-mode)"
-if ! device_monitor_in_fastboot_quick; then
-  echo "error: no fastboot device detected. Power on into bootloader and rerun." >&2
-  exit 1
-fi
-MODE="$(device_monitor_gbl_mode)"
-if [[ -z "$MODE" ]]; then
-  echo "error: device responded but is NOT our FastbootLib (getvar boot-mode" >&2
-  echo "       returned no gbl-mode-* string). Recovery options:" >&2
-  echo "         1) Reboot device: \`fastboot reboot bootloader\` — our flashed" >&2
-  echo "            chainloader EFI should auto-boot into FastbootLib." >&2
-  echo "         2) If our EFI isn't flashed: flash a mode-* build to uefi_a/uefi_b" >&2
-  echo "            and try again." >&2
-  exit 1
-fi
-echo "    in our FastbootLib: $MODE"
+echo "    in our FastbootLib: $DEVICE_BUILD_NAME"
+echo "    log dir            : $LOG_DIR"
 
 # ---------------------------------------------------------------------------
 # Step 2 — stage + oem boot-efi
@@ -173,8 +172,8 @@ case "$OUTCOME" in
     echo "    outcome A: payload booted to adb."
     ;;
   B)
-    BMODE="$(device_monitor_gbl_mode)"
-    echo "    outcome B: payload crashed, back in our FastbootLib ($BMODE)."
+    BNAME="$(device_monitor_build_name)"
+    echo "    outcome B: payload crashed, back in our FastbootLib ($BNAME)."
     echo "    issuing oem escape → patched ABL → recovery..."
     if ! device_monitor_phoenix_check; then
       echo "error: Phoenix watchdog deadline — bailing before stock-fastboot wedge" >&2
@@ -248,11 +247,11 @@ adb reboot bootloader 2>/dev/null || true
 echo "    waiting for our FastbootLib to come back up (auto-boot from flashed EFI)..."
 if device_monitor_wait_for_fastboot 90; then
   device_monitor_phoenix_stop
-  POST_MODE="$(device_monitor_gbl_mode)"
-  if [[ -n "$POST_MODE" ]]; then
-    echo "    back in our FastbootLib: $POST_MODE."
+  POST_NAME="$(device_monitor_build_name)"
+  if [[ -n "$POST_NAME" ]]; then
+    echo "    back in our FastbootLib: $POST_NAME."
   else
-    echo "    fastboot is up but not our FastbootLib (boot-mode missing). May be stock." >&2
+    echo "    fastboot is up but not our FastbootLib (build-name missing). May be stock." >&2
   fi
 else
   echo "error: fastboot did not come back within 90s — device may need manual recovery." >&2

@@ -17,10 +17,12 @@ tests/*/test_*
 .omc/
 tests/*/.omc/
 
-# Stock OTA partition images — never tracked
-images/
-!images/.gitkeep
-!images/README.md
+# Stock OTA partition images — top-level only.
+# (Anchored with a leading slash so `tests/images/` stays tracked: that's
+# where committed ABL fixtures for the patch test harness live.)
+/images/
+!/images/.gitkeep
+!/images/README.md
 
 # Mode-2 profile payloads — gitignored; manifest.json is tracked (Plan 2)
 profiles/*/profile.h

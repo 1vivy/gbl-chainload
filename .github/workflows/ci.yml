@@ -7,15 +7,10 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - name: Set up Docker
-        uses: docker/setup-buildx-action@v3
-      - name: Build docker image
-        run: docker build -t gbl-chainload-build docker/
       - name: Run all tests
-        run: |
-          docker run --rm -v "$PWD":/work -w /work gbl-chainload-build \
-            bash tests/runall.sh
+        run: bash tests/runall.sh

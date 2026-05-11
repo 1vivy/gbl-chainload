@@ -19,20 +19,8 @@
 #define GBL_CHAINLOAD_VERSION  "unknown"
 #endif
 
-#ifndef GBL_MODE
-# define GBL_MODE 0
-#endif
-
-#if (GBL_MODE == 0)
-# define GBL_CHAINLOAD_MODE  "mode-0"
-#elif (GBL_MODE == 1)
-# define GBL_CHAINLOAD_MODE  "mode-1"
-#elif (GBL_MODE == 2)
-# define GBL_CHAINLOAD_MODE  "mode-2"
-#elif (GBL_MODE == 3)
-# define GBL_CHAINLOAD_MODE  "mode-3"
-#else
-# define GBL_CHAINLOAD_MODE  "unknown-mode"
+#ifndef GBL_BUILD_NAME
+# define GBL_BUILD_NAME  "mode-unknown"
 #endif
 
 EFI_STATUS
@@ -114,9 +102,9 @@ LogFsOpenPostGblLog (
 
   /* Banner identifies the build that wrote this log. */
   BannerLen = AsciiSPrint (Banner, sizeof (Banner),
-                           "=== gbl-chainload - %a - %a %a ===\n"
+                           "=== gbl-chainload %a - %a %a ===\n"
                            "=== boot slot %u of %u ===\n",
-                           GBL_CHAINLOAD_MODE,
+                           GBL_BUILD_NAME,
                            __DATE__, __TIME__,
                            Slot, POST_GBL_SLOTS);
   Size   = BannerLen;

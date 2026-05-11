@@ -46,12 +46,16 @@ case "$MODE" in
   *) echo "--mode must be 0, 1, 2, or 3" >&2; exit 2 ;;
 esac
 
-# Artifact name reflects active flags.
+# Artifact name reflects active flags. This same string is also passed to the
+# in-container build as GBL_BUILD_NAME so the EFI publishes it via getvar
+# build-name — scripts can identify what's running on device without parsing
+# the binary or filename.
 SUFFIX=""
 [[ $AUTO    -eq 1 ]] && SUFFIX+="-auto"
 [[ $DEBUG   -eq 1 ]] && SUFFIX+="-debug"
 [[ $VERBOSE -eq 1 ]] && SUFFIX+="-verbose"
-ARTIFACT="dist/mode-${MODE}${SUFFIX}.efi"
+BUILD_NAME="mode-${MODE}${SUFFIX}"
+ARTIFACT="dist/${BUILD_NAME}.efi"
 
 IMAGE_TAG="gbl-chainload-build:latest"
 
@@ -83,6 +87,7 @@ echo "==> Building $ARTIFACT (mode=$MODE auto=$AUTO debug=$DEBUG verbose=$VERBOS
   -e GBL_AUTO="$AUTO" \
   -e GBL_DEBUG="$DEBUG" \
   -e GBL_VERBOSE="$VERBOSE" \
+  -e GBL_BUILD_NAME="$BUILD_NAME" \
   "$IMAGE_TAG" \
   bash scripts/build-inside-docker.sh
 

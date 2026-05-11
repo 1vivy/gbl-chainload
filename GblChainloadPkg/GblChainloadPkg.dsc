@@ -66,6 +66,11 @@
   DEFINE GBL_DEBUG                        = 0
   DEFINE GBL_VERBOSE                      = 0
 
+  # Build name — single string identifier substituted into log banner,
+  # FastbootMenu display, and the build-name getvar. build-inside-docker.sh
+  # constructs the suffixed form (e.g. mode-1-auto-debug-verbose).
+  DEFINE GBL_BUILD_NAME                   = mode-unknown
+
 ################################################################################
 # Library mappings — mirrors QcomModulePkg.dsc [LibraryClasses.*]
 ################################################################################
@@ -135,6 +140,7 @@
   GCC:*_*_*_CC_FLAGS = -DGBL_AUTO=$(GBL_AUTO)
   GCC:*_*_*_CC_FLAGS = -DGBL_DEBUG=$(GBL_DEBUG)
   GCC:*_*_*_CC_FLAGS = -DGBL_VERBOSE=$(GBL_VERBOSE)
+  GCC:*_*_*_CC_FLAGS = -DGBL_BUILD_NAME=\"$(GBL_BUILD_NAME)\"
 
   # Workarounds for this Qualcomm edk2 fork against modern Ubuntu GCC:
   #  - __FORTIFY_SOURCE: BaseLib.h:148 macro space-bug workaround
