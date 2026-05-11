@@ -4,6 +4,8 @@
 
 **Goal:** verify that mode-1 (patch9 active + grafted vbmeta footers) builds the same Root of Trust and vbmeta hash that the pure-stock fakelocked baseline produced. Output a findings doc with a concrete pass / fail / inconclusive verdict.
 
+**Status:** completed (findings in `docs/re/fakelock-vs-debug-comparison.md`, carried forward in commit `8d779e6`).
+
 **Architecture:** read-only RE work. Pull data from two existing captures, build a property table, diff bootloader_log around ROT/vbmeta/verifiedboot, interpret divergences as expected (patch9 changes verification path) vs anomalous (ROT bytes that shouldn't depend on our patches). No source code changes.
 
 **Tech Stack:** `grep`, `diff`, `awk`, `python3` for any tabulation. Output is markdown in `docs/re/`.

@@ -4,6 +4,8 @@
 
 **Goal:** Land mode-0 (minimal foundation), fix logfs to mount across every mode, redesign patch9 to survive multi-binary anchor verification, and validate end-to-end on device through to a custom-recovery boot under mode-1 fakelock.
 
+**Status:** completed (commit `b871992` / tag `v2.0.0-plan2-mode0-logfs-patch9v2`).
+
 **Architecture:** Mode-0 is GBL_MODE=0 — patch1 only, no protocol hooks, no patch9. Logfs always mounts (universal across modes), with a "proper transition" (flush+close before LoadImage) so chained EFIs aren't blocked. Patch9 v2 has two sites (Approach A: VerifyFlags-derivation rewrite + post-libavb gate rewrite; Approach B alternative: libavb-internal return remap). Selection is data-driven during disassembly. Anchors validated against 5 PE fixtures (old infiniti, EU 16.0.5.703, IN 16.0.7.201, fairlady CN 16.0.7.200, myron) with at least 3-of-5 PATCH_OK requirement.
 
 **Tech Stack:** EDK-II (UEFI Application + Library, AArch64), C99, host-side disassembly via `aarch64-linux-gnu-objdump` and/or Ghidra MCP, Docker for build, `gh` for git/release.
