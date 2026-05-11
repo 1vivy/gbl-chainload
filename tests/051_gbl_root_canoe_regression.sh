@@ -5,7 +5,7 @@
 # prerequisites before any of these patches can be ported.  Survey comments
 # below enumerate per-patch unblocks; see commit history for the full survey.
 #
-# Survey date: 2026-05-09  (gbl_root_canoe @ /home/vivy/gbl_root_canoe)
+# Survey date: 2026-05-09  (gbl_root_canoe @ <repo checkout>)
 #
 # Patches surveyed (tools/patchlib.h + tools/patch_abl.c):
 #
