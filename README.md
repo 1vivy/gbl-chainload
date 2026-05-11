@@ -26,7 +26,3 @@ Working artifacts: `dist/mode-0.efi` (pass-through observation build) and `dist/
 - `GblChainloadPkg/Library/DynamicPatchLib/{universal,oem,mode_1}/` — patches scoped by applicability.
 - `GblChainloadPkg/Library/ProtocolHookLib/UniversalBaseline.c` — hooks every mode ships.
 - `GblChainloadPkg/Library/ProtocolHookLib/Mode1Overlay.c` — mode-1-specific hooks atop baseline.
-
-## Sibling
-
-Old tree preserved read-only at `/home/vivy/gbl-chainload-dirty/` (tag `dirty/last-mode-fakelocked`).
