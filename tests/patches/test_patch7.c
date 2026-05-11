@@ -14,8 +14,13 @@
 /* Call ApplyOrangeScreen directly — patch7 is not in the active table. */
 extern PATCH_OUTCOME ApplyOrangeScreen (UINT8 *Buf, UINT32 Size);
 
-#define INFINITI_FIXTURE \
-  "/home/vivy/gbl-chainload/images/infiniti/LinuxLoader_infiniti.efi"
+#ifndef TEST_FIXTURES_DIR
+#error "TEST_FIXTURES_DIR must be -D'd at compile time (set by Makefile)"
+#endif
+
+/* Patch7's anchor/offset is specific to the extracted infiniti PE. The
+   test runs only when that exact fixture is present; otherwise SKIP. */
+#define INFINITI_FIXTURE TEST_FIXTURES_DIR "/LinuxLoader_infiniti.efi"
 
 /* File offset of the CBZ instruction in the infiniti binary. */
 #define PATCH7_CBZ_OFF  0x78F0U
@@ -57,8 +62,9 @@ main (void)
   UINT32 size = 0;
   UINT8 *buf  = load_file (INFINITI_FIXTURE, &size);
   if (!buf) {
-    fprintf (stderr, "infiniti fixture missing — cannot exercise patch7\n");
-    return 1;
+    printf ("SKIP: test_patch7 — infiniti fixture %s not present\n",
+            INFINITI_FIXTURE);
+    return 0;
   }
 
   /* --- 1. Anchor uniqueness ------------------------------------------------ */
