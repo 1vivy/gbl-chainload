@@ -4,6 +4,8 @@
 
 **Goal:** make `scripts/test-device-automatic.sh` run unattended through the full reboot→fastboot→stage→escape→recovery→pull→bootloader cycle, surfacing actionable errors instead of hanging when something goes wrong.
 
+**Status:** completed (Tasks 1-8 land in commits `186e7e2`, `2488296`, `66ad792` and ancestors; Tasks 9-11 appended via `ca574bb` and validated through `21133e3`).
+
 **Architecture:** iterative hardening. First a baseline run captures actual failure modes. Then concrete, scoped fixes land for known categories: Phoenix watchdog stopwatch, state-probe primitives in `device-monitor.sh`, replacing silent `|| true` swallows with explicit "expected X, got Y, hard-reset and rerun" exits, and porting test-device-manual.sh's logfs-mount discoveries. Validation = 3 unattended back-to-back runs.
 
 **Tech Stack:** bash, `adb`, `fastboot`, the existing `scripts/device-monitor.sh` helpers (`device_monitor_wait_for_fastboot`, `device_monitor_wait_for_adb_state`, `device_monitor_fastboot`).

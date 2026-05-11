@@ -4,6 +4,8 @@
 
 **Goal:** Bootstrap a fresh `gbl-chainload` repo with a clean three-mode-ready architecture, scan-based patch engine v2, universal baseline + mode-1 protocol-hook overlay, and a green host CI. End-state artifact: `dist/mode-1.efi` boots a stock-signed image on canoe with the same green/locked behavior as today's `mode-fakelocked.efi`, rebuilt on the durable scan-engine + clean module taxonomy.
 
+**Status:** completed (commit `4397930` / tag `v2.0.0-plan1-foundation`).
+
 **Architecture:** Fresh GitHub repo (`1vivy/gbl-chainload`) with a fresh edk2 fork. `GblChainloadPkg/` split into Application (Entry, BootFlow), DynamicPatchLib (scan engine + universal/oem/mode_N namespaces), ProtocolHookLib (universal baseline + per-mode overlay). Host-runnable `tools/abl-patcher` shares one C source with the runtime patcher.
 
 **Tech Stack:** EDK-II (UEFI Application + Library, AArch64), C99, GitHub Actions, Docker for build environment, gh CLI for repo creation.

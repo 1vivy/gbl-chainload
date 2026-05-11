@@ -1,6 +1,6 @@
 ## @file AvbParseLib.inf
 #  Minimal AVB structure parser — no external libavb dependency.
-#  Used by AvbFacade (Plan 3a) and fastboot status interface (Plan 3d).
+#  Used by AvbFacade and the fastboot status interface.
 ##
 
 [Defines]

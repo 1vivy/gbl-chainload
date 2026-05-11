@@ -28,9 +28,10 @@ for src in "${!FV_TO_PE[@]}"; do
   fi
 done
 
-# Copy the gbl_root_canoe-extracted myron PE (already a PE).
-if [[ -f /home/vivy/gbl_root_canoe/tests/extracted/LinuxLoader.efi ]]; then
-  cp /home/vivy/gbl_root_canoe/tests/extracted/LinuxLoader.efi images/pe/myron.efi
+# Copy a pre-extracted myron PE if MYRON_PE points at one
+# (e.g. MYRON_PE=/path/to/gbl_root_canoe/tests/extracted/LinuxLoader.efi).
+if [[ -n "${MYRON_PE:-}" && -f "$MYRON_PE" ]]; then
+  cp "$MYRON_PE" images/pe/myron.efi
   sha256sum images/pe/myron.efi
 fi
 

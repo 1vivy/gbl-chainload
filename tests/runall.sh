@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# runall.sh — full host CI surface for plan-1.
+# runall.sh — full host CI surface.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

@@ -4,6 +4,8 @@
 
 **Goal:** Restore custom-recovery + system-boot under mode-1 by transplanting stock recovery's embedded vbmeta into the user's custom recovery image; ship three tooling tracks (host script, on-device fastboot oem, flashable ZIP) plus an `AvbParseLib` for our own AVB structure parsing and a `getvar`/`oem` fastboot interface for vbmeta diagnostics.
 
+**Status:** completed (commit `4d7eddd` introduced `AvbParseLib`; `scripts/graft-vbmeta.py`, `tools/avb-graft-recovery/`, `zip/avb-graft-installer/`, and `tests/052_graft_vbmeta_roundtrip.sh` all landed alongside).
+
 **Architecture:** New `GblChainloadPkg/Library/AvbParseLib/` provides minimal AVB structure parsing (footer, header, descriptors) with no link dependency on libavb. New `scripts/graft-vbmeta.py` is a host-side Python tool (Track 1). New fastboot oem commands `graft-and-flash` and `vbmeta-status` plus per-vbmeta `getvar` handlers in the edk2 fork's `FastbootCmds.c` reuse `AvbParseLib`. Flashable ZIP under `zip/avb-graft-installer/` ports the graft logic to a static-linked aarch64 C binary (Track 3). All code is unconditionally compiled — no build flag gating in this plan.
 
 **Tech Stack:** EDK-II (UEFI Application + Library, AArch64), C99, Python 3 stdlib, AnyKernel3-style flashable ZIP, BaseCryptLib's SHA256 (already available in EDK-II), `aarch64-linux-gnu-gcc` cross-compile for the recovery-side static binary.

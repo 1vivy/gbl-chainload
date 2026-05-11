@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
 # tests/051_gbl_root_canoe_regression.sh — gbl_root_canoe regression fixtures.
 #
-# Status: survey-only for plan 1.  Future plan should build extractfv, bake
-# LinuxLoader.efi fixtures into tests/fixtures/patches-gbl-root-canoe/, port
-# representative patches into kRegressionPatches[], and add abl-patcher
-# --regression-suite.  See commit message for full survey findings.
+# Status: deferred — host-side extractfv and arm64 decoder vendoring are
+# prerequisites before any of these patches can be ported.  Survey comments
+# below enumerate per-patch unblocks; see commit history for the full survey.
 #
-# Survey date: 2026-05-09  (gbl_root_canoe @ /home/vivy/gbl_root_canoe)
+# Survey date: 2026-05-09  (gbl_root_canoe @ <repo checkout>)
 #
 # Patches surveyed (tools/patchlib.h + tools/patch_abl.c):
 #
