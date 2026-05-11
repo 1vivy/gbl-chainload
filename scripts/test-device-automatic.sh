@@ -97,14 +97,14 @@ echo "======================================================================"
 # Step 1 — confirm device is in OUR FastbootLib
 
 echo
-echo ">>> [1/4] confirming device is in our FastbootLib (via getvar boot-mode)"
+echo ">>> [1/4] confirming device is in our FastbootLib (via getvar mode)"
 if ! device_monitor_in_fastboot_quick; then
   echo "error: no fastboot device detected. Power on into bootloader and rerun." >&2
   exit 1
 fi
 MODE="$(device_monitor_gbl_mode)"
 if [[ -z "$MODE" ]]; then
-  echo "error: device responded but is NOT our FastbootLib (getvar boot-mode" >&2
+  echo "error: device responded but is NOT our FastbootLib (getvar mode" >&2
   echo "       returned no gbl-mode-* string). Recovery options:" >&2
   echo "         1) Reboot device: \`fastboot reboot bootloader\` — our flashed" >&2
   echo "            chainloader EFI should auto-boot into FastbootLib." >&2
@@ -252,7 +252,7 @@ if device_monitor_wait_for_fastboot 90; then
   if [[ -n "$POST_MODE" ]]; then
     echo "    back in our FastbootLib: $POST_MODE."
   else
-    echo "    fastboot is up but not our FastbootLib (boot-mode missing). May be stock." >&2
+    echo "    fastboot is up but not our FastbootLib (mode missing). May be stock." >&2
   fi
 else
   echo "error: fastboot did not come back within 90s — device may need manual recovery." >&2
