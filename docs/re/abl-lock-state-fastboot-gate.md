@@ -84,7 +84,7 @@ Concrete byte rewrites for the four B.NE sites:
 
 ## Why patch6 is mode-1 only
 
-Under modes 2 and 3 ABL stays honest (per `2026-05-09-gbl-chainload-v2-three-mode-rewrite-design.md`):
+Under modes 2 and 3 ABL stays honest (per [`docs/superpowers/specs/2026-05-09-gbl-chainload-v2-three-mode-rewrite-design.md`](../superpowers/specs/2026-05-09-gbl-chainload-v2-three-mode-rewrite-design.md)):
 `IsUnlocked()` returns TRUE, so on Pattern A the CBZ never branches into the
 error block, and on Pattern B the `B.NE skip_error` always takes the skip.
 The gates are dead branches under modes 2/3 — patch6 has no useful effect
@@ -110,12 +110,17 @@ unwrap correctly.
 
 This is the explicit reason we did not pursue the alternative "detect
 fastboot session and present real-unlocked RoT only then" — that would flip
-the hidden-set triple between boots and brick `/data`. See the 2026-05-11
-RoT-flow artifact for the field-by-field treatment across Trusty / QSEE /
-Samsung / AOSP-Rust keymint TAs; canoe = QSEE-KMv3.0.3 = three-field hidden
-set (`verified_boot_hash` is attestation-only, not bound to the KEK), which
-is why grafted vbmeta footers do not brick `/data` today and why patch6's
-no-touch contract is sufficient.
+the hidden-set triple between boots and brick `/data`. The field-by-field
+divergence across keymint TAs (Trusty C++ / QSEE / Samsung TEEGRIS /
+AOSP-Rust kmr-ta) is treated in external research (not committed here): the
+canonical pointers are `BuildHiddenAuthorizations` in `system/keymaster` /
+`trusty/app/keymaster` and `kmr-ta/src/keys.rs` `hidden()` in AOSP, plus
+Shakevsky/Ronen/Wool USENIX'22 for the Samsung blob, and Beniamini 2016 /
+NCC 2019 for QSEE. Canoe runs QSEE-KMv3.0.3 (KM2+ class) so its
+hidden-set is the three-field form `(verified_boot_key, verified_boot_state,
+device_locked)`; `verified_boot_hash` is attestation-only and not bound to
+the KEK — which is why grafted vbmeta footers do not brick `/data` today
+and why patch6's no-touch contract is sufficient.
 
 ## Scan/anchor strategy for the engine v2 patch
 
