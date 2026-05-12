@@ -1,7 +1,7 @@
 # AVB façade graft + libavb-status fastboot interface
 
 **Date**: 2026-05-10
-**Status**: Design draft (revised, lean); awaiting user review.
+**Status**: **SUPERSEDED — 2026-05-12** (see top of [`docs/superpowers/plans/2026-05-10-avb-facade-graft-and-status.md`](../plans/2026-05-10-avb-facade-graft-and-status.md)). Graft's "transplant stock vbmeta" approach worked for system-boot only because patch10 hid the descriptor/content mismatch at the ABL layer; userspace `libfs_avb` (post AOSP `ec10d3c`) catches it independently on the recovery-boot path. The replacement is **synthesize** — building an unsigned vbmeta whose `expected_digest` is derived from the partition's actual content (`scripts/synthesize-vbmeta.py`, fastboot `oem synthesize-and-flash` in PR C). Body below preserved for historical context only.
 **Working directory**: `/home/vivy/gbl-chainload` (v2 repo, `main` at `ee1b97f`).
 
 ## Context

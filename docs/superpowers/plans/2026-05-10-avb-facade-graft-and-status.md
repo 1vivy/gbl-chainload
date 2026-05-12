@@ -1,10 +1,34 @@
 # AVB façade graft + libavb-status fastboot interface — Implementation Plan
 
+> **Status: SUPERSEDED — 2026-05-12.** Shipped per this plan but proved
+> insufficient on the primary Android bootpath: stock's `expected_digest`
+> baked into the transplanted hash descriptor mismatches the custom
+> partition's actual content, and userspace `libfs_avb` (post AOSP
+> `ec10d3c`) re-validates the on-disk vbmeta independently of the
+> bootloader's claim. Graft worked for system-boot only because patch10
+> swallowed the mismatch at the ABL layer; recovery-boot broke at a
+> parallel check that patch10 doesn't cover.
+>
+> **Replaced by:** [`scripts/synthesize-vbmeta.py`](../../../scripts/synthesize-vbmeta.py)
+> and the upcoming `fastboot oem synthesize-and-flash` command. Synthesize
+> derives `expected_digest` from the partition's actual bytes, removing the
+> mismatch by construction.
+>
+> The graft host scripts (`scripts/graft-vbmeta.py`, `tools/avb-graft-recovery/`,
+> `zip/avb-graft-installer/`) and `tests/052_graft_vbmeta_roundtrip.sh` were
+> deleted. `AvbParseLib` is retained — its parsers are reusable for the
+> diagnostic / `getvar` surface this plan defined. The fastboot
+> `CmdOemGraftAndFlash` removal lands with the synthesize command in PR C.
+>
+> Body below preserved for historical context and the design vocabulary
+> (three-track tooling shape, vbmeta-status getvar surface) that synthesize
+> will reuse.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Restore custom-recovery + system-boot under mode-1 by transplanting stock recovery's embedded vbmeta into the user's custom recovery image; ship three tooling tracks (host script, on-device fastboot oem, flashable ZIP) plus an `AvbParseLib` for our own AVB structure parsing and a `getvar`/`oem` fastboot interface for vbmeta diagnostics.
 
-**Status:** completed (commit `4d7eddd` introduced `AvbParseLib`; `scripts/graft-vbmeta.py`, `tools/avb-graft-recovery/`, `zip/avb-graft-installer/`, and `tests/052_graft_vbmeta_roundtrip.sh` all landed alongside).
+**Status:** ~~completed~~ **superseded** (commit `4d7eddd` introduced `AvbParseLib`; `scripts/graft-vbmeta.py`, `tools/avb-graft-recovery/`, `zip/avb-graft-installer/`, and `tests/052_graft_vbmeta_roundtrip.sh` all landed alongside — and have since been removed).
 
 **Architecture:** New `GblChainloadPkg/Library/AvbParseLib/` provides minimal AVB structure parsing (footer, header, descriptors) with no link dependency on libavb. New `scripts/graft-vbmeta.py` is a host-side Python tool (Track 1). New fastboot oem commands `graft-and-flash` and `vbmeta-status` plus per-vbmeta `getvar` handlers in the edk2 fork's `FastbootCmds.c` reuse `AvbParseLib`. Flashable ZIP under `zip/avb-graft-installer/` ports the graft logic to a static-linked aarch64 C binary (Track 3). All code is unconditionally compiled — no build flag gating in this plan.
 
