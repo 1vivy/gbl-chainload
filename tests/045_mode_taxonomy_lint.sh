@@ -25,13 +25,22 @@ grep -q 'SCOPE_OEM_ONEPLUS' "$PKG/oem/oneplus_canoe.c" \
 grep -q 'SCOPE_MODE_1' "$PKG/mode_1/mode_1.c" \
   || { echo "FAIL: mode_1/mode_1.c must declare SCOPE_MODE_1"; exit 1; }
 
-# 5. patch9 is mode-1 scope, NOT in universal or oem.
-if grep -q 'patch9-avb-locked-recoverable-continue' "$PKG/universal/universal.c" \
-   || grep -q 'patch9-avb-locked-recoverable-continue' "$PKG/oem/oneplus_canoe.c"; then
-  echo "FAIL: patch9 must be in mode_1/, not universal/ or oem/"; exit 1
+# 5. mode-1 patches are mode-1 scope, NOT in universal or oem.
+#    patch10 (libavb force-AVB-success) and patch6 (lock-state fastboot-gate)
+#    are mode-1 only; patch9 is superseded by patch10 and must be gone from
+#    the active patch table.
+for name in patch10-libavb-force-avb-success patch6-lock-state-fastboot-gate; do
+  if grep -q "$name" "$PKG/universal/universal.c" \
+     || grep -q "$name" "$PKG/oem/oneplus_canoe.c"; then
+    echo "FAIL: $name must be in mode_1/, not universal/ or oem/"; exit 1
+  fi
+  grep -q "$name" "$PKG/mode_1/mode_1.c" \
+    || { echo "FAIL: $name must be in mode_1/mode_1.c"; exit 1; }
+done
+if grep -q 'patch9-avb-locked-recoverable-continue' "$PKG/mode_1/mode_1.c"; then
+  echo "FAIL: patch9 is superseded by patch10; remove patch9 from mode_1/mode_1.c"
+  exit 1
 fi
-grep -q 'patch9-avb-locked-recoverable-continue' "$PKG/mode_1/mode_1.c" \
-  || { echo "FAIL: patch9 must be in mode_1/mode_1.c"; exit 1; }
 
 # 6. patch1 is universal scope.
 grep -q 'patch1-efisp-recursion' "$PKG/universal/universal.c" \
