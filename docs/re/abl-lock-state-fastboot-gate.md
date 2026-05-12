@@ -1,8 +1,14 @@
 # ABL fastboot Lock-State gate — patch6 RE findings
 
 **Date:** 2026-05-11
-**Fixtures:** `LinuxLoader_infiniti.efi` (host), `LinuxLoader.efi` (canoe ABL)
-**Ghidra project:** `gbl_root_canoe` — bookmarks under category `patch6`
+**Fixtures:** `LinuxLoader_infiniti.efi` (infiniti — OnePlus 15) and
+`LinuxLoader.efi` (myron — Xiaomi Redmi K90 Pro Max / POCO F8 Ultra;
+identified by literal `myron,end` string in the PE body).
+**Ghidra project:** `gbl_root_canoe` — bookmarks under category `patch6`.
+The project name is aspirational/historical (canoe = kaanapali, sm8850 — not
+a fixture we currently exercise). The binary opened as `LinuxLoader.efi` in
+that project is myron's extracted PE; the cross-OEM split (OnePlus +
+Xiaomi) below confirms patch6's anchor strategy isn't OnePlus-specific.
 
 ## Goal
 
@@ -18,7 +24,7 @@ RoT triple, AVB state).
 
 ## String anchors (both fixtures)
 
-| String | Infiniti VA | Canoe VA | Note |
+| String | Infiniti VA | Myron VA | Note |
 |--------|-------------|----------|------|
 | `Flashing is not allowed in Lock State`        | `0x584CF` | `0x65EEE` | |
 | `Erase is not allowed in Lock State`           | `0x5B002` | `0x68A79` | |
@@ -39,7 +45,7 @@ shapes** across the four sites. Both fixtures share the same split.
 The error block (ADRP+ADD+BL printer) sits OFF the success path; control
 reaches it only via an explicit `CBZ`.
 
-| Site | Infiniti CBZ | Decoded | Canoe CBZ | Decoded |
+| Site | Infiniti CBZ | Decoded | Myron CBZ | Decoded |
 |------|--------------|---------|-----------|---------|
 | Flashing | `0x1C3E4: a8 03 00 34` | `CBZ w8, #+0x74 → 0x1C458` | `0x5C080: 68 21 00 34` | `CBZ w8, #+0x42C → 0x5C4AC` |
 | Erase    | `0x1DF68: a8 02 00 34` | `CBZ w8, #+0x54 → 0x1DFBC` | `0x5DDE0: a8 0a 00 34` | `CBZ w8, #+0x154 → 0x5DF34` |
@@ -60,7 +66,7 @@ The error block is fall-through; the conditional skips past it when the
 device is unlocked. `BL <unlock-checker>` immediately above sets the flags
 consumed by `B.NE`.
 
-| Site | Infiniti B.NE | Decoded | Canoe B.NE | Decoded |
+| Site | Infiniti B.NE | Decoded | Myron B.NE | Decoded |
 |------|---------------|---------|------------|---------|
 | Slot Change     | `0x1AA54: c1 21 00 54` | `B.NE #+0x438 → 0x1AE8C` | `0x5A1E4: e1 21 00 54` | `B.NE #+0x43C → 0x5A620` |
 | Snapshot Cancel | `0x1C1EC: a1 04 00 54` | `B.NE #+0x94  → 0x1C280` | `0x5B8A4: a1 04 00 54` | `B.NE #+0x94  → 0x5B938` |
@@ -79,8 +85,8 @@ Concrete byte rewrites for the four B.NE sites:
 |------|---------------|--------------|---------------|
 | Infiniti Slot Change     | `0x540021C1` | `0x1400010E` | `0e 01 00 14` |
 | Infiniti Snapshot Cancel | `0x540004A1` | `0x14000025` | `25 00 00 14` |
-| Canoe Slot Change        | `0x540021E1` | `0x1400010F` | `0f 01 00 14` |
-| Canoe Snapshot Cancel    | `0x540004A1` | `0x14000025` | `25 00 00 14` |
+| Myron Slot Change        | `0x540021E1` | `0x1400010F` | `0f 01 00 14` |
+| Myron Snapshot Cancel    | `0x540004A1` | `0x14000025` | `25 00 00 14` |
 
 ## Why patch6 is mode-1 only
 
@@ -116,11 +122,16 @@ AOSP-Rust kmr-ta) is treated in external research (not committed here): the
 canonical pointers are `BuildHiddenAuthorizations` in `system/keymaster` /
 `trusty/app/keymaster` and `kmr-ta/src/keys.rs` `hidden()` in AOSP, plus
 Shakevsky/Ronen/Wool USENIX'22 for the Samsung blob, and Beniamini 2016 /
-NCC 2019 for QSEE. Canoe runs QSEE-KMv3.0.3 (KM2+ class) so its
-hidden-set is the three-field form `(verified_boot_key, verified_boot_state,
+NCC 2019 for QSEE. Infiniti runs QSEE-KMv3.0.3 (KM2+ class, confirmed by the
+2026-05-08 device capture in `.re-notes/sessions/2026-05-08-km-revalidation.md`)
+so its hidden-set is the three-field form `(verified_boot_key, verified_boot_state,
 device_locked)`; `verified_boot_hash` is attestation-only and not bound to
 the KEK — which is why grafted vbmeta footers do not brick `/data` today
-and why patch6's no-touch contract is sufficient.
+and why patch6's no-touch contract is sufficient. (Myron's KM class is not
+yet directly measured here; if its hidden-set turns out to also bind
+`verified_boot_hash` like the AOSP-Rust path, patch6 stays safe but mode-1's
+vbmeta-graft assumption needs re-verification on myron — separate
+follow-up.)
 
 ## Scan/anchor strategy for the engine v2 patch
 
@@ -165,7 +176,7 @@ fails and CI fails.
 
 ## Cross-fixture stability summary
 
-| Aspect | Infiniti | Canoe | Stable? |
+| Aspect | Infiniti | Myron | Stable? |
 |--------|----------|-------|---------|
 | Strings present | 4 of 4 | 4 of 4 | yes |
 | Pattern split (which gate uses A vs B) | Flash/Erase A; Slot/Snap B | identical | **yes** |
@@ -192,7 +203,7 @@ the `gbl_root_canoe` project: `LinuxLoader_infiniti.efi` and
    `tests/051_gbl_root_canoe_regression.sh` survey.
 2. Implement `patch6-lock-state-fastboot-gate` (`SCOPE_MODE_1`,
    `Mandatory=TRUE`) in `GblChainloadPkg/Library/DynamicPatchLib/mode_1/`.
-3. Add `tests/fixtures/patches-patch6/{infiniti,canoe}/{input,expected}.bin`
+3. Add `tests/fixtures/patches-patch6/{infiniti,myron}/{input,expected}.bin`
    and a byte-diff regression test wired into
    `tests/042_dynamic_patch_harness.sh`.
 4. Stage+`oem boot-efi` smoke: confirm
