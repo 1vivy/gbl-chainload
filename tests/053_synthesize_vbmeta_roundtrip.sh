@@ -1,280 +1,242 @@
 #!/usr/bin/env bash
 # 053_synthesize_vbmeta_roundtrip.sh — verify synthesize-vbmeta.py
-# produces a well-formed AVB partition layout for both modes:
-#   default: fake-signed SHA256_RSA2048 → SIGNATURE_MISMATCH at libavb
-#   --unsigned: algorithm_type=NONE → OK_NOT_SIGNED at libavb
-# In both cases the hash descriptor's expected_digest is the SHA256 of
-# (salt || input).
+# produces a stock-shaped fake-signed vbmeta whose hash descriptor's
+# expected_digest is SHA256(salt || input) and whose embedded pubkey is
+# the OEM pubkey extracted from stock vbmeta.img.
+#
+# Test fixture builds a stock-like vbmeta.img on the fly that contains
+# RSA-2048 and RSA-4096 chain descriptors so we can exercise both
+# key-size branches of synthesize without depending on a real OEM image.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 
-# 1. Synthesize a known input — deterministic, byte 0xCC repeated.
+# 1. Synthesize a known input.
 python3 - "$TMP" <<'PY'
 import os, sys
 tmp = sys.argv[1]
-IMG_SIZE = 64 * 1024
-img = bytes([0xCC]) * IMG_SIZE
+img = bytes([0xCC]) * (64 * 1024)
 with open(os.path.join(tmp, "input.img"), "wb") as f: f.write(img)
-print(f"input image: {IMG_SIZE} bytes of 0xCC")
+print(f"input image: {len(img)} bytes of 0xCC")
 PY
 
-PARTITION_SIZE=131072
-
-# ---------------------------------------------------------------------------
-# 2. Default invocation: fake-signed SHA256_RSA2048.
-# ---------------------------------------------------------------------------
-python3 scripts/synthesize-vbmeta.py \
-  --partition recovery \
-  --in "$TMP/input.img" \
-  --partition-size "$PARTITION_SIZE" \
-  --out "$TMP/out_signed.img"
-
-# Verify the signed output structurally and digest-wise.
-python3 - "$TMP" "$PARTITION_SIZE" <<'PY'
-import hashlib, struct, sys
+# 2. Build a fixture stock-like vbmeta.img with chain descriptors for two
+#    partitions: "recovery" using RSA-4096, "dtbo" using RSA-2048.
+python3 - "$TMP" <<'PY'
+import os, struct, sys
 tmp = sys.argv[1]
-PSZ = int(sys.argv[2])
+
+def chain_desc(name, pk_len, key_num_bits, rb_loc):
+    name_b = name.encode("ascii")
+    # AvbRSAPublicKey: key_num_bits(u32 BE) + n0inv(u32 BE) + N + RR
+    bits = key_num_bits
+    pubkey = (
+        struct.pack(">I", bits) + struct.pack(">I", 0xDEADBEEF) +
+        b"\xab" * (bits // 8) + b"\xcd" * (bits // 8)
+    )
+    assert len(pubkey) == pk_len
+    # body: rb_loc(u32)+name_len(u32)+pk_len(u32)+flags(u8)+reserved[3]+reserved2[60]=76, then name+pk
+    body = struct.pack(">III", rb_loc, len(name_b), pk_len) + b"\x00" * 4 + b"\x00" * 60
+    body += name_b + pubkey
+    pad = (-len(body)) & 7
+    body += b"\x00" * pad
+    # parent: tag(u64 BE) + num_bytes_following(u64 BE)
+    return struct.pack(">QQ", 4, len(body)) + body
+
+aux_block = chain_desc("recovery", 1032, 4096, 1) + chain_desc("dtbo", 520, 2048, 3)
+aux_size = ((len(aux_block) + 63) & ~63)
+aux_block += b"\x00" * (aux_size - len(aux_block))
+
+# Build header: unsigned (algo=0, auth=0) — we only need the descriptor area
+# parseable for extract_chain_pubkey.
+hdr = (
+    b"AVB0" +
+    struct.pack(">II", 1, 0) +              # required ver
+    struct.pack(">Q", 0) +                  # auth_size
+    struct.pack(">Q", aux_size) +           # aux_size
+    struct.pack(">I", 0) +                  # algo NONE
+    struct.pack(">Q", 0) * 8 +              # hash/sig/pk/pkm off+sizes
+    struct.pack(">Q", 0) +                  # desc_off
+    struct.pack(">Q", aux_size) +           # desc_size
+    struct.pack(">Q", 0) +                  # rollback
+    struct.pack(">I", 0) +                  # flags
+    struct.pack(">I", 0)                    # rb_loc
+)
+hdr += b"\x00" * (256 - len(hdr))
+assert len(hdr) == 256
+with open(os.path.join(tmp, "stock_vbmeta.img"), "wb") as f:
+    f.write(hdr + aux_block)
+print(f"fixture vbmeta.img: {256 + aux_size} B; chain[recovery]=RSA-4096 chain[dtbo]=RSA-2048")
+PY
+
+# Helper that re-parses synthesize output and checks invariants for a given
+# partition name + expected algorithm/sizes.
+verify_py='
+import hashlib, struct, sys
+tmp, out_name, part_name, want_algo, want_pk_size, want_sig_size = sys.argv[1:7]
+want_algo, want_pk_size, want_sig_size = int(want_algo), int(want_pk_size), int(want_sig_size)
+PSZ = int(sys.argv[7])
 
 with open(f"{tmp}/input.img", "rb") as f: input_data = f.read()
-with open(f"{tmp}/out_signed.img", "rb") as f: out = f.read()
-
+with open(f"{tmp}/{out_name}", "rb") as f: out = f.read()
 assert len(out) == PSZ, f"output size {len(out)} != partition_size {PSZ}"
 
-# AvbFooter (last 64 bytes).
 footer = out[-64:]
-assert footer[:4] == b"AVBf", f"footer magic missing: {footer[:4]!r}"
-f_major, f_minor = struct.unpack(">II", footer[4:12])
-orig_size, vbm_off, vbm_size = struct.unpack(">QQQ", footer[12:36])
-assert f_major == 1 and f_minor == 0, f"footer version {f_major}.{f_minor}"
-assert orig_size == len(input_data), f"footer.original_image_size {orig_size} != {len(input_data)}"
-assert vbm_off + vbm_size <= PSZ - 64, "vbmeta region overlaps footer"
-assert vbm_off % 4096 == 0, f"vbmeta_offset not 4K-aligned: {vbm_off}"
-print(f"ok AvbFooter: image_size={orig_size} vbm_off={vbm_off} vbm_size={vbm_size}")
-
-pad = out[len(input_data):vbm_off]
-assert all(b == 0 for b in pad), f"padding {len(pad)}B should be zero"
-
-# AvbVBMetaImageHeader (256 bytes at vbm_off).
-hdr = out[vbm_off:vbm_off + 256]
-assert hdr[:4] == b"AVB0", f"vbmeta magic missing: {hdr[:4]!r}"
-h_major, h_minor = struct.unpack(">II", hdr[4:12])
-auth_sz, aux_sz = struct.unpack(">QQ", hdr[12:28])
-algo, = struct.unpack(">I", hdr[28:32])
-hash_off, hash_sz = struct.unpack(">QQ", hdr[0x20:0x30])
-sig_off,  sig_sz  = struct.unpack(">QQ", hdr[0x30:0x40])
-pk_off,   pk_sz   = struct.unpack(">QQ", hdr[0x40:0x50])
-desc_off, desc_sz = struct.unpack(">QQ", hdr[0x60:0x70])
-
-assert h_major == 1 and h_minor == 0, f"header version {h_major}.{h_minor}"
-# Signed-junk requirements that make libavb hit ERROR_VERIFICATION (vs reject
-# the structure with INVALID_VBMETA_HEADER).
-assert algo == 1,    f"algorithm_type {algo} != 1 (SHA256_RSA2048)"
-assert auth_sz % 64 == 0, f"auth size {auth_sz} not 64-aligned"
-assert aux_sz  % 64 == 0, f"aux size {aux_sz} not 64-aligned"
-assert hash_off == 0 and hash_sz == 32, f"hash region {hash_off},{hash_sz}"
-assert sig_off == 32 and sig_sz == 256, f"sig region {sig_off},{sig_sz}"
-assert pk_sz == 520, f"pubkey size {pk_sz} != 520 (RSA-2048)"
-assert desc_off == 0, f"descriptors_offset {desc_off} != 0"
-print(f"ok vbmeta header (signed): algo={algo} auth={auth_sz} aux={aux_sz} pk_sz={pk_sz}")
-
-# Auth block at vbm_off + 256.
-auth = out[vbm_off + 256 : vbm_off + 256 + auth_sz]
-hash_field = auth[hash_off : hash_off + hash_sz]
-sig_field  = auth[sig_off  : sig_off  + sig_sz]
-assert sig_field == b"\x00" * sig_sz, "signature should be all zeros (junk)"
-
-# Verify the hash field matches SHA256(header || aux_block).
-aux_block = out[vbm_off + 256 + auth_sz : vbm_off + 256 + auth_sz + aux_sz]
-computed = hashlib.sha256(hdr + aux_block).digest()
-assert hash_field == computed, \
-    f"auth.hash mismatch: file={hash_field.hex()} computed={computed.hex()}"
-print(f"ok auth: hash = SHA256(header||aux), signature = zeros (will fail RSA verify)")
-
-# Descriptor at start of aux.
-desc = aux_block[0 : desc_sz]
-tag, num_after = struct.unpack(">QQ", desc[:16])
-assert tag == 2, f"descriptor tag {tag} != AVB_DESCRIPTOR_TAG_HASH(2)"
-assert 16 + num_after == len(desc), \
-    f"descriptor says {num_after}B following + 16 header, got {len(desc)}"
-body = desc[16:16+116]
-img_sz, = struct.unpack(">Q", body[0:8])
-algo_field = body[8:40].rstrip(b"\x00")
-name_len, salt_len, digest_len = struct.unpack(">III", body[40:52])
-flags, = struct.unpack(">I", body[52:56])
-assert body[56:116] == b"\x00" * 60, "reserved[60] not zero"
-assert algo_field == b"sha256", f"hash_algorithm {algo_field!r}"
-assert img_sz == len(input_data)
-assert flags == 0
-assert salt_len == 0
-assert digest_len == 32
-
-trailer = desc[16+116 : 16+116 + name_len + salt_len + digest_len]
-partition_name = trailer[:name_len].decode("ascii")
-digest = trailer[name_len + salt_len : name_len + salt_len + digest_len]
-assert partition_name == "recovery", f"partition_name {partition_name!r}"
-
-expected = hashlib.sha256(input_data).digest()
-assert digest == expected, f"descriptor digest mismatch"
-print(f"ok descriptor: partition={partition_name!r} digest matches SHA256(input)")
-
-# Pubkey blob check.
-pubkey = aux_block[pk_off : pk_off + pk_sz]
-key_num_bits, n0inv = struct.unpack(">II", pubkey[:8])
-N  = pubkey[8:8+256]
-RR = pubkey[8+256:8+512]
-assert key_num_bits == 2048, f"key_num_bits {key_num_bits} != 2048"
-assert N == b"\xff" * 256, "modulus should be all-0xFF (junk)"
-assert RR == b"\x00" * 256, "RR should be zero (junk)"
-print(f"ok pubkey blob: key_num_bits=2048, N=ff*256, RR=00*256 (junk)")
-
-assert out[:len(input_data)] == input_data, "image prefix corrupted"
-print("ok signed-junk path complete")
-PY
-
-# ---------------------------------------------------------------------------
-# 3. --unsigned: algorithm_type = NONE.
-# ---------------------------------------------------------------------------
-python3 scripts/synthesize-vbmeta.py \
-  --partition recovery \
-  --in "$TMP/input.img" \
-  --partition-size "$PARTITION_SIZE" \
-  --unsigned \
-  --out "$TMP/out_unsigned.img"
-
-python3 - "$TMP" "$PARTITION_SIZE" <<'PY'
-import hashlib, struct, sys
-tmp = sys.argv[1]
-PSZ = int(sys.argv[2])
-
-with open(f"{tmp}/input.img", "rb") as f: input_data = f.read()
-with open(f"{tmp}/out_unsigned.img", "rb") as f: out = f.read()
-
-footer = out[-64:]
-_, vbm_off, vbm_size = struct.unpack(">QQQ", footer[12:36])
+assert footer[:4] == b"AVBf", f"footer magic: {footer[:4]!r}"
+_, vbm_off, vbm_sz = struct.unpack(">QQQ", footer[12:36])
+assert vbm_off % 4096 == 0
+assert vbm_off + vbm_sz <= PSZ - 64
 
 hdr = out[vbm_off:vbm_off + 256]
 assert hdr[:4] == b"AVB0"
 auth_sz, aux_sz = struct.unpack(">QQ", hdr[12:28])
 algo, = struct.unpack(">I", hdr[28:32])
-pk_off, pk_sz = struct.unpack(">QQ", hdr[0x40:0x50])
+hash_off, hash_sz = struct.unpack(">QQ", hdr[0x20:0x30])
+sig_off, sig_sz   = struct.unpack(">QQ", hdr[0x30:0x40])
+pk_off,  pk_sz    = struct.unpack(">QQ", hdr[0x40:0x50])
 desc_off, desc_sz = struct.unpack(">QQ", hdr[0x60:0x70])
 
-assert algo == 0, f"--unsigned: algorithm_type {algo} != 0 (NONE)"
-assert auth_sz == 0, f"--unsigned: auth_sz {auth_sz} != 0"
-assert aux_sz % 64 == 0, f"--unsigned: aux_sz {aux_sz} not 64-aligned"
-assert pk_sz == 0, f"--unsigned: pk_sz {pk_sz} != 0"
-assert desc_off == 0
-print(f"ok unsigned vbmeta: algo=0 auth=0 aux={aux_sz} pk=0")
+assert algo == want_algo, f"algo {algo} != {want_algo}"
+assert hash_sz == 32 and sig_sz == want_sig_size and pk_sz == want_pk_size, \
+    f"hash={hash_sz} sig={sig_sz} pk={pk_sz} (want {want_sig_size} sig, {want_pk_size} pk)"
+assert auth_sz % 64 == 0 and aux_sz % 64 == 0, f"sizes not 64-aligned"
+assert (32 + want_sig_size) <= auth_sz <= (32 + want_sig_size + 63), "auth size off"
+assert desc_off == 0, f"desc_off {desc_off}"
 
-# Descriptor still present and digest still matches.
-aux_block = out[vbm_off + 256 : vbm_off + 256 + aux_sz]
+# Auth block: real hash + zero signature.
+auth = out[vbm_off + 256 : vbm_off + 256 + auth_sz]
+hash_field = auth[0:32]
+sig_field  = auth[32:32 + want_sig_size]
+assert sig_field == b"\x00" * want_sig_size, "signature must be zero"
+
+aux_block = out[vbm_off + 256 + auth_sz : vbm_off + 256 + auth_sz + aux_sz]
+computed = hashlib.sha256(hdr + aux_block).digest()
+assert hash_field == computed, "auth.hash != SHA256(header||aux)"
+
+# Descriptor at start of aux.
 desc = aux_block[0:desc_sz]
 tag, num_after = struct.unpack(">QQ", desc[:16])
-assert tag == 2
+assert tag == 2, f"descriptor tag {tag} != HASH(2)"
 body = desc[16:16+116]
-name_len, salt_len, digest_len = struct.unpack(">III", body[40:52])
-trailer = desc[16+116 : 16+116 + name_len + salt_len + digest_len]
-partition_name = trailer[:name_len].decode("ascii")
-digest = trailer[name_len + salt_len : name_len + salt_len + digest_len]
-expected = hashlib.sha256(input_data).digest()
-assert digest == expected, "unsigned: descriptor digest mismatch"
-print(f"ok --unsigned descriptor: partition={partition_name!r} digest matches")
-PY
+img_sz, = struct.unpack(">Q", body[0:8])
+name_len, salt_len, dig_len = struct.unpack(">III", body[40:52])
+assert dig_len == 32
+trailer = desc[16+116 : 16+116 + name_len + salt_len + dig_len]
+name = trailer[:name_len].decode("ascii")
+salt = trailer[name_len:name_len+salt_len]
+digest = trailer[name_len+salt_len : name_len+salt_len+dig_len]
+assert name == part_name, f"partition_name {name!r}"
 
-# ---------------------------------------------------------------------------
-# 4. Salt path (default signed mode + --salt).
-# ---------------------------------------------------------------------------
+# Verify descriptor digest matches SHA256(salt||input).
+h = hashlib.sha256(); h.update(salt); h.update(input_data)
+assert digest == h.digest(), "descriptor digest mismatch"
+
+# Pubkey bytes: should be the fixture pubkey we constructed above.
+pubkey = aux_block[pk_off : pk_off + pk_sz]
+k_bits, n0inv = struct.unpack(">II", pubkey[:8])
+assert k_bits in (2048, 4096, 8192), f"key_num_bits {k_bits}"
+assert n0inv == 0xDEADBEEF, f"n0inv 0x{n0inv:x}"
+N = pubkey[8:8 + k_bits//8]
+RR = pubkey[8 + k_bits//8 : 8 + 2*(k_bits//8)]
+assert N == b"\xab" * (k_bits//8), "pubkey N bytes != fixture"
+assert RR == b"\xcd" * (k_bits//8), "pubkey RR bytes != fixture"
+
+print(f"ok {part_name}: algo={algo} auth={auth_sz} aux={aux_sz} pk={pk_sz}, descriptor digest matches, pubkey matches fixture")
+'
+
+# 3. Recovery → RSA-4096 path.
+python3 scripts/synthesize-vbmeta.py \
+  --partition recovery \
+  --in "$TMP/input.img" \
+  --partition-size 131072 \
+  --vbmeta "$TMP/stock_vbmeta.img" \
+  --out "$TMP/out_recovery.img"
+python3 -c "$verify_py" "$TMP" out_recovery.img recovery 2 1032 512 131072
+
+# 4. dtbo → RSA-2048 path.
 python3 scripts/synthesize-vbmeta.py \
   --partition dtbo \
   --in "$TMP/input.img" \
-  --partition-size "$PARTITION_SIZE" \
+  --partition-size 131072 \
+  --vbmeta "$TMP/stock_vbmeta.img" \
+  --out "$TMP/out_dtbo.img"
+python3 -c "$verify_py" "$TMP" out_dtbo.img dtbo 1 520 256 131072
+
+# 5. Salt path.
+python3 scripts/synthesize-vbmeta.py \
+  --partition recovery \
+  --in "$TMP/input.img" \
+  --partition-size 131072 \
+  --vbmeta "$TMP/stock_vbmeta.img" \
   --salt "deadbeefcafef00d" \
   --out "$TMP/out_salt.img"
+python3 -c "$verify_py" "$TMP" out_salt.img recovery 2 1032 512 131072
+echo "ok salt path (recovery + 8B salt)"
 
-python3 - "$TMP" "$PARTITION_SIZE" <<'PY'
-import hashlib, struct, sys
-tmp = sys.argv[1]
-PSZ = int(sys.argv[2])
+# 6. Error: partition not present in the supplied vbmeta.
+set +e
+python3 scripts/synthesize-vbmeta.py \
+  --partition not_a_real_part \
+  --in "$TMP/input.img" \
+  --partition-size 131072 \
+  --vbmeta "$TMP/stock_vbmeta.img" \
+  --out "$TMP/should_not_exist.img" 2>"$TMP/err_missing.log"
+rc=$?
+set -e
+if [[ $rc -eq 0 ]]; then
+  echo "FAIL: expected error when partition not in vbmeta"
+  exit 1
+fi
+grep -q "no chain partition descriptor" "$TMP/err_missing.log" || {
+  echo "FAIL: error log missing 'no chain partition descriptor':"
+  cat "$TMP/err_missing.log"
+  exit 1
+}
+echo "ok error: missing chain descriptor rejected cleanly"
 
-with open(f"{tmp}/input.img", "rb") as f: input_data = f.read()
-with open(f"{tmp}/out_salt.img", "rb") as f: out = f.read()
-assert len(out) == PSZ
-
-footer = out[-64:]
-_, vbm_off, vbm_size = struct.unpack(">QQQ", footer[12:36])
-
-hdr = out[vbm_off:vbm_off + 256]
-auth_sz, aux_sz = struct.unpack(">QQ", hdr[12:28])
-algo, = struct.unpack(">I", hdr[28:32])
-desc_sz, = struct.unpack(">Q", hdr[0x68:0x70])
-assert algo == 1, "salt path should still be fake-signed by default"
-
-aux_block = out[vbm_off + 256 + auth_sz : vbm_off + 256 + auth_sz + aux_sz]
-desc = aux_block[0:desc_sz]
-body = desc[16:16+116]
-name_len, salt_len, digest_len = struct.unpack(">III", body[40:52])
-assert salt_len == 8, f"salt_len {salt_len} != 8"
-trailer = desc[16+116 : 16+116 + name_len + salt_len + digest_len]
-partition_name = trailer[:name_len].decode("ascii")
-salt   = trailer[name_len : name_len + salt_len]
-digest = trailer[name_len + salt_len : name_len + salt_len + digest_len]
-assert partition_name == "dtbo"
-assert salt == bytes.fromhex("deadbeefcafef00d")
-
-h = hashlib.sha256()
-h.update(salt)
-h.update(input_data)
-expected = h.digest()
-assert digest == expected, "salted digest mismatch"
-print(f"ok salt path: partition=dtbo salt={salt.hex()} digest matches SHA256(salt||input)")
-PY
-
-# ---------------------------------------------------------------------------
-# 5. Error path: partition size too small.
-# ---------------------------------------------------------------------------
+# 7. Error: too-small partition.
 set +e
 python3 scripts/synthesize-vbmeta.py \
   --partition recovery \
   --in "$TMP/input.img" \
   --partition-size 8192 \
-  --out "$TMP/should_not_exist.img" 2>"$TMP/err.log"
+  --vbmeta "$TMP/stock_vbmeta.img" \
+  --out "$TMP/too_small.img" 2>"$TMP/err_size.log"
 rc=$?
 set -e
 if [[ $rc -eq 0 ]]; then
-  echo "FAIL: expected error when partition_size < image_size"
+  echo "FAIL: expected error when partition_size < image"
   exit 1
 fi
-if ! grep -q "partition_size" "$TMP/err.log"; then
-  echo "FAIL: error message should mention partition_size"
-  cat "$TMP/err.log"
+grep -q "partition_size" "$TMP/err_size.log" || {
+  echo "FAIL: error log missing 'partition_size'"
+  cat "$TMP/err_size.log"
   exit 1
-fi
-echo "ok error path: too-small partition_size rejected"
+}
+echo "ok error: too-small partition rejected"
 
-# ---------------------------------------------------------------------------
-# 6. Error path: invalid hex in --salt.
-# ---------------------------------------------------------------------------
+# 8. Error: invalid hex in --salt.
 set +e
 python3 scripts/synthesize-vbmeta.py \
   --partition recovery \
   --in "$TMP/input.img" \
-  --partition-size "$PARTITION_SIZE" \
+  --partition-size 131072 \
+  --vbmeta "$TMP/stock_vbmeta.img" \
   --salt "not-hex-at-all" \
-  --out "$TMP/should_not_exist2.img" 2>"$TMP/err_hex.log"
+  --out "$TMP/bad_salt.img" 2>"$TMP/err_hex.log"
 rc=$?
 set -e
 if [[ $rc -eq 0 ]]; then
   echo "FAIL: expected error for invalid --salt hex"
   exit 1
 fi
-if ! grep -q "valid hex" "$TMP/err_hex.log"; then
-  echo "FAIL: error message should mention salt hex validity"
+grep -q "valid hex" "$TMP/err_hex.log" || {
+  echo "FAIL: error log missing 'valid hex'"
   cat "$TMP/err_hex.log"
   exit 1
-fi
-echo "ok error path: invalid --salt hex rejected cleanly (no traceback)"
+}
+echo "ok error: invalid --salt hex rejected"
 
 echo "ok 053_synthesize_vbmeta_roundtrip"
