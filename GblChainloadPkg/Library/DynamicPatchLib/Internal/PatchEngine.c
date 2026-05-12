@@ -11,6 +11,8 @@
 #ifndef __HOST_BUILD__
 #include <Library/DebugLib.h>
 #include <Library/UefiLib.h>
+#else
+#include <stdio.h>
 #endif
 
 /* Patch table provided externally by the aggregator (Task 19).
@@ -43,7 +45,6 @@ DynamicPatch_Apply (
     CONST PATCH_DESC *P = &gPatchTable[i];
     PATCH_OUTCOME     O = P->Apply (Buf, Size);
 
-#ifndef __HOST_BUILD__
     {
       CONST CHAR8  *OutcomeName =
         (O == PATCH_OK)        ? "OK"        :
@@ -53,13 +54,20 @@ DynamicPatch_Apply (
         (P->Scope == SCOPE_UNIVERSAL)   ? "universal"   :
         (P->Scope == SCOPE_OEM_ONEPLUS) ? "oem-oneplus" :
         (P->Scope == SCOPE_MODE_1)      ? "mode-1"      : "unknown";
+#ifdef __HOST_BUILD__
+      fprintf (stderr,
+               "DynamicPatch: %s [%s, %s] -> %s\n",
+               P->Name, ScopeName,
+               P->Mandatory ? "mandatory" : "optional",
+               OutcomeName);
+#else
       DEBUG ((DEBUG_INFO,
               "DynamicPatch: %a [%a, %a] -> %a\n",
               P->Name, ScopeName,
               P->Mandatory ? "mandatory" : "optional",
               OutcomeName));
-    }
 #endif
+    }
 
     if (O == PATCH_OK) {
       ++Result->AppliedCount;

@@ -49,19 +49,34 @@ load_file (const char *path, UINT32 *size_out)
   return buf;
 }
 
-/* Returns 1 if the fixture was tested, 0 otherwise. Asserts on logic errors. */
-static int
-test_patch1_against (PATCH_APPLY apply, const char *path)
+static const char *
+outcome_name (PATCH_OUTCOME o)
+{
+  return (o == PATCH_OK)        ? "PATCH_OK"
+       : (o == PATCH_MISS)      ? "PATCH_MISS"
+       : (o == PATCH_AMBIGUOUS) ? "PATCH_AMBIGUOUS"
+                                : "?";
+}
+
+/* Counts (out-parameters): both must be supplied.
+   *ran_out   — increments on any fixture that was loaded.
+   *ok_out    — increments only on PATCH_OK.
+   Asserts on logic errors (unexpected outcome, broken idempotency, etc.). */
+static void
+test_patch1_against (PATCH_APPLY apply, const char *path,
+                     int *ran_out, int *ok_out)
 {
   UINT32 size = 0;
   UINT8 *buf  = load_file (path, &size);
   if (!buf) {
-    return 0;
+    return;
   }
+  ++*ran_out;
 
   PATCH_OUTCOME o = apply (buf, size);
-  printf ("patch1 vs %s -> outcome=%d\n", path, (int)o);
+  printf ("patch1 vs %s -> %s\n", path, outcome_name (o));
   assert ((o == PATCH_OK || o == PATCH_MISS) && "unexpected outcome");
+  if (o == PATCH_OK) ++*ok_out;
 
   if (o == PATCH_OK) {
     UINT8 nulls_pat[] = { 'n', 0, 'u', 0, 'l', 0, 'l', 0, 's', 0 };
@@ -84,23 +99,21 @@ test_patch1_against (PATCH_APPLY apply, const char *path)
   }
 
   free (buf);
-  return 1;
 }
 
-static int
-glob_extension (PATCH_APPLY apply, const char *dir, const char *ext)
+static void
+glob_extension (PATCH_APPLY apply, const char *dir, const char *ext,
+                int *ran_out, int *ok_out)
 {
   char pat[1024];
   snprintf (pat, sizeof (pat), "%s/*%s", dir, ext);
   glob_t g;
-  int ran = 0;
   if (glob (pat, 0, NULL, &g) == 0) {
     for (size_t i = 0; i < g.gl_pathc; ++i) {
-      ran += test_patch1_against (apply, g.gl_pathv[i]);
+      test_patch1_against (apply, g.gl_pathv[i], ran_out, ok_out);
     }
     globfree (&g);
   }
-  return ran;
 }
 
 int
@@ -116,15 +129,29 @@ main (void)
   assert (apply != NULL && "patch1-efisp-recursion not found in kUniversalPatches");
 
   const char *exts[] = { ".efi", ".bin", ".img" };
-  int ran = 0;
+  int ran = 0, ok = 0;
   for (size_t i = 0; i < sizeof (exts) / sizeof (exts[0]); ++i) {
-    ran += glob_extension (apply, TEST_FIXTURES_DIR, exts[i]);
+    glob_extension (apply, TEST_FIXTURES_DIR, exts[i], &ran, &ok);
   }
 
   if (ran == 0) {
     printf ("SKIP: test_patch1 — no fixtures found in %s\n", TEST_FIXTURES_DIR);
     return 0;
   }
-  printf ("ALL PASS (%d fixture%s exercised)\n", ran, ran == 1 ? "" : "s");
+  /* PATCH_MISS is legal per-fixture (e.g. raw FV wrappers where the inner
+     PE is compressed and the byte scan can't see "efisp"), so report OK/MISS
+     counts honestly rather than imply ALL_PASS when nothing was actually
+     rewritten. The idempotency / "efisp gone, nulls present" asserts inside
+     the PATCH_OK branch are the real regression checks. */
+  if (ok == 0) {
+    printf ("WARN: test_patch1 — %d fixture%s loaded but ZERO produced "
+            "PATCH_OK (all MISS). Likely all fixtures are compressed FV "
+            "wrappers; commit extracted PEs to TEST_FIXTURES_DIR for real "
+            "coverage.\n",
+            ran, ran == 1 ? "" : "s");
+    return 0;
+  }
+  printf ("EXERCISED (%d fixture%s loaded, %d PATCH_OK, %d MISS)\n",
+          ran, ran == 1 ? "" : "s", ok, ran - ok);
   return 0;
 }
