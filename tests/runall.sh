@@ -17,8 +17,6 @@ echo "== 042_dynamic_patch_harness =="
 bash tests/042_dynamic_patch_harness.sh
 echo "== 051_gbl_root_canoe_regression =="
 bash tests/051_gbl_root_canoe_regression.sh
-echo "== 052_graft_vbmeta_roundtrip =="
-bash tests/052_graft_vbmeta_roundtrip.sh
 echo "== 053_synthesize_vbmeta_roundtrip =="
 bash tests/053_synthesize_vbmeta_roundtrip.sh
 

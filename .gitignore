@@ -6,7 +6,6 @@ dist/
 *.efi.unsigned
 tools/abl-patcher/abl-patcher
 tools/fv-unwrap/fv-unwrap
-tools/avb-graft-recovery/graft-vbmeta
 tests/*/test_*
 !tests/*/test_*.c
 !tests/*/test_*.h
