@@ -75,7 +75,14 @@ def build_hash_descriptor(
     """
     name_bytes = partition_name.encode("utf-8")
 
-    # Body (72 bytes): image_size, hash_algorithm[32], lens, flags, reserved[60].
+    # Body (116 bytes after the 16-byte descriptor header):
+    #   image_size              u64    (8 B)
+    #   hash_algorithm[32]      char[] (32 B)
+    #   partition_name_len      u32    (4 B)
+    #   salt_len                u32    (4 B)
+    #   digest_len              u32    (4 B)
+    #   flags                   u32    (4 B)
+    #   reserved[60]            u8[]   (60 B)
     algo_bytes = hash_algo.encode("ascii")
     if len(algo_bytes) > 32:
         raise SynthesizeError(f"hash_algorithm too long: {hash_algo!r}")
@@ -235,7 +242,13 @@ def main() -> int:
     args = ap.parse_args()
 
     try:
-        salt = bytes.fromhex(args.salt) if args.salt else b""
+        if args.salt:
+            try:
+                salt = bytes.fromhex(args.salt)
+            except ValueError as ve:
+                raise SynthesizeError(f"--salt is not valid hex: {ve}")
+        else:
+            salt = b""
         image = args.in_path.read_bytes()
         out = synthesize(args.partition, image, args.partition_size,
                          salt=salt, hash_algo=args.hash_algorithm)

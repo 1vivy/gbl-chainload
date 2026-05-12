@@ -74,11 +74,14 @@ assert tag == 2, f"descriptor tag {tag} != AVB_DESCRIPTOR_TAG_HASH(2)"
 assert 16 + num_after == len(desc), \
     f"descriptor header says {num_after}B following + 16 header, got total {len(desc)}"
 
-body = desc[16:16+72]
+# AvbHashDescriptor fixed body is 116 bytes after the 16-byte parent header.
+body = desc[16:16+116]
 img_sz, = struct.unpack(">Q", body[0:8])
 algo_field = body[8:40].rstrip(b"\x00")
 name_len, salt_len, digest_len = struct.unpack(">III", body[40:52])
 flags, = struct.unpack(">I", body[52:56])
+# bytes 56..116 are reserved[60] — must be zero
+assert body[56:116] == b"\x00" * 60, "reserved[60] not zero"
 assert algo_field == b"sha256", f"hash_algorithm {algo_field!r}"
 assert img_sz == len(input_data), f"descriptor.image_size {img_sz} != {len(input_data)}"
 assert flags == 0
@@ -168,5 +171,26 @@ if ! grep -q "partition_size" "$TMP/err.log"; then
   exit 1
 fi
 echo "ok error path: too-small partition_size rejected"
+
+# 6. Error path: invalid hex in --salt.
+set +e
+python3 scripts/synthesize-vbmeta.py \
+  --partition recovery \
+  --in "$TMP/input.img" \
+  --partition-size "$PARTITION_SIZE" \
+  --salt "not-hex-at-all" \
+  --out "$TMP/should_not_exist2.img" 2>"$TMP/err_hex.log"
+rc=$?
+set -e
+if [[ $rc -eq 0 ]]; then
+  echo "FAIL: expected error for invalid --salt hex"
+  exit 1
+fi
+if ! grep -q "valid hex" "$TMP/err_hex.log"; then
+  echo "FAIL: error message should mention salt hex validity"
+  cat "$TMP/err_hex.log"
+  exit 1
+fi
+echo "ok error path: invalid --salt hex rejected cleanly (no traceback)"
 
 echo "ok 053_synthesize_vbmeta_roundtrip"
