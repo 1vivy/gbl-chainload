@@ -3,7 +3,7 @@
 #
 #  Library mappings mirror QcomModulePkg.dsc so we get the same dep graph as
 #  LinuxLoader.efi. Feature flags are passed as integer PCDs via GBL_MODE /
-#  GBL_AUTO / GBL_DEBUG / GBL_VERBOSE env vars from scripts/build.sh.
+#  GBL_AUTO / GBL_DEBUG env vars from scripts/build.sh.
 ##
 
 [Defines]
@@ -64,11 +64,10 @@
   DEFINE GBL_MODE                         = 1
   DEFINE GBL_AUTO                         = 0
   DEFINE GBL_DEBUG                        = 0
-  DEFINE GBL_VERBOSE                      = 0
 
   # Build name — single string identifier substituted into log banner,
   # FastbootMenu display, and the build-name getvar. build-inside-docker.sh
-  # constructs the suffixed form (e.g. mode-1-auto-debug-verbose).
+  # constructs the suffixed form (e.g. mode-1-auto-debug).
   DEFINE GBL_BUILD_NAME                   = mode-unknown
 
 ################################################################################
@@ -140,7 +139,6 @@
   GCC:*_*_*_CC_FLAGS = -DGBL_MODE=$(GBL_MODE)
   GCC:*_*_*_CC_FLAGS = -DGBL_AUTO=$(GBL_AUTO)
   GCC:*_*_*_CC_FLAGS = -DGBL_DEBUG=$(GBL_DEBUG)
-  GCC:*_*_*_CC_FLAGS = -DGBL_VERBOSE=$(GBL_VERBOSE)
   GCC:*_*_*_CC_FLAGS = -DGBL_BUILD_NAME=\"$(GBL_BUILD_NAME)\"
 
   # Workarounds for this Qualcomm edk2 fork against modern Ubuntu GCC:

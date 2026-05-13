@@ -79,4 +79,19 @@ EFI_STATUS
 EFIAPI
 LogFsRemoveDebugSink (VOID);
 
+/** Set the bitmask of DEBUG() error-levels that the screen sink is
+    allowed to mirror onto ConOut. Levels not in the mask are dropped
+    from the screen but still written to gbl-chainload_BootN.txt.
+    Bare Print() (no level recorded) ignores this mask and always
+    reaches the screen — callers use Print() for failures and user-
+    interrupt acks that must always be visible.
+
+    Default at install time is DEBUG_ERROR. Production callers leave
+    it alone; debug builds widen it via this entry point. **/
+VOID
+EFIAPI
+LogFsSetScreenMask (
+  IN UINTN  Mask
+  );
+
 #endif /* GBL_CHAINLOAD_LOGFSLIB_H */

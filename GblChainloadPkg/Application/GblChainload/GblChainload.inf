@@ -1,7 +1,7 @@
 ## @file
 #  GblChainload application — single-mode dispatcher.
-#  GBL_MODE (1/2/3), GBL_AUTO, GBL_DEBUG, GBL_VERBOSE are set via BuildOptions
-#  in the DSC; one binary per mode is produced.
+#  GBL_MODE (0/1), GBL_AUTO, GBL_DEBUG are set via BuildOptions in the DSC;
+#  one binary per mode is produced.
 #
 #  [Packages] / [LibraryClasses] / [Protocols] / [Guids] / [FixedPcd] carried
 #  from the dirty-repo GblChainload.inf (which mirrored LinuxLoader.inf) with
@@ -118,7 +118,7 @@
   gQcomTokenSpaceGuid.EnableMdtpSupport
 
 [BuildOptions]
-  *_*_AARCH64_CC_FLAGS = -DGBL_MODE=$(GBL_MODE) -DGBL_AUTO=$(GBL_AUTO) -DGBL_DEBUG=$(GBL_DEBUG) -DGBL_VERBOSE=$(GBL_VERBOSE)
+  *_*_AARCH64_CC_FLAGS = -DGBL_MODE=$(GBL_MODE) -DGBL_AUTO=$(GBL_AUTO) -DGBL_DEBUG=$(GBL_DEBUG)
 
 [Depex]
   TRUE

@@ -40,7 +40,14 @@
 extern UINTN gDbgCurrentLevel;
 
 STATIC EFI_TEXT_STRING gOriginalOutputString = NULL;
-STATIC BOOLEAN         gInHook = FALSE;
+STATIC BOOLEAN         gInHook              = FALSE;
+
+/* Bitmask of DEBUG() error-levels permitted to reach ConOut. Defaults to
+ * DEBUG_ERROR (production: only failures + boundary markers on screen).
+ * The application widens it via LogFsSetScreenMask() when GBL_DEBUG=1
+ * is built. Bare Print() bypasses this gate via the sentinel sentinel
+ * in gDbgCurrentLevel. */
+STATIC UINTN           gGblScreenMask       = DEBUG_ERROR;
 
 /* Convert a UCS-2 input to ASCII in a fixed-size scratch buffer.
  * Common Unicode punctuation (em/en-dash, curly quotes) is folded to
@@ -100,17 +107,20 @@ HookedOutputString (
   CHAR8      Buf[512];
   UINTN      Len;
   BOOLEAN    IsDebugCall;
-  BOOLEAN    IsErrorLevel;
+  BOOLEAN    IsScreenLevel;
 
   /* Snapshot the level before any call that might alter it. */
-  IsDebugCall  = (gDbgCurrentLevel != (UINTN)-1);
-  IsErrorLevel = IsDebugCall && ((gDbgCurrentLevel & DEBUG_ERROR) != 0);
+  IsDebugCall   = (gDbgCurrentLevel != (UINTN)-1);
+  IsScreenLevel = IsDebugCall && ((gDbgCurrentLevel & gGblScreenMask) != 0);
 
   /* Pass through to ConOut (→ QCOM BDS → UefiLog) only when:
-   *   (a) this is not a DEBUG() call at all (bare Print() path), OR
-   *   (b) this is a DEBUG_ERROR-level call (boundary markers + fatal lines).
-   * All other DEBUG() levels (INFO, WARN) go to our logfs stream only. */
-  if (!IsDebugCall || IsErrorLevel) {
+   *   (a) this is not a DEBUG() call at all (bare Print() path) — always
+   *       shown; callers use Print() for failures + user-interrupt acks
+   *       that must be visible regardless of build flags, OR
+   *   (b) this is a DEBUG() call at a level permitted by gGblScreenMask
+   *       (DEBUG_ERROR in production, widened to INFO under GBL_DEBUG=1).
+   * Levels outside the mask go to our logfs stream only. */
+  if (!IsDebugCall || IsScreenLevel) {
     Status = (gOriginalOutputString != NULL)
                ? gOriginalOutputString (This, String)
                : EFI_NOT_READY;
@@ -163,4 +173,13 @@ LogFsRemoveDebugSink (VOID)
   }
   gOriginalOutputString = NULL;
   return EFI_SUCCESS;
+}
+
+VOID
+EFIAPI
+LogFsSetScreenMask (
+  IN UINTN  Mask
+  )
+{
+  gGblScreenMask = Mask;
 }

@@ -31,9 +31,6 @@ EFI_STATUS EFIAPI BootFlowChainLoad (VOID);
 #ifndef GBL_DEBUG
 # define GBL_DEBUG 0
 #endif
-#ifndef GBL_VERBOSE
-# define GBL_VERBOSE 0
-#endif
 
 #ifndef GBL_CHAINLOAD_VERSION
 # define GBL_CHAINLOAD_VERSION "v2"
@@ -41,15 +38,18 @@ EFI_STATUS EFIAPI BootFlowChainLoad (VOID);
 
 #define KEY_WINDOW_MS  3000
 
-/*
- * Screen output is gated by GBL_DEBUG.
- * logfs/EFI_DEBUG always emit regardless of this flag.
+/* Screen output policy (single coherent system, see LogFsLib/DebugSink.c):
+ *   Print(L"...")              — always shown on screen (and always logged
+ *                                via the hook). Use for failures, fatal
+ *                                warnings, and user-interrupt acks.
+ *   DEBUG((DEBUG_ERROR, "..."))— always shown on screen + always logged.
+ *                                Use for boundary markers + error lines
+ *                                that carry a %r status code.
+ *   DEBUG((DEBUG_INFO,  "..."))— always logged; screen-visible only when
+ *                                GBL_DEBUG=1 (LogFsSetScreenMask widens
+ *                                the mask in CommonEarlyInit).
+ * No SCR_PRINT, no per-callsite #if GBL_DEBUG.
  */
-#if (GBL_DEBUG == 1)
-# define SCR_PRINT(...)  Print (__VA_ARGS__)
-#else
-# define SCR_PRINT(...)  do {} while (0)
-#endif
 
 typedef enum { GblKeyNone, GblKeyVolDown, GblKeyVolUp } GBL_KEY_ACTION;
 
@@ -119,8 +119,8 @@ CommonEarlyInit (
   EFI_STATUS Status;
 
   DEBUG ((DEBUG_INFO,
-          "gbl-chainload | mode=%d auto=%d debug=%d verbose=%d\n",
-          (int)GBL_MODE, (int)GBL_AUTO, (int)GBL_DEBUG, (int)GBL_VERBOSE));
+          "gbl-chainload | mode=%d auto=%d debug=%d\n",
+          (int)GBL_MODE, (int)GBL_AUTO, (int)GBL_DEBUG));
 
   DeviceInfoInit ();
   EnumeratePartitions ();
@@ -134,6 +134,12 @@ CommonEarlyInit (
     Print (L"!!! LOGFS PARTITION NOT FOUND - LOGGING TO CONSOLE ONLY !!!\n");
   } else if (!EFI_ERROR (Status)) {
     LogFsInstallDebugSink ();
+#if (GBL_DEBUG == 1)
+    /* Debug builds: widen the screen filter so DEBUG_INFO + DEBUG_WARN
+     * status lines reach the screen too. Production stays at the
+     * DEBUG_ERROR default established in DebugSink.c. */
+    LogFsSetScreenMask (DEBUG_ERROR | DEBUG_WARN | DEBUG_INFO);
+#endif
     LogFsFlush ();
   }
 }
@@ -144,7 +150,7 @@ EnterFastboot (VOID)
   EFI_STATUS Status;
 
   DEBUG ((DEBUG_ERROR, "gbl-chainload exiting (path=fastboot-fallback)\n"));
-  SCR_PRINT (L"gbl-chainload: entering FastbootLib\n");
+  DEBUG ((DEBUG_INFO, "gbl-chainload: entering FastbootLib\n"));
   LogFsFlush ();
   LogFsRemoveDebugSink ();
   LogFsClose ();
@@ -162,14 +168,16 @@ TryChainLoad (VOID)
   EFI_STATUS Status;
 
   DEBUG ((DEBUG_ERROR, "gbl-chainload exiting (path=chainload)\n"));
-  SCR_PRINT (L"gbl-chainload: chain-loading patched ABL\n");
+  DEBUG ((DEBUG_INFO, "gbl-chainload: chain-loading patched ABL\n"));
   LogFsFlush ();
 
   Status = BootFlowChainLoad ();
 
-  /* On return, BootFlow already logged. Fall through to fastboot as recovery. */
-  SCR_PRINT (L"gbl-chainload: BootFlow returned %r — falling to fastboot\n",
-             Status);
+  /* On return, BootFlow already logged the failure. Surface it on the
+   * screen too — chainload returning is itself a failure (it should have
+   * handed off to the patched ABL). */
+  Print (L"gbl-chainload: BootFlow returned %r — falling to fastboot\n",
+         Status);
   LogFsFlush ();
 }
 
@@ -182,13 +190,14 @@ GblChainloadEntry (
 {
   GBL_KEY_ACTION Key;
 
-  /* Banner: always to logfs/DEBUG, screen only under GBL_DEBUG=1. */
-  SCR_PRINT (L"\ngbl-chainload %a — mode=%d auto=%d debug=%d verbose=%d"
-             L" (%a %a)\n",
-             GBL_CHAINLOAD_VERSION,
-             (int)GBL_MODE, (int)GBL_AUTO,
-             (int)GBL_DEBUG, (int)GBL_VERBOSE,
-             __DATE__, __TIME__);
+  /* Banner: DEBUG_INFO — always logged, screen-visible only under
+   * GBL_DEBUG=1 (via widened mask). ASCII so it lands inside the
+   * standard DEBUG() format. */
+  DEBUG ((DEBUG_INFO,
+          "\ngbl-chainload %a -- mode=%d auto=%d debug=%d (%a %a)\n",
+          GBL_CHAINLOAD_VERSION,
+          (int)GBL_MODE, (int)GBL_AUTO, (int)GBL_DEBUG,
+          __DATE__, __TIME__));
 
   CommonEarlyInit (ImageHandle);
 
@@ -196,13 +205,15 @@ GblChainloadEntry (
           (int)GBL_MODE, GBL_BUILD_NAME));
 
 #if (GBL_AUTO == 0)
-  SCR_PRINT (L"Hold VolUp within %us to enter FastbootLib; "
-             L"timeout chain-loads silently.\n",
-             KEY_WINDOW_MS / 1000);
+  DEBUG ((DEBUG_INFO,
+          "Hold VolUp within %us to enter FastbootLib; "
+          "timeout chain-loads silently.\n",
+          KEY_WINDOW_MS / 1000));
 #else
-  SCR_PRINT (L"Hold VolUp within %us to chain-load patched ABL immediately; "
-             L"timeout enters FastbootLib (await `oem escape`).\n",
-             KEY_WINDOW_MS / 1000);
+  DEBUG ((DEBUG_INFO,
+          "Hold VolUp within %us to chain-load patched ABL immediately; "
+          "timeout enters FastbootLib (await `oem escape`).\n",
+          KEY_WINDOW_MS / 1000));
 #endif
 
   Key = WaitForBootInterrupt (KEY_WINDOW_MS);
@@ -214,13 +225,14 @@ GblChainloadEntry (
    * VolDown is a placeholder — same default path.
    */
   if (Key == GblKeyVolUp) {
-    SCR_PRINT (L"VolUp escape: entering FastbootLib\n");
+    /* User interrupt — always visible on screen. */
+    Print (L"VolUp escape: entering FastbootLib\n");
     EnterFastboot ();
   } else {
     TryChainLoad ();
     /*
-     * If chain-load returns (shouldn't happen on success), fall through
-     * to FastbootLib as recovery surface.
+     * If chain-load returns (shouldn't happen on success), drop into
+     * FastbootLib as the recovery surface.
      */
     EnterFastboot ();
   }
@@ -230,9 +242,10 @@ GblChainloadEntry (
    * VolUp forces immediate chain-load without waiting for host.
    */
   if (Key == GblKeyVolUp) {
-    SCR_PRINT (L"VolUp escape: chain-loading patched ABL\n");
+    /* User interrupt — always visible on screen. */
+    Print (L"VolUp escape: chain-loading patched ABL\n");
     TryChainLoad ();
-    /* If chainload returns, fall through to fastboot. */
+    /* If chainload returns, drop into fastboot. */
   }
   EnterFastboot ();
 #endif
