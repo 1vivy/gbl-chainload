@@ -28,6 +28,20 @@ BOOLEAN            gLogFsReady = FALSE;
 
 STATIC UINTN       gLogFsDirtyBytes = 0;
 
+/* Pre-sink mount-probe progress output. These lines fire before
+ * LogFsInstallDebugSink runs, so they bypass any screen-mask filtering.
+ * Gate them at compile time so production builds keep the screen quiet
+ * during the happy-path mount; FAIL-case Print() calls below stay
+ * unconditional so a real mount failure remains visible on every build. */
+#ifndef GBL_DEBUG
+# define GBL_DEBUG 0
+#endif
+#if (GBL_DEBUG == 1)
+# define LOGFS_PROBE(...)  Print (__VA_ARGS__)
+#else
+# define LOGFS_PROBE(...)  do {} while (0)
+#endif
+
 /* Forward declarations (siblings provide). */
 extern VOID LogFsRotateUefiLog (IN EFI_FILE_PROTOCOL *Root,
                                 IN BOOLEAN            DeleteSource);
@@ -91,11 +105,11 @@ MountLogFsRoot (
   HandleFilter.PartitionLabel = L"logfs";
   MaxHandles = ARRAY_SIZE (HandleInfoList);
 
-  Print (L"LogFs: [1/5] calling GetBlkIOHandles (label='logfs')\n");
+  LOGFS_PROBE (L"LogFs: [1/5] calling GetBlkIOHandles (label='logfs')\n");
   Status = GetBlkIOHandles (BlkIoAttrib, &HandleFilter,
                             HandleInfoList, &MaxHandles);
-  Print (L"LogFs: [1/5] GetBlkIOHandles returned %r handles=%u\n",
-         Status, MaxHandles);
+  LOGFS_PROBE (L"LogFs: [1/5] GetBlkIOHandles returned %r handles=%u\n",
+               Status, MaxHandles);
   if (EFI_ERROR (Status) || MaxHandles != 1) {
     Print (L"LogFs: [1/5] FAIL — no logfs partition found (want 1 handle)\n");
     return EFI_NOT_FOUND;
@@ -106,7 +120,7 @@ MountLogFsRoot (
     Print (L"LogFs: [1/5] FAIL — handle pointer is NULL\n");
     return EFI_NOT_FOUND;
   }
-  Print (L"LogFs: [1/5] handle=%p OK\n", Handle);
+  LOGFS_PROBE (L"LogFs: [1/5] handle=%p OK\n", Handle);
 
   /* [2/5] Try HandleProtocol(SimpleFileSystem) directly first.
    * On canoe the platform BDS may have already connected FAT to the logfs
@@ -115,16 +129,16 @@ MountLogFsRoot (
    * re-probe.  EFI_NOT_FOUND from ConnectController means no driver bound
    * this time, but the protocol may still appear if the platform's FAT
    * driver is already managing the handle under a different context. */
-  Print (L"LogFs: [2/5] probe SimpleFileSystem before ConnectController\n");
+  LOGFS_PROBE (L"LogFs: [2/5] probe SimpleFileSystem before ConnectController\n");
   Status = gBS->HandleProtocol (Handle,
                                 &gEfiSimpleFileSystemProtocolGuid,
                                 (VOID **)&Fs);
-  Print (L"LogFs: [2/5] direct HandleProtocol(SimpleFS) returned %r\n", Status);
+  LOGFS_PROBE (L"LogFs: [2/5] direct HandleProtocol(SimpleFS) returned %r\n", Status);
   if (EFI_ERROR (Status)) {
     /* Not yet connected — attempt ConnectController to trigger driver binding. */
-    Print (L"LogFs: [2/5] calling gBS->ConnectController\n");
+    LOGFS_PROBE (L"LogFs: [2/5] calling gBS->ConnectController\n");
     Status = gBS->ConnectController (Handle, NULL, NULL, TRUE);
-    Print (L"LogFs: [2/5] ConnectController returned %r\n", Status);
+    LOGFS_PROBE (L"LogFs: [2/5] ConnectController returned %r\n", Status);
     /* EFI_NOT_FOUND = no driver bound right now but may still be available
      * via a pre-existing connection; EFI_ALREADY_STARTED = already bound.
      * Either way, proceed to the HandleProtocol probe below. */
@@ -134,18 +148,18 @@ MountLogFsRoot (
       Print (L"LogFs: [2/5] FAIL — ConnectController unexpected error\n");
       return Status;
     }
-    Print (L"LogFs: [2/5] ConnectController done (%r), re-probing SimpleFS\n", Status);
+    LOGFS_PROBE (L"LogFs: [2/5] ConnectController done (%r), re-probing SimpleFS\n", Status);
     Fs = NULL;
   }
 
-  Print (L"LogFs: [3/5] calling gBS->HandleProtocol (SimpleFileSystem)\n");
+  LOGFS_PROBE (L"LogFs: [3/5] calling gBS->HandleProtocol (SimpleFileSystem)\n");
   if (Fs == NULL) {
     Status = gBS->HandleProtocol (Handle,
                                   &gEfiSimpleFileSystemProtocolGuid,
                                   (VOID **)&Fs);
-    Print (L"LogFs: [3/5] HandleProtocol(SimpleFS) returned %r\n", Status);
+    LOGFS_PROBE (L"LogFs: [3/5] HandleProtocol(SimpleFS) returned %r\n", Status);
   } else {
-    Print (L"LogFs: [3/5] SimpleFS already obtained in [2/5] probe\n");
+    LOGFS_PROBE (L"LogFs: [3/5] SimpleFS already obtained in [2/5] probe\n");
     Status = EFI_SUCCESS;
   }
   if (EFI_ERROR (Status)) {
@@ -153,15 +167,15 @@ MountLogFsRoot (
     return Status;
   }
 
-  Print (L"LogFs: [4/5] calling Fs->OpenVolume\n");
+  LOGFS_PROBE (L"LogFs: [4/5] calling Fs->OpenVolume\n");
   Status = Fs->OpenVolume (Fs, &Root);
-  Print (L"LogFs: [4/5] OpenVolume returned %r\n", Status);
+  LOGFS_PROBE (L"LogFs: [4/5] OpenVolume returned %r\n", Status);
   if (EFI_ERROR (Status)) {
     Print (L"LogFs: [4/5] FAIL — OpenVolume failed\n");
     return Status;
   }
 
-  Print (L"LogFs: [5/5] mount succeeded — root=%p\n", Root);
+  LOGFS_PROBE (L"LogFs: [5/5] mount succeeded — root=%p\n", Root);
   *OutRoot = Root;
   return EFI_SUCCESS;
 }
@@ -176,7 +190,7 @@ LogFsInit (VOID)
     return EFI_SUCCESS;
   }
 
-  Print (L"LogFsLib: start\n");
+  LOGFS_PROBE (L"LogFsLib: start\n");
 
   Status = MountLogFsRoot (&gLogFsRoot);
   if (EFI_ERROR (Status)) {
@@ -206,7 +220,7 @@ LogFsInit (VOID)
   }
 
   gLogFsReady = TRUE;
-  Print (L"LogFsLib: finished\n");
+  LOGFS_PROBE (L"LogFsLib: finished\n");
   return EFI_SUCCESS;
 }
 
