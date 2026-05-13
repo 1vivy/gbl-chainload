@@ -149,7 +149,11 @@ EnterFastboot (VOID)
 {
   EFI_STATUS Status;
 
-  DEBUG ((DEBUG_ERROR, "gbl-chainload exiting (path=fastboot-fallback)\n"));
+  /* Boundary marker — INFO level: logged to gbl-chainload_BootN.txt
+   * always, screen+UefiLog only when --debug widens the mask. Production
+   * boots stay silent on entry/exit; correlation with ABL/UefiLog timing
+   * needs a --debug build. */
+  DEBUG ((DEBUG_INFO, "gbl-chainload exiting (path=fastboot-fallback)\n"));
   DEBUG ((DEBUG_INFO, "gbl-chainload: entering FastbootLib\n"));
   LogFsFlush ();
   LogFsRemoveDebugSink ();
@@ -167,7 +171,8 @@ TryChainLoad (VOID)
 {
   EFI_STATUS Status;
 
-  DEBUG ((DEBUG_ERROR, "gbl-chainload exiting (path=chainload)\n"));
+  /* Boundary marker — INFO level (see EnterFastboot comment). */
+  DEBUG ((DEBUG_INFO, "gbl-chainload exiting (path=chainload)\n"));
   DEBUG ((DEBUG_INFO, "gbl-chainload: chain-loading patched ABL\n"));
   LogFsFlush ();
 
@@ -201,7 +206,10 @@ GblChainloadEntry (
 
   CommonEarlyInit (ImageHandle);
 
-  DEBUG ((DEBUG_ERROR, "gbl-chainload entered (mode=%d build=%a)\n",
+  /* Boundary marker — INFO level. The chainload entry surface is logged
+   * to gbl-chainload_BootN.txt every boot regardless; this DEBUG only
+   * reaches the screen and UefiLog under --debug. */
+  DEBUG ((DEBUG_INFO, "gbl-chainload entered (mode=%d build=%a)\n",
           (int)GBL_MODE, GBL_BUILD_NAME));
 
 #if (GBL_AUTO == 0)

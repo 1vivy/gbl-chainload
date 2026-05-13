@@ -1,15 +1,17 @@
 #!/usr/bin/env bash
-# 051_log_stream_split.sh — regression check for cleanup-phase-1 PR-c.
+# 052_log_stream_split.sh — regression check for cleanup-phase-1 PR-c.
 #
 # Asserts:
 # 1. The gbl-chainload log filename constant in LogFsLib is the new
 #    lowercase-hyphen form: gbl-chainload_Boot
 # 2. The old form (GblChainload_Boot) is not referenced as an output
 #    file path anywhere in LogFsLib source or headers.
-# 3. DebugSink.c gates ConOut passthrough on DEBUG_ERROR (reads gDbgCurrentLevel).
+# 3. DebugSink.c gates ConOut passthrough via gDbgCurrentLevel against
+#    gGblScreenMask (default DEBUG_ERROR; widened by LogFsSetScreenMask).
 # 4. GblDebugLib sets gDbgCurrentLevel before calling ConOut->OutputString.
 # 5. Boundary markers ("gbl-chainload entered" / "gbl-chainload exiting")
-#    are present in Application source at DEBUG_ERROR level.
+#    are present in Application source at DEBUG_INFO level — visible on
+#    screen + UefiLog only under --debug, always logged to logfs.
 #
 # Host-side check; runtime stream split is verified manually on-device.
 
@@ -35,14 +37,21 @@ if grep -Rn 'GblChainload_Boot' "$LOGFS" "$INCLUDE" 2>/dev/null; then
   fail=1
 fi
 
-# ── Check 3: DebugSink reads gDbgCurrentLevel for level-gated routing. ─────
+# ── Check 3: DebugSink reads gDbgCurrentLevel and gates against the
+#            runtime gGblScreenMask (default DEBUG_ERROR). ─────────────────
 if ! grep -q 'gDbgCurrentLevel' "$LOGFS/DebugSink.c"; then
   echo "FAIL: DebugSink.c does not reference gDbgCurrentLevel" >&2
   fail=1
 fi
 
-if ! grep -q 'DEBUG_ERROR' "$LOGFS/DebugSink.c"; then
-  echo "FAIL: DebugSink.c has no DEBUG_ERROR gate" >&2
+if ! grep -q 'gGblScreenMask' "$LOGFS/DebugSink.c"; then
+  echo "FAIL: DebugSink.c does not gate via gGblScreenMask" >&2
+  fail=1
+fi
+
+if ! grep -q 'gGblScreenMask.*DEBUG_ERROR\|DEBUG_ERROR.*gGblScreenMask' \
+       "$LOGFS/DebugSink.c"; then
+  echo "FAIL: DebugSink.c gGblScreenMask must default to DEBUG_ERROR" >&2
   fail=1
 fi
 
@@ -55,25 +64,27 @@ elif ! grep -q 'gDbgCurrentLevel' "$DBGLIB/GblDebugLib.c"; then
   fail=1
 fi
 
-# ── Check 5a: "gbl-chainload entered" marker present at DEBUG_ERROR. ───────
+# ── Check 5a: "gbl-chainload entered" marker present at DEBUG_INFO. ───────
+# Boundary markers are intentionally INFO-level so they stay off the
+# production screen + UefiLog; they reach both only under --debug. The
+# logfs stream captures them regardless.
 if ! grep -Rq 'gbl-chainload entered' "$APP"; then
   echo "FAIL: 'gbl-chainload entered' boundary marker not found in Application/" >&2
   fail=1
 else
-  # The DEBUG((DEBUG_ERROR, "gbl-chainload entered...")) call is on one line.
-  if ! grep -RnE 'DEBUG_ERROR.*gbl-chainload entered|gbl-chainload entered.*DEBUG_ERROR' "$APP" 2>/dev/null | grep -q .; then
-    echo "FAIL: 'gbl-chainload entered' found but not on a DEBUG_ERROR line" >&2
+  if ! grep -RnE 'DEBUG_INFO.*gbl-chainload entered|gbl-chainload entered.*DEBUG_INFO' "$APP" 2>/dev/null | grep -q .; then
+    echo "FAIL: 'gbl-chainload entered' found but not on a DEBUG_INFO line" >&2
     fail=1
   fi
 fi
 
-# ── Check 5b: "gbl-chainload exiting" marker present at DEBUG_ERROR. ───────
+# ── Check 5b: "gbl-chainload exiting" marker present at DEBUG_INFO. ───────
 if ! grep -Rq 'gbl-chainload exiting' "$APP"; then
   echo "FAIL: 'gbl-chainload exiting' boundary marker not found in Application/" >&2
   fail=1
 else
-  if ! grep -RnE 'DEBUG_ERROR.*gbl-chainload exiting|gbl-chainload exiting.*DEBUG_ERROR' "$APP" 2>/dev/null | grep -q .; then
-    echo "FAIL: 'gbl-chainload exiting' found but not on a DEBUG_ERROR line" >&2
+  if ! grep -RnE 'DEBUG_INFO.*gbl-chainload exiting|gbl-chainload exiting.*DEBUG_INFO' "$APP" 2>/dev/null | grep -q .; then
+    echo "FAIL: 'gbl-chainload exiting' found but not on a DEBUG_INFO line" >&2
     fail=1
   fi
 fi
