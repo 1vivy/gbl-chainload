@@ -7,13 +7,13 @@
 
   ## Reentry guard (Phase A)
 
-  Verbose hooks fan out a `DEBUG()` per call. `DEBUG()` routes through
-  `LogFsLib`'s sink → `EFI_FILE_PROTOCOL->Write` → SimpleFS → block IO
-  → potentially SCM smc traffic. If the SCM hook is installed and one
-  of those internal SMCs lands back in our wrapper, the wrapper would
-  recurse, log again, and either explode the stack or starve the log
-  budget. Each hook source declares its own per-record reentry guard
-  and wraps its body in `HookEnter`/`HookLeave`.
+  Verbose hooks can fan out a log emit per call. Depending on the active
+  build flags and firmware logging path, those emits can route through
+  firmware services that eventually perform block I/O or SCM/QSEE traffic.
+  If one of those internal calls lands back in our wrappers, the wrapper
+  would recurse, log again, and either explode the stack or starve the log
+  budget. Each hook source declares its own per-record reentry guard and
+  wraps its body in `HookEnter`/`HookLeave`.
 **/
 #ifndef GBL_CHAINLOAD_HOOK_COMMON_H
 #define GBL_CHAINLOAD_HOOK_COMMON_H
@@ -24,6 +24,7 @@ EFI_STATUS InstallQseecomHook (VOID);
 EFI_STATUS InstallScmHook (VOID);
 EFI_STATUS InstallVerifiedBootHook (VOID);
 EFI_STATUS InstallSpssHook (VOID);
+EFI_STATUS InstallBlockIoHook (VOID);
 EFI_STATUS InstallEbsHook (VOID);
 
 /* ------------------------------------------------------------------

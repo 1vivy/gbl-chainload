@@ -21,6 +21,8 @@
 
 #include <Library/ProtocolHookLib.h>
 
+#include "HookCommon.h"
+
 #if (GBL_MODE == 0)
 
 EFI_STATUS
@@ -41,12 +43,6 @@ ProtocolHook_InstallAll (
 }
 
 #elif (GBL_MODE == 1)
-
-/* Existing slot installers (defined in their respective .c files). */
-EFI_STATUS InstallVerifiedBootHook (VOID);
-EFI_STATUS InstallScmHook          (VOID);
-EFI_STATUS InstallQseecomHook      (VOID);
-EFI_STATUS InstallSpssHook         (VOID);
 
 EFI_STATUS
 EFIAPI
@@ -104,11 +100,23 @@ ProtocolHook_InstallAll (
   }
   Result->SpssExpectedSlots = 1;
 
-  /* Aggregate -- all three required hooks must be installed. */
+  /* 5. BlockIo -- required for mode-1 reserve preservation.  This hook
+        observes partition reads/writes and swallows oplusreserve1 writes. */
+  Status = InstallBlockIoHook ();
+  if (EFI_ERROR (Status)) {
+    Print (L"ProtocolHookLib: FATAL — BlockIo install failed (%r), aborting chain-load\n",
+           Status);
+    return Status;
+  }
+  Result->BlockIoInstalledSlots = 1;
+  Result->BlockIoExpectedSlots  = 1;
+
+  /* Aggregate -- all required hooks must be installed. */
   Result->UniversalRequiredOk =
     (Result->VbInstalledSlots    > 0 &&
      Result->ScmInstalledSlots   > 0 &&
-     Result->QseecomInstalledSlots > 0);
+     Result->QseecomInstalledSlots > 0 &&
+     Result->BlockIoInstalledSlots > 0);
 
   if (!Result->UniversalRequiredOk) {
     Print (L"ProtocolHookLib: FATAL — universal baseline incomplete, aborting chain-load\n");
@@ -119,12 +127,13 @@ ProtocolHook_InstallAll (
 
   GBL_INFO (
     "ProtocolHookLib: installed (mode=%d,"
-    " vb=%u/%u scm=%u/%u qsee=%u/%u spss=%u/%u)\n",
+    " vb=%u/%u scm=%u/%u qsee=%u/%u spss=%u/%u blockio=%u/%u)\n",
     (int)GBL_MODE,
     Result->VbInstalledSlots,      Result->VbExpectedSlots,
     Result->ScmInstalledSlots,     Result->ScmExpectedSlots,
     Result->QseecomInstalledSlots, Result->QseecomExpectedSlots,
-    Result->SpssInstalledSlots,    Result->SpssExpectedSlots
+    Result->SpssInstalledSlots,    Result->SpssExpectedSlots,
+    Result->BlockIoInstalledSlots, Result->BlockIoExpectedSlots
     );
   return EFI_SUCCESS;
 }

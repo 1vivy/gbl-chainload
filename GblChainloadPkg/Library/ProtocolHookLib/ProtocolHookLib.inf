@@ -20,6 +20,7 @@
   QseecomHook.c
   ScmHook.c
   SpssHook.c
+  BlockIoHook.c
 
 [Packages]
   MdePkg/MdePkg.dec

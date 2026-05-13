@@ -13,6 +13,8 @@ typedef struct {
   UINT32   QseecomExpectedSlots;
   UINT32   SpssInstalledSlots;
   UINT32   SpssExpectedSlots;
+  UINT32   BlockIoInstalledSlots;
+  UINT32   BlockIoExpectedSlots;
   /* Aggregate flags. */
   BOOLEAN  UniversalRequiredOk;
   BOOLEAN  ModeOverlayOk;
