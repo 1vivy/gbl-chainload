@@ -10,17 +10,23 @@
 #    gGblScreenMask, defaulted to DEBUG_ERROR.
 # 4. GblDebugLib sets gDbgCurrentLevel before calling ConOut->OutputString.
 # 5. Boundary markers ("gbl-chainload entered" / "gbl-chainload exiting")
-#    are present in Application source at DEBUG_INFO level — captured
-#    by logfs always, never on screen/UefiLog.
+#    are present in Application source at DEBUG_INFO level. Visible on
+#    screen + UefiLog only under --debug (mask widening); always in logfs.
 # 6. SCR_PRINT is not reintroduced anywhere in code paths.
-# 7. gGblScreenMask is never widened at runtime — no Application code
-#    calls LogFsSetScreenMask to add any level beyond DEBUG_ERROR. The
-#    UefiLog stays clean regardless of build flags.
+# 7. Application LogFsSetScreenMask calls only widen to ERROR|WARN|INFO,
+#    never include DEBUG_VERBOSE or GBL_DBG_LOGFS_ONLY (verbose tier
+#    must NEVER reach UefiLog per design).
 # 8. GBL_DBG_LOGFS_ONLY (private logfs-only error-level bit) is defined
 #    in LogFsLib.h.
 # 9. AblUnwrap's high-volume traces use GBL_DBG_LOGFS_ONLY (not
 #    DEBUG_VERBOSE), so admitting them via PcdDebugPrintErrorLevel does
 #    not also admit QCOM stock DEBUG_VERBOSE spam.
+# 10. BootFlow.c does NOT call LogFsRemoveDebugSink before LoadImage.
+#     The sink is retained across the chainload handoff so the runtime
+#     mask continues to filter the patched ABL's DEBUG output (per-call
+#     QSEECOM/SCM/VB traces) by gGblScreenMask — otherwise those
+#     emits would leak directly to UefiLog post-handoff regardless of
+#     mask state.
 #
 # Host-side check; runtime stream split is verified manually on-device.
 
@@ -74,9 +80,9 @@ elif ! grep -q 'gDbgCurrentLevel' "$DBGLIB/GblDebugLib.c"; then
 fi
 
 # ── Check 5a: "gbl-chainload entered" marker present at DEBUG_INFO. ───────
-# Boundary markers stay at INFO level so the runtime mask (DEBUG_ERROR
-# only, never widened) keeps them off ConOut and out of UefiLog. The
-# logfs hook captures them on every build via LogFsWrite.
+# Boundary markers stay at INFO. Default mask = DEBUG_ERROR keeps them
+# off ConOut on prod; --debug widens to include INFO so they reach
+# screen + UefiLog as confirmation. logfs captures them on every build.
 if ! grep -Rq 'gbl-chainload entered' "$APP"; then
   echo "FAIL: 'gbl-chainload entered' boundary marker not found in Application/" >&2
   fail=1
@@ -109,20 +115,13 @@ if [ -n "$SCR_HITS" ]; then
   fail=1
 fi
 
-# ── Check 7: gGblScreenMask is never widened at runtime. ──────────────────
-# UefiLog should stay clean regardless of build flags. The Application
-# layer (Entry.c, BootFlow.c, anything else under GblChainloadPkg/
-# Application) must not call LogFsSetScreenMask at all. The function
-# itself is defined in DebugSink.c — that definition is allowed; we only
-# scan the Application surface.
-MASK_HITS=$(grep -RnE '\bLogFsSetScreenMask\s*\(' "$APP" 2>/dev/null || true)
-if [ -n "$MASK_HITS" ]; then
-  echo "FAIL: Application code calls LogFsSetScreenMask:" >&2
-  echo "$MASK_HITS" >&2
-  echo "      The mask must never widen at runtime — UefiLog stays clean" >&2
-  echo "      on every build, including --debug / --verbose. Use" >&2
-  echo "      GBL_DBG_LOGFS_ONLY tier + PcdDebugPrintErrorLevel widening" >&2
-  echo "      for high-volume traces instead." >&2
+# ── Check 7: gGblScreenMask widens are constrained to INFO/WARN. ───────────
+# Verbose tier (GBL_DBG_LOGFS_ONLY) and DEBUG_VERBOSE MUST NEVER appear
+# in a LogFsSetScreenMask call — those tiers are logfs-only by design.
+if grep -RnE '\bLogFsSetScreenMask\s*\([^)]*(GBL_DBG_LOGFS_ONLY|DEBUG_VERBOSE)' \
+     "$APP" 2>/dev/null | grep -q .; then
+  echo "FAIL: LogFsSetScreenMask passes a logfs-only tier (GBL_DBG_LOGFS_ONLY" >&2
+  echo "      or DEBUG_VERBOSE). Those bits must NEVER reach UefiLog by design." >&2
   fail=1
 fi
 
@@ -147,6 +146,23 @@ if [ -f "$ABL" ]; then
   if ! grep -q 'GBL_DBG_LOGFS_ONLY' "$ABL"; then
     echo "FAIL: AblUnwrap doesn't reference GBL_DBG_LOGFS_ONLY — expected" >&2
     echo "      its high-volume traces to use that level." >&2
+    fail=1
+  fi
+fi
+
+# ── Check 10: BootFlow.c retains the sink across the LoadImage handoff. ───
+# Without this, the patched ABL's runtime hook DEBUG output (qsee-buf
+# hex dumps, scm-sip/scm-send traces, vb-fakelock/vb-rwstate) bypasses
+# our mask filter and floods UefiLog on every build. The sink stays
+# installed; LogFsWrite no-ops cleanly after LogFsClose via the
+# !LogFsReady guard, but the screen-mask filter remains active.
+BF=GblChainloadPkg/Application/GblChainload/BootFlow.c
+if [ -f "$BF" ]; then
+  if grep -B2 'gBS->LoadImage' "$BF" | grep -q 'LogFsRemoveDebugSink'; then
+    echo "FAIL: BootFlow.c calls LogFsRemoveDebugSink before LoadImage —" >&2
+    echo "      the sink must be retained across the chainload handoff so" >&2
+    echo "      the screen-mask filter applies to the patched ABL's runtime" >&2
+    echo "      DEBUG emits. Drop the LogFsRemoveDebugSink() call." >&2
     fail=1
   fi
 fi

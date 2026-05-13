@@ -134,12 +134,15 @@ CommonEarlyInit (
     Print (L"!!! LOGFS PARTITION NOT FOUND - LOGGING TO CONSOLE ONLY !!!\n");
   } else if (!EFI_ERROR (Status)) {
     LogFsInstallDebugSink ();
-    /* gGblScreenMask intentionally stays at its DEBUG_ERROR default.
-     * Widening it would tee DEBUG_INFO output onto UefiLog via the
-     * platform's ConOut→UefiLog coupling, diluting UefiLog with
-     * gbl-chainload status content. GBL_VERBOSE=1 instead widens
-     * PcdDebugPrintErrorLevel to admit GBL_DBG_LOGFS_ONLY — that
-     * tier reaches the hook and lands in logfs only. */
+#if (GBL_DEBUG == 1)
+    /* --debug widens the screen filter to admit DEBUG_INFO so status
+     * lines (banner, BootFlow phases, hook results) reach the screen
+     * AND UefiLog (the platform's BDS tees ConOut to UefiLog). Verbose-
+     * tier traces (GBL_DBG_LOGFS_ONLY) are still excluded by the mask
+     * — only logfs gets those. Sink is retained across handoff so the
+     * mask applies to the patched ABL's runtime hook output too. */
+    LogFsSetScreenMask (DEBUG_ERROR | DEBUG_WARN | DEBUG_INFO);
+#endif
     LogFsFlush ();
   }
 }

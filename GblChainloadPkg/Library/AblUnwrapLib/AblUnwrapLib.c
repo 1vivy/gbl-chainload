@@ -166,7 +166,7 @@ GetHandle (
     } else {
       *PartHandle = BlkIo;
       FreePool (Handles);
-      Print (L"AblUnwrap: matched %s\n", PartitionName);
+      DEBUG ((DEBUG_INFO, "AblUnwrap: matched %s\n", PartitionName));
       return EFI_SUCCESS;
     }
   }
@@ -369,7 +369,7 @@ FindPe32InSectionStream (
       CopyMem (Copy, SecData, SecDataSize);
       *PeOut     = Copy;
       *PeSizeOut = SecDataSize;
-      Print (L"AblUnwrap: found PE/TE %u bytes\n", (UINT32)SecDataSize);
+      DEBUG ((DEBUG_INFO, "AblUnwrap: found PE/TE %u bytes\n", (UINT32)SecDataSize));
       return TRUE;
     }
 

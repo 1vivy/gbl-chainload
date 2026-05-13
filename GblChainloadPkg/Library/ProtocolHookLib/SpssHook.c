@@ -153,7 +153,7 @@ InstallSpssHook (VOID)
   Spss->SPSSDxe_ShareKeyMintInfo = HookedShareKeyMintInfo;
   gHookedSpss                    = Spss;
 
-  Print (L"SpssHook: installed ShareKeyMintInfo=%p (orig=%p)\n",
-         HookedShareKeyMintInfo, gOrigShareKeyMintInfo);
+  DEBUG ((DEBUG_INFO, "SpssHook: installed ShareKeyMintInfo=%p (orig=%p)\n",
+          HookedShareKeyMintInfo, gOrigShareKeyMintInfo));
   return EFI_SUCCESS;
 }

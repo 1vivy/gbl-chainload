@@ -69,7 +69,9 @@ BootFlowChainLoad (VOID)
     EFI_STATUS  LogStatus = LogFsInit ();
     if (!EFI_ERROR (LogStatus)) {
       LogFsInstallDebugSink ();
-      /* gGblScreenMask stays at its DEBUG_ERROR default (see Entry.c). */
+#if (GBL_DEBUG == 1)
+      LogFsSetScreenMask (DEBUG_ERROR | DEBUG_WARN | DEBUG_INFO);
+#endif
       LogFsFlush ();
       DEBUG ((DEBUG_INFO, "BootFlow: logfs re-opened for chainload session\n"));
     } else {
@@ -144,13 +146,21 @@ BootFlowChainLoad (VOID)
      instance and ConnectController returns EFI_NOT_FOUND for the next caller. */
   DEBUG ((DEBUG_INFO, "BootFlow: LogFs flush+close before LoadImage\n"));
   LogFsFlush ();
-  /* Restore the original ConOut->OutputString before handing off, so the
-   * patched ABL inherits a clean console table (mirrors EnterFastboot's
-   * teardown). Without this, gST->ConOut->OutputString stays pointed at
-   * HookedOutputString, which would still LogFsWrite — harmless after
-   * LogFsClose due to the !LogFsReady guard, but a latent hazard. */
-  LogFsRemoveDebugSink ();
   LogFsClose ();
+  /* DO NOT call LogFsRemoveDebugSink() here. The sink stays installed
+   * across the chainload handoff so the mask in HookedOutputString
+   * continues to filter the patched ABL's runtime DEBUG output (per-
+   * call QSEECOM/SCM/VB traces) by gGblScreenMask. Without this, ABL's
+   * DEBUG_INFO emits hit the unhooked ConOut and flood UefiLog
+   * regardless of build flags.
+   *
+   * After LogFsClose, LogFsWrite no-ops via the !LogFsReady guard, so
+   * the hook degrades cleanly to "screen-mask filter only" for the
+   * ABL phase.
+   *
+   * The earlier "clean ConOut for the next image" concern is moot:
+   * HookedOutputString is a transparent pass-through-or-filter wrapper.
+   * ABL doesn't inspect or replace ConOut->OutputString itself. */
 
   Status = gBS->LoadImage (FALSE, gImageHandle, NULL, Pe, PeSize, &ImageHandle);
   if (EFI_ERROR (Status)) {

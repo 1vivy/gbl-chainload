@@ -116,15 +116,15 @@ ProtocolHook_InstallAll (
 
   Result->ModeOverlayOk = TRUE;   /* Mode-1 overlay inline; mode-2/3 overlays TBD. */
 
-  Print (
-    L"ProtocolHookLib: installed (mode=%d,"
-    L" vb=%u/%u scm=%u/%u qsee=%u/%u spss=%u/%u)\n",
+  DEBUG ((DEBUG_INFO,
+    "ProtocolHookLib: installed (mode=%d,"
+    " vb=%u/%u scm=%u/%u qsee=%u/%u spss=%u/%u)\n",
     (int)GBL_MODE,
     Result->VbInstalledSlots,      Result->VbExpectedSlots,
     Result->ScmInstalledSlots,     Result->ScmExpectedSlots,
     Result->QseecomInstalledSlots, Result->QseecomExpectedSlots,
     Result->SpssInstalledSlots,    Result->SpssExpectedSlots
-    );
+    ));
   return EFI_SUCCESS;
 }
 
