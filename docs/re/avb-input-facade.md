@@ -1,3 +1,5 @@
+> **Status (2026-05-12):** The partition-read façade idea in this doc did **not** graduate into shim code. The path that did graduate (in spirit; code still Phase-2) is the disk-side graft documented in [`recovery-normal-boot-fix-paths.md`](recovery-normal-boot-fix-paths.md). This doc is preserved as a design alternative considered.
+
 # AVB input façade plan for recovery/dtbo embedded vbmeta
 
 Purpose: make fakelocked ABL/libavb see parseable stock-equivalent recovery/dtbo AVB metadata, so the normal locked/green boot path naturally emits coherent bootconfig, KeyMaster, Oplus, and per-partition vbmeta digest state.
