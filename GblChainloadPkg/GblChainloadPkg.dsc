@@ -171,7 +171,13 @@
 ################################################################################
 [PcdsFixedAtBuild.common]
   gEfiMdePkgTokenSpaceGuid.PcdDebugPropertyMask|0x2f
-  gEfiMdePkgTokenSpaceGuid.PcdDebugPrintErrorLevel|0x80000042
+  # Runtime DEBUG-level mask consumed by GblDebugLib via GetDebugPrintErrorLevel().
+  # Must include DEBUG_VERBOSE (0x00400000) so AblUnwrap's lzma/section traces
+  # reach our HookedOutputString hook; the sink's runtime gGblScreenMask gates
+  # the screen/UefiLog side separately and never includes DEBUG_VERBOSE, so
+  # verbose lines land in gbl-chainload_BootN.txt only.
+  #   ERROR (0x80000000) | VERBOSE (0x00400000) | INFO (0x00000040) | WARN (0x00000002)
+  gEfiMdePkgTokenSpaceGuid.PcdDebugPrintErrorLevel|0x80400042
   gEfiMdePkgTokenSpaceGuid.PcdReportStatusCodePropertyMask|0x06
 
 ################################################################################

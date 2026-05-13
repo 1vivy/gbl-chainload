@@ -22,9 +22,9 @@ echo "== building dist/mode-1.efi =="
 ./scripts/build.sh --mode 1
 test -f dist/mode-1.efi || { echo "FAIL: dist/mode-1.efi missing"; exit 1; }
 
-echo "== building dist/mode-1-auto-debug-verbose.efi =="
-./scripts/build.sh --mode 1 --auto --debug --verbose
-test -f dist/mode-1-auto-debug-verbose.efi \
-  || { echo "FAIL: dist/mode-1-auto-debug-verbose.efi missing"; exit 1; }
+echo "== building dist/mode-1-auto-debug.efi =="
+./scripts/build.sh --mode 1 --auto --debug
+test -f dist/mode-1-auto-debug.efi \
+  || { echo "FAIL: dist/mode-1-auto-debug.efi missing"; exit 1; }
 
 echo "ok 010_build_smoke"

@@ -29,7 +29,10 @@
 
 #define MAX_DEBUG_MESSAGE_LENGTH  0x100
 
-/* Shared with DebugSink.c via extern — same link unit (LogFsLib). */
+/* Defined here; LogFsLib/DebugSink.c reads it via `extern`. The two are
+ * separate library instances — they don't share a link unit, but both
+ * end up in the same UEFI_APPLICATION binary when the DSC maps DebugLib
+ * to GblDebugLib (see DebugSink.c for the contract). */
 UINTN   gDbgCurrentLevel = GBL_DBG_LEVEL_NONE;
 
 STATIC BOOLEAN mPostEBS  = FALSE;
@@ -52,14 +55,25 @@ DxeDebugLibConstructor (
   IN EFI_SYSTEM_TABLE *SystemTable
   )
 {
+  EFI_STATUS  Status;
+
   mDebugST = SystemTable;
-  SystemTable->BootServices->CreateEvent (
-    EVT_SIGNAL_EXIT_BOOT_SERVICES,
-    TPL_NOTIFY,
-    ExitBootServicesCallback,
-    NULL,
-    &mExitBootServicesEvent
-    );
+  Status = SystemTable->BootServices->CreateEvent (
+             EVT_SIGNAL_EXIT_BOOT_SERVICES,
+             TPL_NOTIFY,
+             ExitBootServicesCallback,
+             NULL,
+             &mExitBootServicesEvent
+             );
+  if (EFI_ERROR (Status)) {
+    /* Event creation failed — be explicit so the destructor doesn't try
+     * to close an uninitialised handle. The DebugPrint path still works
+     * without the EBS notification; we just lose the post-EBS guard, so
+     * any DEBUG call after ExitBootServices is a no-op only if the
+     * mPostEBS path is independently set elsewhere. */
+    mExitBootServicesEvent = NULL;
+    return Status;
+  }
   return EFI_SUCCESS;
 }
 
@@ -70,7 +84,14 @@ DxeDebugLibDestructor (
   IN EFI_SYSTEM_TABLE *SystemTable
   )
 {
-  if (mExitBootServicesEvent != NULL) {
+  /* Only close the event if (a) it exists, (b) we're still in the boot-
+   * services phase (CloseEvent is a BootServices function and is
+   * undefined after ExitBootServices), and (c) the SystemTable +
+   * BootServices pointers are still valid. */
+  if (mExitBootServicesEvent != NULL
+      && !mPostEBS
+      && SystemTable != NULL
+      && SystemTable->BootServices != NULL) {
     SystemTable->BootServices->CloseEvent (mExitBootServicesEvent);
   }
   return EFI_SUCCESS;

@@ -11,6 +11,10 @@
   BASE_NAME                      = GblDebugLib
   FILE_GUID                      = 3f8a2c1e-7b4d-4f9e-8c2a-1d5e6f7a8b9c
   MODULE_TYPE                    = UEFI_DRIVER
+  # NB: Library uses BootServices->CreateEvent (EXIT_BOOT_SERVICES notify)
+  # and the constructor/destructor take (EFI_HANDLE, EFI_SYSTEM_TABLE) —
+  # both require a non-BASE module type. UEFI_DRIVER matches the
+  # supported-consumer list below and matches UefiDebugLibConOut's INF.
   VERSION_STRING                 = 1.0
   LIBRARY_CLASS                  = DebugLib|DXE_CORE DXE_DRIVER DXE_RUNTIME_DRIVER UEFI_APPLICATION UEFI_DRIVER
 
