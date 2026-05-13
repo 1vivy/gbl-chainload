@@ -1,0 +1,35 @@
+## @file
+#  SerialIoProbe — throwaway probe app for logging-v2 Task 0 gate.
+#  Writes a unique magic string via gEfiSerialIoProtocol to verify the
+#  string lands in \UefiLog<N>.txt on canoe.  Remove after gate passes.
+##
+
+[Defines]
+  INF_VERSION                    = 0x00010006
+  BASE_NAME                      = SerialIoProbe
+  FILE_GUID                      = 7e8f3a1d-2c4b-4e5f-8a6b-9c7d8e9f0a1b
+  MODULE_TYPE                    = UEFI_APPLICATION
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = SerialIoProbeEntry
+
+[Sources]
+  SerialIoProbe.c
+
+[Packages]
+  MdePkg/MdePkg.dec
+  MdeModulePkg/MdeModulePkg.dec
+  GblChainloadPkg/GblChainloadPkg.dec
+
+[LibraryClasses]
+  UefiApplicationEntryPoint
+  UefiLib
+  DebugLib
+  BaseLib
+  BaseMemoryLib
+  PrintLib
+
+[Protocols]
+  gEfiSerialIoProtocolGuid
+
+[Depex]
+  TRUE

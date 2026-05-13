@@ -230,3 +230,13 @@
       DynamicPatchLib|GblChainloadPkg/Library/DynamicPatchLib/DynamicPatchLib.inf
       ProtocolHookLib|GblChainloadPkg/Library/ProtocolHookLib/ProtocolHookLib.inf
   }
+  GblChainloadPkg/Application/SerialIoProbe/SerialIoProbe.inf {
+    <LibraryClasses>
+      UefiApplicationEntryPoint|MdePkg/Library/UefiApplicationEntryPoint/UefiApplicationEntryPoint.inf
+      UefiLib|MdePkg/Library/UefiLib/UefiLib.inf
+      BaseLib|MdePkg/Library/BaseLib/BaseLib.inf
+      DevicePathLib|MdePkg/Library/UefiDevicePathLib/UefiDevicePathLib.inf
+      HobLib|MdePkg/Library/DxeHobLib/DxeHobLib.inf
+      PerformanceLib|MdeModulePkg/Library/DxePerformanceLib/DxePerformanceLib.inf
+      DebugPrintErrorLevelLib|MdePkg/Library/BaseDebugPrintErrorLevelLib/BaseDebugPrintErrorLevelLib.inf
+  }
