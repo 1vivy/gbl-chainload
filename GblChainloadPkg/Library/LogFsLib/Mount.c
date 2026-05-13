@@ -28,6 +28,30 @@ BOOLEAN            gLogFsReady = FALSE;
 
 STATIC UINTN       gLogFsDirtyBytes = 0;
 
+/* EBS callback handle. logfs stays mounted across the chainload handoff so
+ * the patched ABL's runtime DEBUG output (verbose-tier hook traces) can
+ * still land in gbl-chainload_BootN.txt. We need a final flush at EBS
+ * because the patched ABL never calls LogFsClose itself, and after EBS the
+ * SimpleFS/Block-IO protocols backing gPostGblLog become invalid. */
+STATIC EFI_EVENT   mLogFsEbsEvent = NULL;
+
+STATIC VOID EFIAPI
+LogFsExitBootServicesNotify (
+  IN EFI_EVENT  Event,
+  IN VOID      *Context
+  )
+{
+  if (gLogFsReady && gPostGblLog != NULL) {
+    gPostGblLog->Flush (gPostGblLog);
+  }
+  /* SimpleFS is going away — disarm all writers. We deliberately do NOT
+   * call Close() here: protocol services are undefined at this TPL on
+   * some implementations, and the OS-loader/kernel handoff cleans up
+   * file handles regardless. */
+  gLogFsReady      = FALSE;
+  gLogFsDirtyBytes = 0;
+}
+
 /* Pre-sink mount-probe progress output. These lines fire before
  * LogFsInstallDebugSink runs, so they bypass any screen-mask filtering.
  * Gate them at compile time so production builds keep the screen quiet
@@ -220,6 +244,26 @@ LogFsInit (VOID)
   }
 
   gLogFsReady = TRUE;
+
+  /* Register the ExitBootServices auto-flush + disarm. Idempotent across
+   * LogFsInit -> LogFsClose -> LogFsInit cycles in the same image (Entry.c
+   * re-opens logfs from BootFlow). */
+  if (mLogFsEbsEvent == NULL) {
+    EFI_STATUS EvStatus = gBS->CreateEvent (
+                                 EVT_SIGNAL_EXIT_BOOT_SERVICES,
+                                 TPL_NOTIFY,
+                                 LogFsExitBootServicesNotify,
+                                 NULL,
+                                 &mLogFsEbsEvent);
+    if (EFI_ERROR (EvStatus)) {
+      mLogFsEbsEvent = NULL;
+      DEBUG ((DEBUG_WARN,
+              "LogFs: EBS event registration failed (%r) — post-handoff "
+              "verbose traces may not flush before SimpleFS goes away\n",
+              EvStatus));
+    }
+  }
+
   LOGFS_PROBE (L"LogFsLib: finished\n");
   return EFI_SUCCESS;
 }

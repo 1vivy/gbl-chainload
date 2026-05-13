@@ -140,27 +140,28 @@ BootFlowChainLoad (VOID)
 
   /* 4. LoadImage + StartImage. */
 
-  /* Proper transition: release the logfs partition handle so the next EFI in
-     the chain (the patched ABL or further-chained payloads) can mount it
-     if they want.  Without this, the partition stays bound to our driver
-     instance and ConnectController returns EFI_NOT_FOUND for the next caller. */
-  DEBUG ((DEBUG_INFO, "BootFlow: LogFs flush+close before LoadImage\n"));
+  /* DO NOT close logfs here, and DO NOT call LogFsRemoveDebugSink().
+   *
+   * Both the sink hook and the logfs mount stay live across the chainload
+   * handoff so the patched ABL's runtime DEBUG output (verbose-tier
+   * QSEECOM/SCM/VB/SPSS hook traces tagged GBL_DBG_LOGFS_ONLY) lands in
+   * gbl-chainload_BootN.txt. With logfs closed, LogFsWrite no-ops via the
+   * !LogFsReady guard and the entire verbose tier vanishes — no UefiLog
+   * (screen-mask blocks it) and no logfs (closed). Keeping logfs open is
+   * the only place those traces can land.
+   *
+   * The screen-mask filter in HookedOutputString continues to keep the
+   * verbose tier out of UefiLog (ABL's per-call hex dumps would otherwise
+   * flood it regardless of build flags).
+   *
+   * LogFsLib's EBS callback (LogFsExitBootServicesNotify) flushes and
+   * disarms on the patched ABL's eventual ExitBootServices. The earlier
+   * "release the partition handle for the next EFI in chain" concern is
+   * moot here: HookedOutputString is a transparent wrapper, ABL doesn't
+   * inspect or replace ConOut->OutputString, and the patched ABL takes a
+   * non-EFI path after this point. */
+  DEBUG ((DEBUG_INFO, "BootFlow: LogFs flush before LoadImage (sink+mount retained)\n"));
   LogFsFlush ();
-  LogFsClose ();
-  /* DO NOT call LogFsRemoveDebugSink() here. The sink stays installed
-   * across the chainload handoff so the mask in HookedOutputString
-   * continues to filter the patched ABL's runtime DEBUG output (per-
-   * call QSEECOM/SCM/VB traces) by gGblScreenMask. Without this, ABL's
-   * DEBUG_INFO emits hit the unhooked ConOut and flood UefiLog
-   * regardless of build flags.
-   *
-   * After LogFsClose, LogFsWrite no-ops via the !LogFsReady guard, so
-   * the hook degrades cleanly to "screen-mask filter only" for the
-   * ABL phase.
-   *
-   * The earlier "clean ConOut for the next image" concern is moot:
-   * HookedOutputString is a transparent pass-through-or-filter wrapper.
-   * ABL doesn't inspect or replace ConOut->OutputString itself. */
 
   Status = gBS->LoadImage (FALSE, gImageHandle, NULL, Pe, PeSize, &ImageHandle);
   if (EFI_ERROR (Status)) {
