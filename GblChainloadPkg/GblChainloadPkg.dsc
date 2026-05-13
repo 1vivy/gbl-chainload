@@ -97,8 +97,9 @@
   ArmGenericTimerCounterLib|ArmPkg/Library/ArmGenericTimerPhyCounterLib/ArmGenericTimerPhyCounterLib.inf
   Zlib|QcomModulePkg/Library/zlib/zlib.inf
   BaseMemoryLibOptDxe|MdePkg/Library/BaseMemoryLibOptDxe/BaseMemoryLibOptDxe.inf
-  ## Route DEBUG() through gST->ConOut so LogFsLib's DebugSink can mirror it.
-  DebugLib|MdePkg/Library/UefiDebugLibConOut/UefiDebugLibConOut.inf
+  ## Route DEBUG() through GblDebugLib, which records ErrorLevel before calling
+  ## ConOut so LogFsLib's DebugSink can gate UefiLog writes on DEBUG_ERROR only.
+  DebugLib|GblChainloadPkg/Library/GblDebugLib/GblDebugLib.inf
   ReportStatusCodeLib|MdeModulePkg/Library/DxeReportStatusCodeLib/DxeReportStatusCodeLib.inf
   DebugPrintErrorLevelLib|MdeModulePkg/Library/DxeDebugPrintErrorLevelLib/DxeDebugPrintErrorLevelLib.inf
   UefiDriverEntryPoint|MdePkg/Library/UefiDriverEntryPoint/UefiDriverEntryPoint.inf

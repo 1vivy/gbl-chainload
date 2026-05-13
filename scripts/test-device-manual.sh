@@ -197,7 +197,7 @@ fi
 adb shell 'getprop | grep -E "^\[ro\.boot\.|^\[ro\.bootmode|^\[ro\.bootloader"' \
   > "$LOG_DIR/getprop.boot.txt" 2>/dev/null || true
 
-# Mount + pull logfs partition (UefiLogN.txt + GblChainload_BootN.txt).
+# Mount + pull logfs partition (UefiLogN.txt + gbl-chainload_BootN.txt).
 # Mounting requires root in system.
 LOGFS_MOUNTED=false
 if [[ "$DEVICE_CONTEXT" == "recovery" ]]; then
@@ -236,7 +236,7 @@ if [[ "$LOGFS_MOUNTED" == "true" ]]; then
       || echo "    logfs pull failed — partition unmapped?"
   else
     # System: adb pull on $LOGFS_MOUNTPOINT requires root ADB; pipe individual files via su.
-    for logfs_file in UefiLog1.txt UefiLog2.txt GblChainload_Boot1.txt GblChainload_Boot2.txt; do
+    for logfs_file in UefiLog1.txt UefiLog2.txt gbl-chainload_Boot1.txt gbl-chainload_Boot2.txt; do
       adb shell "su -c 'cat $LOGFS_MOUNTPOINT/${logfs_file}'" \
         > "$LOG_DIR/logfs/${logfs_file}" 2>/dev/null || true
       if [[ -s "$LOG_DIR/logfs/${logfs_file}" ]]; then

@@ -2,7 +2,7 @@
   Mount the device's `logfs` partition (located by GPT label) and provide
   a clean post-GBL log file. Pre-GBL UefiLog1.txt is rotated to
   UefiLogSaved{0..4}.txt across boots so BDS log history is preserved.
-  Our own post-GBL output goes to GblChainload_Boot{0..4}.txt — a separate
+  Our own post-GBL output goes to gbl-chainload_Boot{0..4}.txt — a separate
   file that doesn't get corrupted by the existing UefiLog volume / format.
 
   See REWRITE_PLAN.md §3.5.
@@ -15,7 +15,7 @@
 
 #include <Uefi.h>
 
-/** Mount logfs, rotate UefiLog1.txt, open GblChainload_BootN.txt, and
+/** Mount logfs, rotate UefiLog1.txt, open gbl-chainload_BootN.txt, and
     write an identifying banner to it. Caller may call LogFsWrite()
     afterwards to append more output.
 
@@ -37,7 +37,7 @@ LogFsWrite (
   );
 
 /** Write `Len` bytes from `Data` to a fresh file at the logfs root
-    named `FileName` (e.g. L"\\GblChainload_Boot0_fdt.bin"). Creates
+    named `FileName` (e.g. L"\\gbl-chainload_Boot0_fdt.bin"). Creates
     the file if it doesn't exist; overwrites if it does. Used by EBS
     hooks to dump captured FDT / bootconfig blobs for offline analysis
     rather than spamming chunked DEBUG lines. **/

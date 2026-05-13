@@ -1,5 +1,5 @@
 /** @file PostGblLog.c — open the clean post-GBL log file
-  GblChainload_BootN.txt for the current boot, rotating across 5 slots
+  gbl-chainload_BootN.txt for the current boot, rotating across 5 slots
   with a private slot-index file (`GblChainloadSaved.idx`) so we don't
   collide with UefiLogSaved.idx.
 
@@ -76,9 +76,9 @@ LogFsOpenPostGblLog (
     return Status;
   }
 
-  /* Compose path GblChainload_BootN.txt and clobber any prior contents. */
+  /* Compose path gbl-chainload_BootN.txt and clobber any prior contents. */
   UnicodeSPrint (LogPath, sizeof (LogPath),
-                 L"\\GblChainload_Boot%u.txt", Slot);
+                 L"\\gbl-chainload_Boot%u.txt", Slot);
 
   Status = Root->Open (Root, &LogFile, LogPath,
                        EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE, 0);

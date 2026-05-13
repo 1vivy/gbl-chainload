@@ -143,6 +143,7 @@ EnterFastboot (VOID)
 {
   EFI_STATUS Status;
 
+  DEBUG ((DEBUG_ERROR, "gbl-chainload exiting (path=fastboot-fallback)\n"));
   SCR_PRINT (L"gbl-chainload: entering FastbootLib\n");
   LogFsFlush ();
   LogFsRemoveDebugSink ();
@@ -160,6 +161,7 @@ TryChainLoad (VOID)
 {
   EFI_STATUS Status;
 
+  DEBUG ((DEBUG_ERROR, "gbl-chainload exiting (path=chainload)\n"));
   SCR_PRINT (L"gbl-chainload: chain-loading patched ABL\n");
   LogFsFlush ();
 
@@ -189,6 +191,9 @@ GblChainloadEntry (
              __DATE__, __TIME__);
 
   CommonEarlyInit (ImageHandle);
+
+  DEBUG ((DEBUG_ERROR, "gbl-chainload entered (mode=%d build=%a)\n",
+          (int)GBL_MODE, GBL_BUILD_NAME));
 
 #if (GBL_AUTO == 0)
   SCR_PRINT (L"Hold VolUp within %us to enter FastbootLib; "

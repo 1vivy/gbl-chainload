@@ -1,0 +1,37 @@
+## @file GblDebugLib.inf
+#  DebugLib instance for gbl-chainload.
+#
+#  Records ErrorLevel in gDbgCurrentLevel before writing to ConOut so that
+#  LogFsLib's DebugSink can gate UefiLog passthrough on DEBUG_ERROR only.
+#  Mirrors the constructor/destructor contract of UefiDebugLibConOut.
+##
+
+[Defines]
+  INF_VERSION                    = 0x00010005
+  BASE_NAME                      = GblDebugLib
+  FILE_GUID                      = 3f8a2c1e-7b4d-4f9e-8c2a-1d5e6f7a8b9c
+  MODULE_TYPE                    = UEFI_DRIVER
+  VERSION_STRING                 = 1.0
+  LIBRARY_CLASS                  = DebugLib|DXE_CORE DXE_DRIVER DXE_RUNTIME_DRIVER UEFI_APPLICATION UEFI_DRIVER
+
+  CONSTRUCTOR                    = DxeDebugLibConstructor
+  DESTRUCTOR                     = DxeDebugLibDestructor
+
+[Sources]
+  GblDebugLib.c
+
+[Packages]
+  MdePkg/MdePkg.dec
+  GblChainloadPkg/GblChainloadPkg.dec
+
+[LibraryClasses]
+  BaseLib
+  BaseMemoryLib
+  PrintLib
+  PcdLib
+  DebugPrintErrorLevelLib
+
+[Pcd]
+  gEfiMdePkgTokenSpaceGuid.PcdDebugClearMemoryValue        ## SOMETIMES_CONSUMES
+  gEfiMdePkgTokenSpaceGuid.PcdDebugPropertyMask            ## CONSUMES
+  gEfiMdePkgTokenSpaceGuid.PcdFixedDebugPrintErrorLevel    ## CONSUMES

@@ -3,10 +3,17 @@
   write into the post-GBL log file via LogFsWrite.
 
   Why ConOut->OutputString: in our build DebugLib is mapped to
-  MdePkg/Library/UefiDebugLibConOut, which routes DebugPrint() to
-  gST->ConOut->OutputString. Print() does the same. Hooking that one
-  function captures both DEBUG() and Print() output without per-library
-  shimming.
+  GblDebugLib (GblChainloadPkg/Library/GblDebugLib), which routes
+  DebugPrint() to gST->ConOut->OutputString AND records the ErrorLevel
+  in gDbgCurrentLevel before doing so.  Print() does not set
+  gDbgCurrentLevel, so it keeps the sentinel value (UINTN)-1 and
+  always passes through to ConOut unchanged.
+
+  Routing:
+    - DEBUG((DEBUG_ERROR,...)) → gDbgCurrentLevel=DEBUG_ERROR  → both
+                                 ConOut (→ QCOM BDS → UefiLog) AND logfs.
+    - DEBUG((DEBUG_INFO,...))  → gDbgCurrentLevel=DEBUG_INFO   → logfs only.
+    - Print(...)               → gDbgCurrentLevel=(UINTN)-1   → both (sentinel).
 
   Step 3 of bring-up. Step 2 already mounted logfs and opened the file.
 **/
@@ -17,6 +24,10 @@
 #include <Library/UefiBootServicesTableLib.h>
 #include <Library/LogFsLib.h>
 #include <Protocol/SimpleTextOut.h>
+
+/* Set by GblDebugLib before calling ConOut->OutputString for a DEBUG() call.
+ * Sentinel (UINTN)-1 means "not inside a DEBUG() call" (e.g. Print() path). */
+extern UINTN gDbgCurrentLevel;
 
 STATIC EFI_TEXT_STRING gOriginalOutputString = NULL;
 STATIC BOOLEAN         gInHook = FALSE;
@@ -78,16 +89,28 @@ HookedOutputString (
   EFI_STATUS Status;
   CHAR8      Buf[512];
   UINTN      Len;
+  BOOLEAN    IsDebugCall;
+  BOOLEAN    IsErrorLevel;
 
-  /* Always pass through to the real console, even on hook recursion or
-   * if logfs isn't ready — the screen is the most-trusted output. */
-  Status = (gOriginalOutputString != NULL)
-             ? gOriginalOutputString (This, String)
-             : EFI_NOT_READY;
+  /* Snapshot the level before any call that might alter it. */
+  IsDebugCall  = (gDbgCurrentLevel != (UINTN)-1);
+  IsErrorLevel = IsDebugCall && ((gDbgCurrentLevel & DEBUG_ERROR) != 0);
 
-  /* Mirror to logfs only if not already inside the hook (avoids any
-   * recursion in case LogFsWrite or its DEBUG calls would re-enter
-   * OutputString) and if LogFs is ready. */
+  /* Pass through to ConOut (→ QCOM BDS → UefiLog) only when:
+   *   (a) this is not a DEBUG() call at all (bare Print() path), OR
+   *   (b) this is a DEBUG_ERROR-level call (boundary markers + fatal lines).
+   * All other DEBUG() levels (INFO, WARN) go to our logfs stream only. */
+  if (!IsDebugCall || IsErrorLevel) {
+    Status = (gOriginalOutputString != NULL)
+               ? gOriginalOutputString (This, String)
+               : EFI_NOT_READY;
+  } else {
+    Status = EFI_SUCCESS;
+  }
+
+  /* Mirror to logfs regardless of level — our private stream captures
+   * everything. Guard against re-entry (LogFsWrite may emit diagnostics
+   * that would re-enter OutputString via DEBUG). */
   if (!gInHook && LogFsIsReady () && String != NULL) {
     gInHook = TRUE;
     Len = Ucs2ToAscii (String, Buf, sizeof (Buf));
