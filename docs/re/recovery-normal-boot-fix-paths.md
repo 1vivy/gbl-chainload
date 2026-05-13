@@ -1,6 +1,6 @@
 # Recovery Normal-Boot Fix Paths
 
-**Status (2026-05-12):** Confirmed. Custom-recovery + normal-boot under mode-1 fails in AOSP `first_stage_init` (libfs_avb), which re-walks the vbmeta descriptor tree from disk after our shim has already lied to ABL's KM. The fix has to re-shape the on-disk recovery image *before* first-stage init reads it. Two intended paths, **both Phase-2 work**: a host-side `scripts/graft-vbmeta-from-stock.py` and a device-side recovery-graft companion module. The bootloader shim does not carry the fix because the read path it would need to intercept lives in userspace libfs_avb, outside our chainload domain. The graft technique was validated on infiniti during exploration; technique is preserved in `memory/graft_at_natural_offset_wins.md` until Phase 2 rebuilds the tooling.
+**Status (2026-05-12):** Confirmed. Custom-recovery + normal-boot under mode-1 fails in AOSP `first_stage_init` (libfs_avb), which re-walks the vbmeta descriptor tree from disk after our shim has already lied to ABL's KM. The fix has to re-shape the on-disk recovery image *before* first-stage init reads it. Two intended paths, **both Phase-2 work**: a host-side `scripts/graft-vbmeta-from-stock.py` and a device-side recovery-graft companion module. The bootloader shim does not carry the fix because the read path it would need to intercept lives in userspace libfs_avb, outside our chainload domain. The graft technique was validated on infiniti during the abandoned `feature/synthesize-fastboot-cmd` exploration (commit `b26686e` on origin, retained as orphan history until Phase 2 rebuilds the tooling).
 
 **Original investigation date:** 2026-05-10.
 **Scenario:** gbl-chainload mode-1 + patch9 v2 boots custom recovery but fails normal-boot into Android system when custom recovery is flashed alongside LKM-patched init_boot.
@@ -219,7 +219,7 @@ scripts/graft-vbmeta-from-stock.py \
   --out <patched>.img
 ```
 
-Writes stock recovery vbmeta at `round_up(custom_image_size, 4 KiB)`. With `patch10` in the boot path, ABL emits `verify_result_local=OK` for recovery and the slot-level recoverable error is caught by `patch10` → final OK. Technique validated on infiniti during the abandoned `feature/synthesize-fastboot-cmd` exploration; preserved in `memory/graft_at_natural_offset_wins.md`. Script TBD under Cleanup Phase 2.
+Writes stock recovery vbmeta at `round_up(custom_image_size, 4 KiB)`. With `patch10` in the boot path, ABL emits `verify_result_local=OK` for recovery and the slot-level recoverable error is caught by `patch10` → final OK. Technique validated on infiniti during the abandoned `feature/synthesize-fastboot-cmd` exploration (commit `b26686e`, retained on origin as orphan history). Script TBD under Cleanup Phase 2.
 
 ### Device path (Phase 2)
 
