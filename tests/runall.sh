@@ -17,8 +17,8 @@ echo "== 042_dynamic_patch_harness =="
 bash tests/042_dynamic_patch_harness.sh
 echo "== 051_gbl_root_canoe_regression =="
 bash tests/051_gbl_root_canoe_regression.sh
-echo "== 051_log_stream_split =="
-bash tests/051_log_stream_split.sh
+echo "== 052_log_stream_split =="
+bash tests/052_log_stream_split.sh
 
 # Carried-forward signature lint, if present.
 if [[ -f tests/030_signature_lint.sh ]]; then

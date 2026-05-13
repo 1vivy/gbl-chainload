@@ -32,9 +32,9 @@
 /* Shared with DebugSink.c via extern — same link unit (LogFsLib). */
 UINTN   gDbgCurrentLevel = GBL_DBG_LEVEL_NONE;
 
-BOOLEAN mPostEBS  = FALSE;
-static EFI_EVENT mExitBootServicesEvent;
-EFI_SYSTEM_TABLE *mDebugST = NULL;
+STATIC BOOLEAN mPostEBS  = FALSE;
+STATIC EFI_EVENT mExitBootServicesEvent;
+STATIC EFI_SYSTEM_TABLE *mDebugST = NULL;
 
 STATIC VOID EFIAPI
 ExitBootServicesCallback (

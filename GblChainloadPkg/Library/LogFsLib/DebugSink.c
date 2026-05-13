@@ -26,7 +26,17 @@
 #include <Protocol/SimpleTextOut.h>
 
 /* Set by GblDebugLib before calling ConOut->OutputString for a DEBUG() call.
- * Sentinel (UINTN)-1 means "not inside a DEBUG() call" (e.g. Print() path). */
+ * Sentinel (UINTN)-1 means "not inside a DEBUG() call" (e.g. Print() path).
+ *
+ * CROSS-LIBRARY COUPLING — DO NOT BREAK SILENTLY.
+ *   This extern is only satisfied when GblChainloadPkg.dsc maps the
+ *   DebugLib library class to GblDebugLib.inf (the shim that defines
+ *   gDbgCurrentLevel). Any future DSC variant that remaps DebugLib to a
+ *   different library (UefiDebugLibConOut, DebugLibNull, etc.) will fail
+ *   to link this file with an undefined-symbol error and no compile-time
+ *   warning. If you re-map DebugLib, update this file too or delete the
+ *   level-gating it implements.
+ */
 extern UINTN gDbgCurrentLevel;
 
 STATIC EFI_TEXT_STRING gOriginalOutputString = NULL;
