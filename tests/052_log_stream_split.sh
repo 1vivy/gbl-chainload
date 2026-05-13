@@ -170,15 +170,14 @@ if [ -n "$PHL_HITS" ]; then
   fail=1
 fi
 
-# ── Check 10: BootFlow.c retains BOTH the sink AND the logfs mount across
-#             the LoadImage handoff. Without the sink, the patched ABL's
-#             runtime hook DEBUG output bypasses our mask filter and floods
-#             UefiLog. Without the open logfs mount, every verbose-tier
-#             emit (GBL_DBG_LOGFS_ONLY) becomes a LogFsWrite no-op via the
-#             !LogFsReady guard, so the verbose tier vanishes entirely
-#             (mask blocks screen, closed logfs drops the rest).
-#             LogFsLib's EBS callback (LogFsExitBootServicesNotify) flushes
-#             on the patched ABL's eventual ExitBootServices.
+# ── Check 10: BootFlow.c retains the sink across the LoadImage handoff
+#             (NOT the logfs mount — that must be closed before handoff,
+#             per the partition-handle release contract; observed on
+#             infiniti 2026-05-13 that keep-open breaks the patched ABL
+#             → recovery transition). The sink stays installed so the
+#             screen-mask filter applies to the patched ABL's runtime
+#             DEBUG output; LogFsWrite no-ops via !LogFsReady once
+#             LogFsClose has run, which is the intended degrade.
 BF=GblChainloadPkg/Application/GblChainload/BootFlow.c
 if [ -f "$BF" ]; then
   if grep -B2 'gBS->LoadImage' "$BF" | grep -q 'LogFsRemoveDebugSink'; then
@@ -188,26 +187,18 @@ if [ -f "$BF" ]; then
     echo "      DEBUG emits. Drop the LogFsRemoveDebugSink() call." >&2
     fail=1
   fi
-  # Scan from start of file through gBS->LoadImage for a LogFsClose call.
-  # awk approach: print lines until we hit gBS->LoadImage, then check.
-  if awk '/gBS->LoadImage/{exit} {print}' "$BF" | grep -q 'LogFsClose'; then
-    echo "FAIL: BootFlow.c calls LogFsClose before LoadImage —" >&2
-    echo "      logfs must stay open across the chainload handoff so" >&2
-    echo "      verbose-tier hook traces (qsee-buf / scm-send / spss-rot)" >&2
-    echo "      from the patched ABL phase land in gbl-chainload_BootN.txt." >&2
-    echo "      LogFsLib's EBS callback handles the final flush." >&2
-    fail=1
-  fi
 fi
 
-# ── Check 11: LogFsLib registers an EBS callback so the patched ABL's
-#             eventual ExitBootServices flushes the verbose-tier writes
-#             that landed in gPostGblLog after LoadImage. Without this,
-#             pending dirty bytes <4 KiB can be lost when SimpleFS dies.
+# ── Check 11: LogFsLib registers an EBS callback. Even when BootFlow
+#             closes logfs pre-handoff (the live code path), the EBS
+#             callback is a cheap safety net: if any future path leaves
+#             logfs open past LoadImage the callback flushes + disarms
+#             before SimpleFS dies. Harmless when gLogFsReady is already
+#             FALSE — it just no-ops.
 if ! grep -q 'EVT_SIGNAL_EXIT_BOOT_SERVICES' "$LOGFS/Mount.c"; then
   echo "FAIL: LogFsLib/Mount.c does not register an EBS callback —" >&2
-  echo "      post-handoff verbose-tier writes won't flush before SimpleFS" >&2
-  echo "      goes away. Register EVT_SIGNAL_EXIT_BOOT_SERVICES in LogFsInit" >&2
+  echo "      pre-EBS pending writes won't flush before SimpleFS goes" >&2
+  echo "      away. Register EVT_SIGNAL_EXIT_BOOT_SERVICES in LogFsInit" >&2
   echo "      and flush gPostGblLog + clear gLogFsReady from the handler." >&2
   fail=1
 fi
