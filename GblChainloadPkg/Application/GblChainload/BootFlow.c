@@ -146,6 +146,12 @@ BootFlowChainLoad (VOID)
      instance and ConnectController returns EFI_NOT_FOUND for the next caller. */
   DEBUG ((DEBUG_INFO, "BootFlow: LogFs flush+close before LoadImage\n"));
   LogFsFlush ();
+  /* Restore the original ConOut->OutputString before handing off, so the
+   * patched ABL inherits a clean console table (mirrors EnterFastboot's
+   * teardown). Without this, gST->ConOut->OutputString stays pointed at
+   * HookedOutputString, which would still LogFsWrite — harmless after
+   * LogFsClose due to the !LogFsReady guard, but a latent hazard. */
+  LogFsRemoveDebugSink ();
   LogFsClose ();
 
   Status = gBS->LoadImage (FALSE, gImageHandle, NULL, Pe, PeSize, &ImageHandle);

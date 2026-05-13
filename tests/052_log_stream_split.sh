@@ -89,6 +89,27 @@ else
   fi
 fi
 
+# ── Check 6: SCR_PRINT was deliberately removed. Catch any reintroduction
+#            outside of a comment that documents the removal. ────────────
+SCR_HITS=$(grep -RnE '^[^#/]*\bSCR_PRINT\b' "$APP" "$LOGFS" \
+            "GblChainloadPkg/Library/GblDebugLib" 2>/dev/null \
+            | grep -v ' \* No SCR_PRINT' || true)
+if [ -n "$SCR_HITS" ]; then
+  echo "FAIL: SCR_PRINT reintroduced — design uses Print/DEBUG_ERROR/DEBUG_INFO directly:" >&2
+  echo "$SCR_HITS" >&2
+  fail=1
+fi
+
+# ── Check 7: gGblScreenMask must NOT be widened to include DEBUG_VERBOSE.
+#            That tier is intentionally logfs-only for AblUnwrap traces. ─
+if grep -RnE 'LogFsSetScreenMask.*DEBUG_VERBOSE|DEBUG_VERBOSE.*LogFsSetScreenMask' \
+     "$APP" "$LOGFS" 2>/dev/null | grep -q .; then
+  echo "FAIL: LogFsSetScreenMask widened to include DEBUG_VERBOSE — that level" >&2
+  echo "      is the logfs-only tier; widening it puts heavy AblUnwrap" >&2
+  echo "      traces into UefiLog and floods it." >&2
+  fail=1
+fi
+
 if [ "$fail" -ne 0 ]; then
   exit 1
 fi

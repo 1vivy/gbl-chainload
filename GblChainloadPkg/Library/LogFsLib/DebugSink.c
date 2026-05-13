@@ -45,7 +45,7 @@ STATIC BOOLEAN         gInHook              = FALSE;
 /* Bitmask of DEBUG() error-levels permitted to reach ConOut. Defaults to
  * DEBUG_ERROR (production: only failures + boundary markers on screen).
  * The application widens it via LogFsSetScreenMask() when GBL_DEBUG=1
- * is built. Bare Print() bypasses this gate via the sentinel sentinel
+ * is built. Bare Print() bypasses this gate via the sentinel value
  * in gDbgCurrentLevel. */
 STATIC UINTN           gGblScreenMask       = DEBUG_ERROR;
 

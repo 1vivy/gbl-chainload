@@ -28,7 +28,15 @@ EFIAPI
 LogFsInit (VOID);
 
 /** Append `Len` bytes from `Buf` to the post-GBL log file. No-op if
-    LogFsInit failed or wasn't called. */
+    LogFsInit failed or wasn't called.
+
+    Durability: dirty bytes accumulate across calls and the implementation
+    auto-flushes once the accumulated total reaches an internal threshold
+    (currently 4 KiB). Callers about to hand control off to another image
+    or fastboot loop must call `LogFsFlush()` explicitly to guarantee
+    bytes hit the underlying SimpleFS — the canoe BDS SimpleFS only
+    commits at ExitBootServices, which the fastboot fallback path never
+    reaches. See `memory/active_investigation_log_flush.md` for context. */
 EFI_STATUS
 EFIAPI
 LogFsWrite (
