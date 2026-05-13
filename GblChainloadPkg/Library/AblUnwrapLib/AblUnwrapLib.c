@@ -15,6 +15,7 @@
 #include <Library/LinuxLoaderLib.h>
 #include <Library/PartitionTableUpdate.h>
 #include <Library/AblUnwrapLib.h>
+#include <Library/LogFsLib.h>          /* GBL_DBG_LOGFS_ONLY level bit */
 #include <Pi/PiFirmwareVolume.h>
 #include <Pi/PiFirmwareFile.h>
 #include <Uefi/UefiGpt.h>
@@ -342,7 +343,7 @@ FindPe32InSectionStream (
     }
     SecType = Buf[Offset + 3];
 
-    DEBUG ((DEBUG_VERBOSE,
+    DEBUG ((GBL_DBG_LOGFS_ONLY,
             "AblUnwrap: section @ 0x%x type=0x%02x size=0x%x hdr=%u\n",
             (UINT32)Offset, (UINT32)SecType,
             (UINT32)SecSize, (UINT32)SecHdrSize));
@@ -381,7 +382,7 @@ FindPe32InSectionStream (
       UINT8 *CompData  = SecData + 5;
       UINTN  CompLen   = SecDataSize - 5;
 
-      DEBUG ((DEBUG_VERBOSE,
+      DEBUG ((GBL_DBG_LOGFS_ONLY,
               "AblUnwrap: COMPRESSION type=0x%02x uncomp=%u comp=%u\n",
               (UINT32)CompType, ReadLe32 (SecData), (UINT32)CompLen));
 
@@ -423,7 +424,7 @@ FindPe32InSectionStream (
           FreePool (Dest);
           break;
         }
-        DEBUG ((DEBUG_VERBOSE, "AblUnwrap: LZMA decompressed %u bytes\n",
+        DEBUG ((GBL_DBG_LOGFS_ONLY, "AblUnwrap: LZMA decompressed %u bytes\n",
                 DestSize));
         UINT8 *Pe = NULL;
         UINTN  PeSz = 0;
@@ -468,7 +469,7 @@ FindPe32InSectionStream (
       InnerData = Buf + Offset + DataOffField;
       InnerSize = SecSize - DataOffField;
 
-      DEBUG ((DEBUG_VERBOSE,
+      DEBUG ((GBL_DBG_LOGFS_ONLY,
               "AblUnwrap: GUID_DEFINED off=%u inner=%u\n",
               (UINT32)DataOffField, (UINT32)InnerSize));
 
@@ -500,7 +501,7 @@ FindPe32InSectionStream (
           FreePool (Dest);
           break;
         }
-        DEBUG ((DEBUG_VERBOSE,
+        DEBUG ((GBL_DBG_LOGFS_ONLY,
                 "AblUnwrap: GUID-LZMA decompressed %u bytes\n", DestSize));
         UINT8 *Pe = NULL;
         UINTN  PeSz = 0;
@@ -540,7 +541,7 @@ FindPe32InSectionStream (
 
     case EFI_SECTION_FIRMWARE_VOLUME_IMAGE:
     {
-      DEBUG ((DEBUG_VERBOSE,
+      DEBUG ((GBL_DBG_LOGFS_ONLY,
               "AblUnwrap: FV_IMAGE section, scanning %u bytes\n",
               (UINT32)SecDataSize));
       UINT8 *Pe = NULL;

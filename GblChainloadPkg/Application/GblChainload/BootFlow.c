@@ -69,9 +69,7 @@ BootFlowChainLoad (VOID)
     EFI_STATUS  LogStatus = LogFsInit ();
     if (!EFI_ERROR (LogStatus)) {
       LogFsInstallDebugSink ();
-#if (GBL_DEBUG == 1)
-      LogFsSetScreenMask (DEBUG_ERROR | DEBUG_WARN | DEBUG_INFO);
-#endif
+      /* gGblScreenMask stays at its DEBUG_ERROR default (see Entry.c). */
       LogFsFlush ();
       DEBUG ((DEBUG_INFO, "BootFlow: logfs re-opened for chainload session\n"));
     } else {

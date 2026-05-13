@@ -27,6 +27,7 @@
   BaseMemoryLib
   DebugLib
   PrintLib
+  UefiLib                                ## Print() — failure-path use in Rotation.c
   MemoryAllocationLib
   UefiBootServicesTableLib
   BootLib

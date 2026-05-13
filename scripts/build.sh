@@ -1,14 +1,20 @@
 #!/usr/bin/env bash
 # scripts/build.sh — wrap docker EDK-II build with mode/flag selection.
 #
-# Usage: scripts/build.sh --mode {0|1} [--auto] [--debug]
+# Usage: scripts/build.sh --mode {0|1} [--auto] [--debug] [--verbose]
 #
-# Output: dist/mode-<N>[flags].efi
+# Both --debug and --verbose are compile-time switches. Neither widens
+# the runtime screen mask — UefiLog stays clean on every build (only
+# DEBUG_ERROR + Print() + boundary markers reach ConOut). The logfs
+# stream (gbl-chainload_BootN.txt) captures everything routed through
+# the sink hook regardless of flags.
 #
-# --debug widens the screen-output filter so DEBUG_INFO lines reach the
-# screen too. Without it, only failures, user-interrupt acks, and ERROR-
-# level boundary markers reach the screen. The logfs stream
-# (gbl-chainload_BootN.txt) captures everything regardless of --debug.
+#   --debug    compile in development-only DEBUG paths (e.g. Mount.c
+#              LOGFS_PROBE mount-probe trace).
+#   --verbose  widen PcdDebugPrintErrorLevel to include the private
+#              GBL_DBG_LOGFS_ONLY bit so high-volume traces (AblUnwrap
+#              LZMA/section decode) pass the EDK2 gate and land in
+#              logfs only — still off-screen and off-UefiLog.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -17,15 +23,17 @@ cd "$REPO_ROOT"
 MODE=1
 AUTO=0
 DEBUG=0
+VERBOSE=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --mode)    MODE="$2";    shift 2 ;;
     --auto)    AUTO=1;       shift   ;;
     --debug)   DEBUG=1;      shift   ;;
+    --verbose) VERBOSE=1;    shift   ;;
     -h|--help)
       cat <<EOF
-Usage: $0 --mode {0|1} [--auto] [--debug]
+Usage: $0 --mode {0|1} [--auto] [--debug] [--verbose]
 
 Mode 0: pass-through (no overlay, no patch9 v2, no protocol hooks).
 Mode 1: fakelocked chainload (default).
@@ -45,8 +53,9 @@ esac
 # build-name — scripts can identify what's running on device without parsing
 # the binary or filename.
 SUFFIX=""
-[[ $AUTO  -eq 1 ]] && SUFFIX+="-auto"
-[[ $DEBUG -eq 1 ]] && SUFFIX+="-debug"
+[[ $AUTO    -eq 1 ]] && SUFFIX+="-auto"
+[[ $DEBUG   -eq 1 ]] && SUFFIX+="-debug"
+[[ $VERBOSE -eq 1 ]] && SUFFIX+="-verbose"
 BUILD_NAME="mode-${MODE}${SUFFIX}"
 ARTIFACT="dist/${BUILD_NAME}.efi"
 
@@ -72,7 +81,7 @@ rm -rf Build/
 
 mkdir -p dist Build
 
-echo "==> Building $ARTIFACT (mode=$MODE auto=$AUTO debug=$DEBUG)"
+echo "==> Building $ARTIFACT (mode=$MODE auto=$AUTO debug=$DEBUG verbose=$VERBOSE)"
 
 # Run the in-container build. Mount repo at /work.
 "$DOCKER" run --rm \
@@ -82,6 +91,7 @@ echo "==> Building $ARTIFACT (mode=$MODE auto=$AUTO debug=$DEBUG)"
   -e GBL_MODE="$MODE" \
   -e GBL_AUTO="$AUTO" \
   -e GBL_DEBUG="$DEBUG" \
+  -e GBL_VERBOSE="$VERBOSE" \
   -e GBL_BUILD_NAME="$BUILD_NAME" \
   "$IMAGE_TAG" \
   bash scripts/build-inside-docker.sh

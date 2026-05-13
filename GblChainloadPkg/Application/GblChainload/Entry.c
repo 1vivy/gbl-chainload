@@ -134,12 +134,12 @@ CommonEarlyInit (
     Print (L"!!! LOGFS PARTITION NOT FOUND - LOGGING TO CONSOLE ONLY !!!\n");
   } else if (!EFI_ERROR (Status)) {
     LogFsInstallDebugSink ();
-#if (GBL_DEBUG == 1)
-    /* Debug builds: widen the screen filter so DEBUG_INFO + DEBUG_WARN
-     * status lines reach the screen too. Production stays at the
-     * DEBUG_ERROR default established in DebugSink.c. */
-    LogFsSetScreenMask (DEBUG_ERROR | DEBUG_WARN | DEBUG_INFO);
-#endif
+    /* gGblScreenMask intentionally stays at its DEBUG_ERROR default.
+     * Widening it would tee DEBUG_INFO output onto UefiLog via the
+     * platform's ConOut→UefiLog coupling, diluting UefiLog with
+     * gbl-chainload status content. GBL_VERBOSE=1 instead widens
+     * PcdDebugPrintErrorLevel to admit GBL_DBG_LOGFS_ONLY — that
+     * tier reaches the hook and lands in logfs only. */
     LogFsFlush ();
   }
 }

@@ -15,6 +15,24 @@
 
 #include <Uefi.h>
 
+/** Private error-level bit for "logfs-only" output. EDK2's standard
+    levels occupy 0x80000000 (ERROR), 0x00800000 (MANAGEABILITY) and
+    most bits in between; 0x10000000 is unused by MdePkg. QCOM stock
+    code in our edk2 fork doesn't use it either — PartitionTableUpdate
+    et al. use DEBUG_VERBOSE (0x00400000) which we keep filtered out
+    of PcdDebugPrintErrorLevel.
+
+    Modules with high-volume traces (AblUnwrap's per-section LZMA
+    decode, future patch-engine per-byte spew, etc.) emit at this
+    level. When GBL_VERBOSE=1 the DSC widens
+    PcdDebugPrintErrorLevel to include this bit, so the line passes
+    the EDK2 gate, reaches the sink hook, and the runtime
+    gGblScreenMask (which never includes this bit) drops the ConOut
+    leg — leaving the line in gbl-chainload_BootN.txt only. Under
+    GBL_VERBOSE=0 the bit is masked out at the gate and the call is
+    a no-op at runtime. **/
+#define GBL_DBG_LOGFS_ONLY  0x10000000
+
 /** Mount logfs, rotate UefiLog1.txt, open gbl-chainload_BootN.txt, and
     write an identifying banner to it. Caller may call LogFsWrite()
     afterwards to append more output.

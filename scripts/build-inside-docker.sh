@@ -6,6 +6,7 @@
 #   GBL_MODE    — integer 1/2/3 (default 1)
 #   GBL_AUTO    — 0/1 (default 0)
 #   GBL_DEBUG   — 0/1 (default 0)
+#   GBL_VERBOSE — 0/1 (default 0)
 set -euo pipefail
 
 BUILD_TARGET="${BUILD_TARGET:-RELEASE}"
@@ -15,6 +16,7 @@ ARCH="${ARCH:-AARCH64}"
 GBL_MODE="${GBL_MODE:-1}"
 GBL_AUTO="${GBL_AUTO:-0}"
 GBL_DEBUG="${GBL_DEBUG:-0}"
+GBL_VERBOSE="${GBL_VERBOSE:-0}"
 
 # Single-source-of-truth build identifier. Same shape as build.sh's artifact
 # filename so dist/<NAME>.efi and the on-device getvar build-name match. The
@@ -22,8 +24,9 @@ GBL_DEBUG="${GBL_DEBUG:-0}"
 # and LogFsLib (banner).
 if [[ -z "${GBL_BUILD_NAME:-}" ]]; then
   GBL_BUILD_NAME_SUFFIX=""
-  [[ $GBL_AUTO  -eq 1 ]] && GBL_BUILD_NAME_SUFFIX+="-auto"
-  [[ $GBL_DEBUG -eq 1 ]] && GBL_BUILD_NAME_SUFFIX+="-debug"
+  [[ $GBL_AUTO    -eq 1 ]] && GBL_BUILD_NAME_SUFFIX+="-auto"
+  [[ $GBL_DEBUG   -eq 1 ]] && GBL_BUILD_NAME_SUFFIX+="-debug"
+  [[ $GBL_VERBOSE -eq 1 ]] && GBL_BUILD_NAME_SUFFIX+="-verbose"
   GBL_BUILD_NAME="mode-${GBL_MODE}${GBL_BUILD_NAME_SUFFIX}"
 fi
 
@@ -60,7 +63,7 @@ set -u
 
 export GCC5_AARCH64_PREFIX=/usr/bin/aarch64-linux-gnu-
 
-echo ">>> build: $TOOLCHAIN_TAG / $ARCH / $BUILD_TARGET / mode=$GBL_MODE auto=$GBL_AUTO debug=$GBL_DEBUG"
+echo ">>> build: $TOOLCHAIN_TAG / $ARCH / $BUILD_TARGET / mode=$GBL_MODE auto=$GBL_AUTO debug=$GBL_DEBUG verbose=$GBL_VERBOSE"
 build \
   -p GblChainloadPkg/GblChainloadPkg.dsc \
   -a "$ARCH" \
@@ -69,6 +72,7 @@ build \
   -D GBL_MODE="$GBL_MODE" \
   -D GBL_AUTO="$GBL_AUTO" \
   -D GBL_DEBUG="$GBL_DEBUG" \
+  -D GBL_VERBOSE="$GBL_VERBOSE" \
   -D GBL_BUILD_NAME="$GBL_BUILD_NAME"
 
 # Verify expected output exists.

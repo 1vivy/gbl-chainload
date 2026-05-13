@@ -7,11 +7,20 @@
 # 2. The old form (GblChainload_Boot) is not referenced as an output
 #    file path anywhere in LogFsLib source or headers.
 # 3. DebugSink.c gates ConOut passthrough via gDbgCurrentLevel against
-#    gGblScreenMask (default DEBUG_ERROR; widened by LogFsSetScreenMask).
+#    gGblScreenMask, defaulted to DEBUG_ERROR.
 # 4. GblDebugLib sets gDbgCurrentLevel before calling ConOut->OutputString.
 # 5. Boundary markers ("gbl-chainload entered" / "gbl-chainload exiting")
-#    are present in Application source at DEBUG_INFO level — visible on
-#    screen + UefiLog only under --debug, always logged to logfs.
+#    are present in Application source at DEBUG_INFO level — captured
+#    by logfs always, never on screen/UefiLog.
+# 6. SCR_PRINT is not reintroduced anywhere in code paths.
+# 7. gGblScreenMask is never widened at runtime — no Application code
+#    calls LogFsSetScreenMask to add any level beyond DEBUG_ERROR. The
+#    UefiLog stays clean regardless of build flags.
+# 8. GBL_DBG_LOGFS_ONLY (private logfs-only error-level bit) is defined
+#    in LogFsLib.h.
+# 9. AblUnwrap's high-volume traces use GBL_DBG_LOGFS_ONLY (not
+#    DEBUG_VERBOSE), so admitting them via PcdDebugPrintErrorLevel does
+#    not also admit QCOM stock DEBUG_VERBOSE spam.
 #
 # Host-side check; runtime stream split is verified manually on-device.
 
@@ -65,9 +74,9 @@ elif ! grep -q 'gDbgCurrentLevel' "$DBGLIB/GblDebugLib.c"; then
 fi
 
 # ── Check 5a: "gbl-chainload entered" marker present at DEBUG_INFO. ───────
-# Boundary markers are intentionally INFO-level so they stay off the
-# production screen + UefiLog; they reach both only under --debug. The
-# logfs stream captures them regardless.
+# Boundary markers stay at INFO level so the runtime mask (DEBUG_ERROR
+# only, never widened) keeps them off ConOut and out of UefiLog. The
+# logfs hook captures them on every build via LogFsWrite.
 if ! grep -Rq 'gbl-chainload entered' "$APP"; then
   echo "FAIL: 'gbl-chainload entered' boundary marker not found in Application/" >&2
   fail=1
@@ -100,14 +109,46 @@ if [ -n "$SCR_HITS" ]; then
   fail=1
 fi
 
-# ── Check 7: gGblScreenMask must NOT be widened to include DEBUG_VERBOSE.
-#            That tier is intentionally logfs-only for AblUnwrap traces. ─
-if grep -RnE 'LogFsSetScreenMask.*DEBUG_VERBOSE|DEBUG_VERBOSE.*LogFsSetScreenMask' \
-     "$APP" "$LOGFS" 2>/dev/null | grep -q .; then
-  echo "FAIL: LogFsSetScreenMask widened to include DEBUG_VERBOSE — that level" >&2
-  echo "      is the logfs-only tier; widening it puts heavy AblUnwrap" >&2
-  echo "      traces into UefiLog and floods it." >&2
+# ── Check 7: gGblScreenMask is never widened at runtime. ──────────────────
+# UefiLog should stay clean regardless of build flags. The Application
+# layer (Entry.c, BootFlow.c, anything else under GblChainloadPkg/
+# Application) must not call LogFsSetScreenMask at all. The function
+# itself is defined in DebugSink.c — that definition is allowed; we only
+# scan the Application surface.
+MASK_HITS=$(grep -RnE '\bLogFsSetScreenMask\s*\(' "$APP" 2>/dev/null || true)
+if [ -n "$MASK_HITS" ]; then
+  echo "FAIL: Application code calls LogFsSetScreenMask:" >&2
+  echo "$MASK_HITS" >&2
+  echo "      The mask must never widen at runtime — UefiLog stays clean" >&2
+  echo "      on every build, including --debug / --verbose. Use" >&2
+  echo "      GBL_DBG_LOGFS_ONLY tier + PcdDebugPrintErrorLevel widening" >&2
+  echo "      for high-volume traces instead." >&2
   fail=1
+fi
+
+# ── Check 8: GBL_DBG_LOGFS_ONLY error-level bit defined in LogFsLib.h. ────
+if ! grep -q 'GBL_DBG_LOGFS_ONLY' "$INCLUDE/Library/LogFsLib.h"; then
+  echo "FAIL: GBL_DBG_LOGFS_ONLY not defined in LogFsLib.h —" >&2
+  echo "      this is the private logfs-only error-level bit used by" >&2
+  echo "      AblUnwrap and any future high-volume tracer." >&2
+  fail=1
+fi
+
+# ── Check 9: AblUnwrap uses GBL_DBG_LOGFS_ONLY (not DEBUG_VERBOSE) for
+#            high-volume traces. Using DEBUG_VERBOSE would collide with
+#            QCOM stock code (e.g. PartitionTableUpdate.c:174). ───────────
+ABL=GblChainloadPkg/Library/AblUnwrapLib/AblUnwrapLib.c
+if [ -f "$ABL" ]; then
+  if grep -qE 'DEBUG\s*\(\s*\(\s*DEBUG_VERBOSE' "$ABL"; then
+    echo "FAIL: AblUnwrap still uses DEBUG_VERBOSE — re-tag to GBL_DBG_LOGFS_ONLY" >&2
+    echo "      so QCOM stock code's EFI_D_VERBOSE doesn't get unlocked alongside." >&2
+    fail=1
+  fi
+  if ! grep -q 'GBL_DBG_LOGFS_ONLY' "$ABL"; then
+    echo "FAIL: AblUnwrap doesn't reference GBL_DBG_LOGFS_ONLY — expected" >&2
+    echo "      its high-volume traces to use that level." >&2
+    fail=1
+  fi
 fi
 
 if [ "$fail" -ne 0 ]; then

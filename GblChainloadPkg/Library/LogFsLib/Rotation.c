@@ -11,6 +11,7 @@
 #include <Library/BaseLib.h>
 #include <Library/DebugLib.h>
 #include <Library/PrintLib.h>
+#include <Library/UefiLib.h>                 /* Print() */
 #include <Protocol/SimpleFileSystem.h>
 
 #define LOG_ROTATION_SLOTS  5
@@ -50,7 +51,10 @@ LogFsRotateUefiLog (
     return;
   }
   if (EFI_ERROR (Status)) {
-    DEBUG ((DEBUG_WARN, "LogFs rotate: open UefiLog1.txt failed: %r\n", Status));
+    /* Use Print() so the failure surfaces on the screen + UefiLog even
+     * when DEBUG_WARN is filtered out by the runtime mask. This is the
+     * only place we'd learn rotation broke. */
+    Print (L"LogFs rotate: FAIL — open UefiLog1.txt: %r\n", Status);
     return;
   }
 
@@ -60,7 +64,7 @@ LogFsRotateUefiLog (
                        EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE |
                          EFI_FILE_MODE_CREATE, 0);
   if (EFI_ERROR (Status)) {
-    DEBUG ((DEBUG_WARN, "LogFs rotate: open UefiLogSaved.idx failed: %r\n", Status));
+    Print (L"LogFs rotate: FAIL — open UefiLogSaved.idx: %r\n", Status);
     SourceFile->Close (SourceFile);
     return;
   }
@@ -83,7 +87,7 @@ LogFsRotateUefiLog (
   }
   IndexFile->Close (IndexFile);
   if (EFI_ERROR (Status)) {
-    DEBUG ((DEBUG_WARN, "LogFs rotate: update slot index failed: %r\n", Status));
+    Print (L"LogFs rotate: FAIL — update slot index: %r\n", Status);
     SourceFile->Close (SourceFile);
     return;
   }
@@ -99,7 +103,7 @@ LogFsRotateUefiLog (
     Status = ArchiveFile->Delete (ArchiveFile);
     ArchiveFile = NULL;
     if (EFI_ERROR (Status)) {
-      DEBUG ((DEBUG_WARN, "LogFs rotate: delete old archive failed: %r\n", Status));
+      Print (L"LogFs rotate: FAIL — delete old archive: %r\n", Status);
       SourceFile->Close (SourceFile);
       return;
     }
@@ -109,7 +113,7 @@ LogFsRotateUefiLog (
                        EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE |
                          EFI_FILE_MODE_CREATE, 0);
   if (EFI_ERROR (Status)) {
-    DEBUG ((DEBUG_WARN, "LogFs rotate: create archive failed: %r\n", Status));
+    Print (L"LogFs rotate: FAIL — create archive: %r\n", Status);
     SourceFile->Close (SourceFile);
     return;
   }
@@ -134,7 +138,7 @@ LogFsRotateUefiLog (
   ArchiveFile->Close (ArchiveFile);
 
   if (EFI_ERROR (Status)) {
-    DEBUG ((DEBUG_WARN, "LogFs rotate: archive copy failed: %r\n", Status));
+    Print (L"LogFs rotate: FAIL — archive copy: %r\n", Status);
     SourceFile->Close (SourceFile);
     return;
   }
@@ -145,7 +149,7 @@ LogFsRotateUefiLog (
     /* Delete the source so BDS will create a fresh UefiLog1.txt this boot. */
     Status = SourceFile->Delete (SourceFile);
     if (EFI_ERROR (Status)) {
-      DEBUG ((DEBUG_WARN, "LogFs rotate: delete source UefiLog1.txt failed: %r\n", Status));
+      Print (L"LogFs rotate: FAIL — delete source UefiLog1.txt: %r\n", Status);
     }
   } else {
     SourceFile->Close (SourceFile);

@@ -64,6 +64,7 @@
   DEFINE GBL_MODE                         = 1
   DEFINE GBL_AUTO                         = 0
   DEFINE GBL_DEBUG                        = 0
+  DEFINE GBL_VERBOSE                      = 0
 
   # Build name — single string identifier substituted into log banner,
   # FastbootMenu display, and the build-name getvar. build-inside-docker.sh
@@ -139,6 +140,7 @@
   GCC:*_*_*_CC_FLAGS = -DGBL_MODE=$(GBL_MODE)
   GCC:*_*_*_CC_FLAGS = -DGBL_AUTO=$(GBL_AUTO)
   GCC:*_*_*_CC_FLAGS = -DGBL_DEBUG=$(GBL_DEBUG)
+  GCC:*_*_*_CC_FLAGS = -DGBL_VERBOSE=$(GBL_VERBOSE)
   GCC:*_*_*_CC_FLAGS = -DGBL_BUILD_NAME=\"$(GBL_BUILD_NAME)\"
 
   # Workarounds for this Qualcomm edk2 fork against modern Ubuntu GCC:
@@ -171,13 +173,27 @@
 ################################################################################
 [PcdsFixedAtBuild.common]
   gEfiMdePkgTokenSpaceGuid.PcdDebugPropertyMask|0x2f
-  # Runtime DEBUG-level mask consumed by GblDebugLib via GetDebugPrintErrorLevel().
-  # Must include DEBUG_VERBOSE (0x00400000) so AblUnwrap's lzma/section traces
-  # reach our HookedOutputString hook; the sink's runtime gGblScreenMask gates
-  # the screen/UefiLog side separately and never includes DEBUG_VERBOSE, so
-  # verbose lines land in gbl-chainload_BootN.txt only.
-  #   ERROR (0x80000000) | VERBOSE (0x00400000) | INFO (0x00000040) | WARN (0x00000002)
-  gEfiMdePkgTokenSpaceGuid.PcdDebugPrintErrorLevel|0x80400042
+  # Runtime DEBUG-level mask consumed by GblDebugLib via
+  # GetDebugPrintErrorLevel(). Must EXCLUDE DEBUG_VERBOSE (0x00400000) on
+  # default builds because QCOM stock code (e.g.
+  # edk2/QcomModulePkg/Library/BootLib/PartitionTableUpdate.c:174) emits
+  # routine partition spam at EFI_D_VERBOSE; admitting that bit would
+  # flood UefiLog with ~120 partition-name lines per boot.
+  #
+  # Modules that want high-volume traces in logfs use the private
+  # GBL_DBG_LOGFS_ONLY bit (0x10000000, see Include/Library/LogFsLib.h).
+  # GBL_VERBOSE=1 widens the mask to include that bit so AblUnwrap's
+  # LZMA/section traces pass the EDK2 gate, reach the sink hook, and
+  # land in gbl-chainload_BootN.txt only (the runtime gGblScreenMask
+  # never includes that bit, so they stay out of ConOut/UefiLog).
+  #
+  #   ERROR (0x80000000) | INFO (0x00000040) | WARN (0x00000002)        = 0x80000042
+  #   + GBL_DBG_LOGFS_ONLY (0x10000000) when GBL_VERBOSE=1              = 0x90000042
+!if $(GBL_VERBOSE) == 1
+  gEfiMdePkgTokenSpaceGuid.PcdDebugPrintErrorLevel|0x90000042
+!else
+  gEfiMdePkgTokenSpaceGuid.PcdDebugPrintErrorLevel|0x80000042
+!endif
   gEfiMdePkgTokenSpaceGuid.PcdReportStatusCodePropertyMask|0x06
 
 ################################################################################
