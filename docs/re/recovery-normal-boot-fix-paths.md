@@ -1,14 +1,12 @@
 # Recovery Normal-Boot Fix Paths
 
-**Status (2026-05-13):** Confirmed. With a custom recovery flashed, mode-1 boots Android-recovery instead of Android-system. The fix is to re-shape the on-disk recovery image so its vbmeta descriptor matches what `first_stage_init` will read at boot. Both deliverables are Phase-2 work; nothing in this PR ships the fix itself — this doc just locks in what we know.
+**Status (2026-05-13):** Confirmed. With a custom recovery flashed, mode-1's normal-boot path does not complete — the device only completes the recovery-boot path. Nothing pre-empts a working Android-system boot; Android-system simply never gets there. The fix is to re-shape the on-disk recovery image so its in-partition AVB footer matches what the chain reads at boot. Both deliverables are Phase-2 work; nothing in this PR ships the fix itself — this doc just locks in what we know.
 
 ## Failure mode
 
 Under mode-1, ABL sees a locked + green verifiedboot view (our `QCOM_VERIFIEDBOOT_PROTOCOL` mutation), emits the stock `androidboot.vbmeta.digest`, and hands off cleanly. AOSP `first_stage_init` then runs the userspace AVB chain (`AvbHandle::Open` → `avb_slot_verify`). On a locked device any non-OK `AvbSlotVerifyResult` is treated as a boot failure, and init routes the device to recovery.
 
-What actually denies the boot is narrower than the call graph suggests. Empirically, `vbmeta.digest` is the load-bearing gate: patching `init_boot` or `boot` — which changes their on-disk digests — does not cause userspace to deny normal boot under locked state. The descriptor that matters in practice is recovery. The other descriptors that get walked appear to be telemetry / best-effort rather than load-bearing.
-
-Whether the gate that fires for the recovery mismatch is the userspace AVB walk itself or a downstream dm-verity / mount-time check is not fully nailed down. The chosen fix sidesteps the question by making the on-disk image match the descriptor that's already in stock `vbmeta.img` — once those agree, no mechanism in the chain has a reason to fire.
+What trips the gate is narrower than the call graph suggests. `init_boot` and `boot` are routinely patched in the wild — root solutions, kernel swaps — without breaking normal boot, because those tools rewrite partition contents while preserving the in-partition AVB footer; the descriptor still validates against the on-disk image even though the binary content changed. Custom recovery is the opposite case: porting a recovery tree wholesale replaces the partition, footer included, so what the chain reads at boot has no valid AVB metadata. **TBD on the exact gate** — whether the userspace AVB walk itself rejects, or dm-verity, or a recovery-specific check fires first. The Phase-2 disk-side graft doesn't depend on the answer; re-installing the stock recovery's AVB footer onto the custom image makes the descriptor satisfiable again whichever gate is firing.
 
 ## Fix paths (Phase 2)
 
@@ -26,7 +24,7 @@ The 2026-05-10 investigation listed several mitigations. None of them survive a 
 
 - **Userspace libavb read-handler facade.** Would override `FsManagerAvbOps::ReadFromPartition()` so AVB sees stock content. Not viable from the bootloader stage — we don't have a hook into userspace. The only path to apply this technique would be an untouched-ABL binary-patch workflow that injects a userspace shim, which is much more invasive than the disk-side graft.
 - **Mode-2 TZ payload spoof.** Targets attestation (Play Integrity / KeyMaster / VTS keys), not the normal-boot AVB walk. Different problem domain. Custom ROMs that need this re-spoof use userspace solutions (e.g. SusFS4KSU) for hiding; mode-2's design is for getting valid attestation keys, which is orthogonal to whether the device boots.
-- **ABL cmdline rewrite (`androidboot.vbmeta.recovery.digest=<custom>`).** Android does not emit or consume per-partition `vbmeta.<part>.digest` cmdline values in normal boot — only the recovery path uses them. Writing the value from ABL in a normal-boot context is a no-op.
+- **ABL cmdline rewrite (`androidboot.vbmeta.recovery.digest=<custom>`).** The `vbmeta.recovery.digest` key only appears in bootconfig/cmdline on the recovery-boot path; ABL doesn't emit it on the normal-boot path. The exact reason for this conditional emission is on the ABL side — would need to grep `edk2/QcomModulePkg/` to confirm. Either way, writing the value during normal boot doesn't help because Android never sees it where it isn't emitted.
 - **Userspace fstab `no_fail` for recovery.** libfs_avb is conditional on verifiedboot state, and locked-state (which we fake) runs the AVB walk regardless of fstab markers. The flag doesn't reach the gate that's firing.
 
 ## AOSP source references
