@@ -19,6 +19,7 @@
 
 #include <Library/DebugLib.h>
 #include <Library/DeviceInfo.h>
+#include <Library/LogFsLib.h>  /* GBL_DBG_LOGFS_ONLY level bit */
 
 /* --------------------------------------------------------------------------
  * Internal helpers (mirrors dirty VbOffsetOf* / VbForceDeviceInfoBufferLocked)
@@ -74,7 +75,7 @@ Mode1Policy_OnVbReadConfig_Post (
   B[IsUnlockedOff]       = 0;
   B[IsUnlockCriticalOff] = 0;
 
-  DEBUG ((DEBUG_INFO,
+  DEBUG ((GBL_DBG_LOGFS_ONLY,
           "vb-fakelock | READ_CONFIG | is_unlocked %u->0 | is_unlock_critical %u->0\n",
           (UINT32)OldUnlocked, (UINT32)OldUnlockCritical));
 
@@ -99,7 +100,7 @@ Mode1Policy_OnVbDeviceInit_PrePost (
   Devinfo->is_unlocked        = FALSE;
   Devinfo->is_unlock_critical = FALSE;
 
-  DEBUG ((DEBUG_INFO,
+  DEBUG ((GBL_DBG_LOGFS_ONLY,
           "vb-fakelock | VBDeviceInit/%a | is_unlocked %u->0 | is_unlock_critical %u->0\n",
           IsPre ? "pre" : "post",
           (UINT32)OldUnlocked, (UINT32)OldUnlockCritical));

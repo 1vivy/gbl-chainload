@@ -19,6 +19,7 @@
 #include <Library/BaseLib.h>
 #include <Library/BaseMemoryLib.h>
 #include <Library/DebugLib.h>
+#include <Library/LogFsLib.h>  /* GBL_DBG_LOGFS_ONLY level bit */
 #include <Library/UefiBootServicesTableLib.h>
 #include <Library/UefiLib.h>
 #include <Protocol/EFIQseecom.h>
@@ -112,7 +113,7 @@ DumpChunked (
     if (ThisChunk > QSEE_DUMP_CHUNK_BYTES) ThisChunk = QSEE_DUMP_CHUNK_BYTES;
 
     HexN (Buf + Off, (UINT32)ThisChunk, ThisChunk, Hex, sizeof (Hex));
-    DEBUG ((DEBUG_INFO,
+    DEBUG ((GBL_DBG_LOGFS_ONLY,
             "qsee-buf | h=%u | dir=%a | off=%u | hex=%a\n",
             Handle, Dir, (UINT32)Off, Hex));
   }
@@ -244,7 +245,7 @@ KmDecodeKnownCmd (
       UINT32 VMin    = ReadU32At (RspBuf, RspLen, 8);
       UINT32 VBld    = ReadU32At (RspBuf, RspLen, 12);
       UINT32 BId     = ReadU32At (RspBuf, RspLen, 16);
-      DEBUG ((DEBUG_INFO,
+      DEBUG ((GBL_DBG_LOGFS_ONLY,
               "qsee-km | cmd=0x%08x(probe) | h=%u | rstatus=0x%x | "
               "ver=%u.%u.%u | buildId=0x%x | st=%r\n",
               CmdId, Handle, RStatus, VMaj, VMin, VBld, BId, Status));
@@ -261,7 +262,7 @@ KmDecodeKnownCmd (
       UINT32 RotSize   = ReadU32At (SendBuf, SendLen, 8);
       HexN (SendBuf + 12, (SendLen >= 12) ? (SendLen - 12) : 0, 32,
             Hex, sizeof (Hex));
-      DEBUG ((DEBUG_INFO,
+      DEBUG ((GBL_DBG_LOGFS_ONLY,
               "qsee-km | cmd=0x%08x(SET_ROT) | h=%u | offset=%u | size=%u | "
               "rotDigest=%a | st=%r\n",
               CmdId, Handle, RotOffset, RotSize, Hex, Status));
@@ -275,7 +276,7 @@ KmDecodeKnownCmd (
        * KM device-state struct; TZ reads/writes it in-place. */
       UINT32 AddrLo = ReadU32At (SendBuf, SendLen, 4);
       UINT32 AddrHi = ReadU32At (SendBuf, SendLen, 8);
-      DEBUG ((DEBUG_INFO,
+      DEBUG ((GBL_DBG_LOGFS_ONLY,
               "qsee-km | cmd=0x%08x(%a_KM_DEVICE_STATE) | h=%u | "
               "addr=0x%x_%08x | st=%r\n",
               CmdId, (CmdId == 0x202) ? "READ" : "WRITE",
@@ -286,7 +287,7 @@ KmDecodeKnownCmd (
     case 0x00000204: {
       /* MILESTONE_CALL (4 B). Final TZ notification after BCC/pvmfw
        * setup is complete. */
-      DEBUG ((DEBUG_INFO,
+      DEBUG ((GBL_DBG_LOGFS_ONLY,
               "qsee-km | cmd=0x%08x(MILESTONE_CALL) | h=%u | st=%r\n",
               CmdId, Handle, Status));
       break;
@@ -300,7 +301,7 @@ KmDecodeKnownCmd (
        *   OsPatchLevel SPL = (Day << 11) | ((Year - 2000) << 4) | Month */
       UINT32 Ver = ReadU32At (SendBuf, SendLen, 4);
       UINT32 Spl = ReadU32At (SendBuf, SendLen, 8);
-      DEBUG ((DEBUG_INFO,
+      DEBUG ((GBL_DBG_LOGFS_ONLY,
               "qsee-km | cmd=0x%08x(SET_VERSION) | h=%u | osVer=0x%x | "
               "spl=0x%x | st=%r\n",
               CmdId, Handle, Ver, Spl, Status));
@@ -322,7 +323,7 @@ KmDecodeKnownCmd (
       UINT32 SysSpl  = ReadU32At (SendBuf, SendLen, 16 + 4 + 32 + 8);
       HexN (SendBuf + 20, (SendLen >= 20) ? (SendLen - 20) : 0, 32,
             Hex, sizeof (Hex));
-      DEBUG ((DEBUG_INFO,
+      DEBUG ((GBL_DBG_LOGFS_ONLY,
               "qsee-km | cmd=0x%08x(SET_BOOT_STATE) | h=%u | ver=%u | "
               "offset=%u | size=%u | isUnlocked=%u | pubKey=%a | "
               "color=%u | sysVer=0x%x | sysSpl=0x%x | st=%r\n",
@@ -336,7 +337,7 @@ KmDecodeKnownCmd (
        * Vbh = on-device vbmeta digest. */
       HexN (SendBuf + 4, (SendLen >= 4) ? (SendLen - 4) : 0, 32,
             Hex, sizeof (Hex));
-      DEBUG ((DEBUG_INFO,
+      DEBUG ((GBL_DBG_LOGFS_ONLY,
               "qsee-km | cmd=0x%08x(SET_VBH) | h=%u | vbh=%a | st=%r\n",
               CmdId, Handle, Hex, Status));
       break;
@@ -345,7 +346,7 @@ KmDecodeKnownCmd (
     case 0x00000218: {
       /* FBE_SET_SEED. Sends FBE class-key derivation seed to TZ.
        * MODE-1: DO NOT mutate. */
-      DEBUG ((DEBUG_INFO,
+      DEBUG ((GBL_DBG_LOGFS_ONLY,
               "qsee-km | cmd=0x%08x(FBE_SET_SEED) | h=%u | sl=%u | "
               "st=%r | DO-NOT-MUTATE\n",
               CmdId, Handle, SendLen, Status));
@@ -363,7 +364,7 @@ KmDecodeKnownCmd (
        * is downstream of this output. */
       UINT32 FdrFlag   = ReadU32At (SendBuf, SendLen, 4);
       UINT32 FrsSecLen = ReadU32At (SendBuf, SendLen, 8);
-      DEBUG ((DEBUG_INFO,
+      DEBUG ((GBL_DBG_LOGFS_ONLY,
               "qsee-km | cmd=0x%08x(GENERATE_FRS_AND_UDS) | h=%u | "
               "fdrFlag=0x%x | frsSecLen=%u | st=%r | DO-NOT-MUTATE\n",
               CmdId, Handle, FdrFlag, FrsSecLen, Status));
@@ -414,15 +415,15 @@ HookedStartApp (
                                           sizeof (AppNameAscii));
 
   if (HasAsciiName) {
-    DEBUG ((DEBUG_INFO,
+    DEBUG ((GBL_DBG_LOGFS_ONLY,
             "qsee-start | app=\"%a\" | h=%u | st=%r\n",
             AppNameAscii, OutHandle, Status));
   } else if (IsOplusSec) {
-    DEBUG ((DEBUG_INFO,
+    DEBUG ((GBL_DBG_LOGFS_ONLY,
             "qsee-start | app=<OplusSec-GUID> | h=%u | st=%r\n",
             OutHandle, Status));
   } else {
-    DEBUG ((DEBUG_INFO,
+    DEBUG ((GBL_DBG_LOGFS_ONLY,
             "qsee-start | app=<non-ascii-or-unbounded> | h=%u | st=%r\n",
             OutHandle, Status));
   }
@@ -437,7 +438,7 @@ HookedStartApp (
          AsciiStrCmp (AppNameAscii, "oplus_phoenix") == 0 ||
          AsciiStrCmp (AppNameAscii, "phoenix")       == 0)) {
       gPhoenixHandle = OutHandle;
-      DEBUG ((DEBUG_INFO,
+      DEBUG ((GBL_DBG_LOGFS_ONLY,
               "qsee-start: tagged \"%a\" h=%u as Phoenix-shaped\n",
               AppNameAscii, OutHandle));
     }
@@ -452,7 +453,7 @@ HookedStartApp (
      * is exact. */
     if (IsOplusSec) {
       gOplusSecHandle = OutHandle;
-      DEBUG ((DEBUG_INFO,
+      DEBUG ((GBL_DBG_LOGFS_ONLY,
               "qsee-start: tagged OplusSec h=%u "
               "(GUID E11DDA6A-651B-4AB4-B8C5-30B352B472E2)\n",
               OutHandle));
@@ -516,14 +517,14 @@ HookedSendCmd (
   if (!Wide) {
     HexN (SendBuf, SendLen, 32, SendHex, sizeof (SendHex));
     HexN (RspBuf,  RspLen,  32, RspHex,  sizeof (RspHex));
-    DEBUG ((DEBUG_INFO,
+    DEBUG ((GBL_DBG_LOGFS_ONLY,
             "qsee | cmd=0x%08x | h=%u | sl=%u | s32=%a | rl=%u | r32=%a | st=%r\n",
             CmdId, Handle,
             SendLen, SendHex,
             RspLen,  RspHex,
             Status));
   } else {
-    DEBUG ((DEBUG_INFO,
+    DEBUG ((GBL_DBG_LOGFS_ONLY,
             "qsee | cmd=0x%08x | h=%u | sl=%u | rl=%u | st=%r | wide\n",
             CmdId, Handle, SendLen, RspLen, Status));
     DumpChunked (Handle, "s", SendBuf, SendLen, 192);
@@ -548,11 +549,11 @@ HookedSendCmd (
       default:         Name = NULL;                   break;
     }
     if (Name != NULL) {
-      DEBUG ((DEBUG_INFO,
+      DEBUG ((GBL_DBG_LOGFS_ONLY,
               "qsee-oplussec | cmd=0x%02x(%a) | h=%u | sl=%u | rl=%u | st=%r\n",
               CmdId, Name, Handle, SendLen, RspLen, Status));
     } else {
-      DEBUG ((DEBUG_INFO,
+      DEBUG ((GBL_DBG_LOGFS_ONLY,
               "qsee-oplussec | cmd=0x%02x(unknown) | h=%u | sl=%u | rl=%u | st=%r\n",
               CmdId, Handle, SendLen, RspLen, Status));
     }

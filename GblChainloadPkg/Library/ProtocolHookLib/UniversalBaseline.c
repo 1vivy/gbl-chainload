@@ -15,6 +15,7 @@
 
 #include "UniversalBaseline.h"
 #include <Library/DebugLib.h>
+#include <Library/LogFsLib.h>  /* GBL_DBG_LOGFS_ONLY level bit */
 
 /* Match the SCM SIP that ScmHook.c decodes (existing constant). */
 #define SCM_SIP_TZ_BLOW_SW_FUSE_ID  0x02000801U
@@ -31,7 +32,7 @@ UniversalPolicy_OnVbWriteConfig (
 {
   /* Op should be WRITE_CONFIG; caller has already classified.
      Just emit a diagnostic log and return SUCCESS. */
-  DEBUG ((DEBUG_INFO,
+  DEBUG ((GBL_DBG_LOGFS_ONLY,
           "vb-rwstate | op=WRITE_CONFIG | bufLen=%u | swallowed (universal)\n",
           BufLen));
   return EFI_SUCCESS;
@@ -40,7 +41,7 @@ UniversalPolicy_OnVbWriteConfig (
 EFI_STATUS EFIAPI
 UniversalPolicy_OnVbReset (VOID)
 {
-  DEBUG ((DEBUG_INFO, "vb-reset | swallowed (universal)\n"));
+  DEBUG ((GBL_DBG_LOGFS_ONLY, "vb-reset | swallowed (universal)\n"));
   return EFI_SUCCESS;
 }
 
@@ -52,7 +53,7 @@ UniversalPolicy_ShouldDropScmSip (
 {
   if (SmcId == SCM_SIP_TZ_BLOW_SW_FUSE_ID) {
     *FakeStatus = EFI_SUCCESS;
-    DEBUG ((DEBUG_INFO,
+    DEBUG ((GBL_DBG_LOGFS_ONLY,
             "scm-sip | smcid=0x%08x(TZ_BLOW_SW_FUSE_ID) | DROPPED (universal)\n",
             SmcId));
     return TRUE;
@@ -68,7 +69,7 @@ UniversalPolicy_ShouldDropQseeOplusSec (
 {
   if (CmdId == OPLUSSEC_CMD_WRITE_RPMB_BOOT_INFO) {
     *FakeStatus = EFI_SUCCESS;
-    DEBUG ((DEBUG_INFO,
+    DEBUG ((GBL_DBG_LOGFS_ONLY,
             "qsee-oplussec | cmd=0x%02x(write_rpmb_boot_info) | DROPPED (universal)\n",
             CmdId));
     return TRUE;

@@ -21,6 +21,7 @@
 #include <Library/BaseLib.h>
 #include <Library/BaseMemoryLib.h>
 #include <Library/DebugLib.h>
+#include <Library/LogFsLib.h>  /* GBL_DBG_LOGFS_ONLY level bit */
 #include <Library/UefiBootServicesTableLib.h>
 #include <Library/UefiLib.h>
 #include <Protocol/EFISPSS.h>
@@ -96,14 +97,14 @@ HookedShareKeyMintInfo (
             sizeof (Info->Vbh.Vbh),
             32, VbhHex, sizeof (VbhHex));
 
-  DEBUG ((DEBUG_INFO,
+  DEBUG ((GBL_DBG_LOGFS_ONLY,
           "spss-rot | cmd=0x%x | offset=%u | size=%u | digest=%a\n",
           Info->RootOfTrust.CmdId,
           Info->RootOfTrust.RotOffset,
           Info->RootOfTrust.RotSize,
           RotHex));
 
-  DEBUG ((DEBUG_INFO,
+  DEBUG ((GBL_DBG_LOGFS_ONLY,
           "spss-bootstate | cmd=0x%x | ver=%u | offset=%u | size=%u | "
           "unlocked=%u | pubKey=%a | color=%u | sysVer=0x%x | sysSpl=0x%x\n",
           Info->BootInfo.CmdId,
@@ -116,13 +117,13 @@ HookedShareKeyMintInfo (
           Info->BootInfo.BootState.SystemVersion,
           Info->BootInfo.BootState.SystemSecurityLevel));
 
-  DEBUG ((DEBUG_INFO,
+  DEBUG ((GBL_DBG_LOGFS_ONLY,
           "spss-vbh | cmd=0x%x | digest=%a\n",
           Info->Vbh.CmdId, VbhHex));
 
   Status = gOrigShareKeyMintInfo (Info);
 
-  DEBUG ((DEBUG_INFO, "spss-share | st=%r\n", Status));
+  DEBUG ((GBL_DBG_LOGFS_ONLY, "spss-share | st=%r\n", Status));
 
   HookLeave (&gSpssGuard);
   return Status;

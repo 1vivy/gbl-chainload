@@ -150,6 +150,26 @@ if [ -f "$ABL" ]; then
   fi
 fi
 
+# ── Check 9b: ProtocolHookLib per-call runtime traces are NOT at DEBUG_INFO.
+#             qsee-buf / qsee-km / scm-sip / scm-send / mink / vb-rwstate /
+#             vb-fakelock / vb-send-rot / vb-milestone / vb-secure /
+#             vb-reset / spss-share are the high-volume hook trace prefixes.
+#             They must use GBL_DBG_LOGFS_ONLY so --debug doesn't surface
+#             per-call hex dumps in UefiLog; under --verbose they pass the
+#             PCD gate and the sink writes them to gbl-chainload only.
+#             One-shot "installed" lines (different format, one per hook)
+#             stay at DEBUG_INFO and are not caught by these prefixes.
+PHL=GblChainloadPkg/Library/ProtocolHookLib
+PHL_HITS=$(grep -RnE 'DEBUG\s*\(\s*\(\s*DEBUG_INFO\s*,\s*"(qsee-buf|qsee-km|qsee \||scm-sip|scm-send|scm-sys|mink |vb-rwstate|vb-fakelock|vb-send-rot|vb-milestone|vb-secure|vb-reset|spss-share)' \
+              "$PHL" 2>/dev/null || true)
+if [ -n "$PHL_HITS" ]; then
+  echo "FAIL: ProtocolHookLib per-call traces emit at DEBUG_INFO:" >&2
+  echo "$PHL_HITS" >&2
+  echo "      Re-tag to GBL_DBG_LOGFS_ONLY so --debug builds don't leak" >&2
+  echo "      qsee-buf / scm-send / vb-fakelock hex dumps into UefiLog." >&2
+  fail=1
+fi
+
 # ── Check 10: BootFlow.c retains the sink across the LoadImage handoff. ───
 # Without this, the patched ABL's runtime hook DEBUG output (qsee-buf
 # hex dumps, scm-sip/scm-send traces, vb-fakelock/vb-rwstate) bypasses
