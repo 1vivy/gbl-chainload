@@ -18,12 +18,12 @@ The failure is **deterministic and silent**: init doesn't panic or hang—it ret
 ## Early-AVB Call Chain with File:Line References
 
 ### 1. **First-Stage Init Entry Point** (`first_stage_init.cpp`)
-- **File:** `/home/vivy/android/fox_14.1/system/core/init/first_stage_init.cpp`
+- **File:** `system/core/init/first_stage_init.cpp`
 - **Init:** Entry into first-stage mount via `FirstStageMount::Create()` (line 227).
 - **Key:** Sets up `FirstStageMountVBootV2` class to orchestrate AVB verification and dm-verity setup.
 
 ### 2. **First-Stage Mount Initialization** (`first_stage_mount.cpp`)
-- **File:** `/home/vivy/android/fox_14.1/system/core/init/first_stage_mount.cpp`
+- **File:** `system/core/init/first_stage_mount.cpp`
 
 | Function | Line | Purpose |
 |----------|------|---------|
@@ -33,7 +33,7 @@ The failure is **deterministic and silent**: init doesn't panic or hang—it ret
 | `FirstStageMountVBootV2::SetUpDmVerity()` | 744 | For each fstab entry with avb flag, calls `AvbHandle::SetUpAvbHashtree()` |
 
 ### 3. **AVB Handle Open (userspace libavb bridge)** (`fs_avb.cpp`)
-- **File:** `/home/vivy/android/fox_14.1/system/core/fs_mgr/libfs_avb/fs_avb.cpp`
+- **File:** `system/core/fs_mgr/libfs_avb/fs_avb.cpp`
 
 | Function | Line | Purpose |
 |----------|------|---------|
@@ -54,7 +54,7 @@ if (!avb_verifier || !avb_verifier->VerifyVbmetaImages(avb_handle->vbmeta_images
 ```
 
 ### 4. **Userspace AVB Slot Verify (libavb C library)** (`avb_ops.cpp`)
-- **File:** `/home/vivy/android/fox_14.1/system/core/fs_mgr/libfs_avb/avb_ops.cpp`
+- **File:** `system/core/fs_mgr/libfs_avb/avb_ops.cpp`
 
 | Line | Purpose |
 |------|---------|
@@ -66,7 +66,7 @@ if (!avb_verifier || !avb_verifier->VerifyVbmetaImages(avb_handle->vbmeta_images
 2. Then **re-verifies the vbmeta digest against cmdline values** set by ABL.
 
 ### 5. **Slot Verify & Chain-Partition Walk** (`avb_slot_verify.c`)
-- **File:** `/home/vivy/android/fox_14.1/external/avb/libavb/avb_slot_verify.c`
+- **File:** `external/avb/libavb/avb_slot_verify.c`
 
 | Line | Descriptor Type | Purpose |
 |------|-----------------|---------|
@@ -103,7 +103,7 @@ if (avb_safe_memcmp(digest, expected_digest, digest_len) != 0) {
 
 ### Where Cmdline Digests Are Read
 
-**File:** `/home/vivy/android/fox_14.1/system/core/fs_mgr/libfs_avb/fs_avb.cpp`
+**File:** `system/core/fs_mgr/libfs_avb/fs_avb.cpp`
 
 | Line | Field | Source |
 |------|-------|--------|
@@ -115,7 +115,7 @@ These values are **set by ABL** during bootloader-stage AVB verification.
 
 ### How Cmdline Digests Are Used
 
-**File:** `/home/vivy/android/fox_14.1/system/core/fs_mgr/libfs_avb/fs_avb.cpp` → `AvbVerifier::VerifyVbmetaImages()` (lines 152–181)
+**File:** `system/core/fs_mgr/libfs_avb/fs_avb.cpp` → `AvbVerifier::VerifyVbmetaImages()` (lines 152–181)
 
 ```cpp
 bool AvbVerifier::VerifyVbmetaImages(const std::vector<VBMetaData>& vbmeta_images) {
@@ -320,7 +320,7 @@ androidboot.vbmeta.recovery.digest=<custom_recovery_sha256>
 
 ## References
 
-- **First-stage init:** `/home/vivy/android/fox_14.1/system/core/init/first_stage_mount.cpp:809–821`
-- **Userspace AVB:** `/home/vivy/android/fox_14.1/system/core/fs_mgr/libfs_avb/fs_avb.cpp:453–535`
-- **Hash validation:** `/home/vivy/android/fox_14.1/external/avb/libavb/avb_slot_verify.c:276–449`
-- **Cmdline digest:** `/home/vivy/android/fox_14.1/system/core/fs_mgr/libfs_avb/fs_avb.cpp:106–150`
+- **First-stage init:** `system/core/init/first_stage_mount.cpp:809–821`
+- **Userspace AVB:** `system/core/fs_mgr/libfs_avb/fs_avb.cpp:453–535`
+- **Hash validation:** `external/avb/libavb/avb_slot_verify.c:276–449`
+- **Cmdline digest:** `system/core/fs_mgr/libfs_avb/fs_avb.cpp:106–150`
