@@ -1,0 +1,43 @@
+## @file
+#  UartProbeA — throwaway EFI probe app.
+#
+#  Answers Q1 (UefiInfoBlk HOB GUID + struct layout + UART buffer ptr/len)
+#  and Q5 (which UefiLog<N>.txt slot planted magic lands in).
+#
+#  DELETE after on-device capture per
+#  docs/re/qcom-uart-log-buffer-probe-plan.md § Probe A clean-up.
+##
+
+[Defines]
+  INF_VERSION                    = 0x00010006
+  BASE_NAME                      = UartProbeA
+  FILE_GUID                      = a3b4c5d6-1111-2222-3333-444455556666
+  MODULE_TYPE                    = UEFI_APPLICATION
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = UartProbeAEntry
+
+[Sources]
+  UartProbeA.c
+
+[Packages]
+  MdePkg/MdePkg.dec
+  MdeModulePkg/MdeModulePkg.dec
+  ArmPkg/ArmPkg.dec
+
+[LibraryClasses]
+  UefiApplicationEntryPoint
+  UefiBootServicesTableLib
+  UefiLib
+  BaseLib
+  BaseMemoryLib
+  DebugLib
+  PrintLib
+  HobLib
+  TimerLib
+
+[Protocols]
+
+[Guids]
+
+[Depex]
+  TRUE

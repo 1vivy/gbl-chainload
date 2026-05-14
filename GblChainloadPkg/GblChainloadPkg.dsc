@@ -209,3 +209,16 @@
       DynamicPatchLib|GblChainloadPkg/Library/DynamicPatchLib/DynamicPatchLib.inf
       ProtocolHookLib|GblChainloadPkg/Library/ProtocolHookLib/ProtocolHookLib.inf
   }
+
+  # Throwaway probe — answers Q1 (UefiInfoBlk HOB layout) and Q5 (log flush timing).
+  # Delete after on-device capture.
+  GblChainloadPkg/Application/UartProbeA/UartProbeA.inf {
+    <LibraryClasses>
+      UefiApplicationEntryPoint|MdePkg/Library/UefiApplicationEntryPoint/UefiApplicationEntryPoint.inf
+      UefiLib|MdePkg/Library/UefiLib/UefiLib.inf
+      BaseLib|MdePkg/Library/BaseLib/BaseLib.inf
+      HobLib|MdePkg/Library/DxeHobLib/DxeHobLib.inf
+      TimerLib|ArmPkg/Library/ArmArchTimerLib/ArmArchTimerLib.inf
+      DebugPrintErrorLevelLib|MdePkg/Library/BaseDebugPrintErrorLevelLib/BaseDebugPrintErrorLevelLib.inf
+      DevicePathLib|MdePkg/Library/UefiDevicePathLib/UefiDevicePathLib.inf
+  }
