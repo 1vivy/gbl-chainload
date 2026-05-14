@@ -499,6 +499,10 @@ InstallVerifiedBootHook (VOID)
     return Status;
   }
 
+  /* Set before swaps so ProtocolHook_UninstallAll can roll back if a later
+     required-slot check fails. */
+  gHookedVb = Vb;
+
   /* Per-slot null check + swap. Mirror ScmHook's pattern. */
 
   if (Vb->VBRwDeviceState != NULL) {
@@ -584,7 +588,86 @@ InstallVerifiedBootHook (VOID)
   }
 #endif
 
-  gHookedVb = Vb;
   GBL_INFO ("VerifiedBootHook: installed %u of 10 slots\n", (UINT32)Installed);
   return EFI_SUCCESS;
+}
+
+BOOLEAN
+UninstallVerifiedBootHook (VOID)
+{
+  BOOLEAN RestoredAll = TRUE;
+
+  if (gHookedVb == NULL) {
+    return TRUE;
+  }
+
+  if (gHookedVb->VBRwDeviceState == HookedVBRwDeviceState) {
+    gHookedVb->VBRwDeviceState = gOrigVbRwDeviceState;
+  } else if (gOrigVbRwDeviceState != NULL && gHookedVb->VBRwDeviceState != gOrigVbRwDeviceState) {
+    RestoredAll = FALSE;
+  }
+  if (gHookedVb->VBDeviceInit == HookedVBDeviceInit) {
+    gHookedVb->VBDeviceInit = gOrigVbDeviceInit;
+  } else if (gOrigVbDeviceInit != NULL && gHookedVb->VBDeviceInit != gOrigVbDeviceInit) {
+    RestoredAll = FALSE;
+  }
+  if (gHookedVb->VBSendRot == HookedVBSendRot) {
+    gHookedVb->VBSendRot = gOrigVbSendRot;
+  } else if (gOrigVbSendRot != NULL && gHookedVb->VBSendRot != gOrigVbSendRot) {
+    RestoredAll = FALSE;
+  }
+  if (gHookedVb->VBSendMilestone == HookedVBSendMilestone) {
+    gHookedVb->VBSendMilestone = gOrigVbSendMilestone;
+  } else if (gOrigVbSendMilestone != NULL && gHookedVb->VBSendMilestone != gOrigVbSendMilestone) {
+    RestoredAll = FALSE;
+  }
+  if (gHookedVb->VBVerifyImage == HookedVBVerifyImage) {
+    gHookedVb->VBVerifyImage = gOrigVbVerifyImage;
+  } else if (gOrigVbVerifyImage != NULL && gHookedVb->VBVerifyImage != gOrigVbVerifyImage) {
+    RestoredAll = FALSE;
+  }
+  if (gHookedVb->VBDeviceResetState == HookedVBResetState) {
+    gHookedVb->VBDeviceResetState = gOrigVbResetState;
+  } else if (gOrigVbResetState != NULL && gHookedVb->VBDeviceResetState != gOrigVbResetState) {
+    RestoredAll = FALSE;
+  }
+  if (gHookedVb->VBIsDeviceSecure == HookedVBIsDeviceSecure) {
+    gHookedVb->VBIsDeviceSecure = gOrigVbIsDeviceSecure;
+  } else if (gOrigVbIsDeviceSecure != NULL && gHookedVb->VBIsDeviceSecure != gOrigVbIsDeviceSecure) {
+    RestoredAll = FALSE;
+  }
+  if (gHookedVb->VBGetBootState == HookedVBGetBootState) {
+    gHookedVb->VBGetBootState = gOrigVbGetBootState;
+  } else if (gOrigVbGetBootState != NULL && gHookedVb->VBGetBootState != gOrigVbGetBootState) {
+    RestoredAll = FALSE;
+  }
+  if (gHookedVb->VBGetCertFingerPrint == HookedVBGetCertFingerPrint) {
+    gHookedVb->VBGetCertFingerPrint = gOrigVbGetCert;
+  } else if (gOrigVbGetCert != NULL && gHookedVb->VBGetCertFingerPrint != gOrigVbGetCert) {
+    RestoredAll = FALSE;
+  }
+  if (gHookedVb->VBIsKeymasterEnabled == HookedVBIsKeymasterEnabled) {
+    gHookedVb->VBIsKeymasterEnabled = gOrigVbIsKmEnabled;
+  } else if (gOrigVbIsKmEnabled != NULL && gHookedVb->VBIsKeymasterEnabled != gOrigVbIsKmEnabled) {
+    RestoredAll = FALSE;
+  }
+
+  if (!RestoredAll) {
+    GBL_INFO ("VerifiedBootHook: uninstall deferred; slots no longer point at this wrapper\n");
+    return FALSE;
+  }
+
+  GBL_INFO ("VerifiedBootHook: uninstalled\n");
+  gHookedVb             = NULL;
+  gOrigVbRwDeviceState  = NULL;
+  gOrigVbDeviceInit     = NULL;
+  gOrigVbSendRot        = NULL;
+  gOrigVbSendMilestone  = NULL;
+  gOrigVbVerifyImage    = NULL;
+  gOrigVbResetState     = NULL;
+  gOrigVbIsDeviceSecure = NULL;
+  gOrigVbGetBootState   = NULL;
+  gOrigVbGetCert        = NULL;
+  gOrigVbIsKmEnabled    = NULL;
+  return TRUE;
 }

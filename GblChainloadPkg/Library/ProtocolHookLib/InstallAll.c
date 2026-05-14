@@ -25,6 +25,141 @@
 
 #include "HookCommon.h"
 
+#define GBL_HOOK_REGISTRY_MAGIC    SIGNATURE_32 ('G', 'B', 'H', 'K')
+#define GBL_HOOK_REGISTRY_VERSION  1u
+
+typedef struct {
+  UINT32  Magic;
+  UINT32  Version;
+  VOID   *Owner;
+  UINT32  Mode;
+} GBL_HOOK_REGISTRY;
+
+STATIC EFI_GUID  mGblHookRegistryGuid = {
+  0x67c2eab0, 0x792f, 0x46aa,
+  { 0x9d, 0x2f, 0x3e, 0x1d, 0x84, 0x12, 0x5c, 0x91 }
+};
+STATIC GBL_HOOK_REGISTRY  mGblHookRegistry = {
+  GBL_HOOK_REGISTRY_MAGIC,
+  GBL_HOOK_REGISTRY_VERSION,
+  NULL,
+  0
+};
+
+STATIC VOID *
+HookOwnerToken (VOID)
+{
+  return (VOID *)&mGblHookRegistry;
+}
+
+STATIC GBL_HOOK_REGISTRY *
+FindHookRegistry (VOID)
+{
+  UINTN Index;
+
+  if (gST == NULL) {
+    return NULL;
+  }
+
+  for (Index = 0; Index < gST->NumberOfTableEntries; Index++) {
+    if (CompareGuid (&gST->ConfigurationTable[Index].VendorGuid,
+                     &mGblHookRegistryGuid)) {
+      GBL_HOOK_REGISTRY *Registry;
+
+      Registry = (GBL_HOOK_REGISTRY *)gST->ConfigurationTable[Index].VendorTable;
+      if (Registry != NULL &&
+          Registry->Magic == GBL_HOOK_REGISTRY_MAGIC &&
+          Registry->Version == GBL_HOOK_REGISTRY_VERSION &&
+          Registry->Owner != NULL) {
+        return Registry;
+      }
+      return NULL;
+    }
+  }
+
+  return NULL;
+}
+
+STATIC VOID
+PopulateExistingResult (
+  OUT HOOK_INSTALL_RESULT  *Result
+  )
+{
+  ZeroMem (Result, sizeof (*Result));
+  Result->VbInstalledSlots      = 1;
+  Result->VbExpectedSlots       = 1;
+  Result->ScmInstalledSlots     = 1;
+  Result->ScmExpectedSlots      = 1;
+  Result->QseecomInstalledSlots = 1;
+  Result->QseecomExpectedSlots  = 1;
+  Result->SpssInstalledSlots    = 1;
+  Result->SpssExpectedSlots     = 1;
+  Result->BlockIoInstalledSlots = 1;
+  Result->BlockIoExpectedSlots  = 1;
+  Result->UniversalRequiredOk   = TRUE;
+  Result->ModeOverlayOk         = TRUE;
+}
+
+STATIC EFI_STATUS
+RegisterInstalledHooks (VOID)
+{
+  EFI_STATUS Status;
+
+  mGblHookRegistry.Owner = HookOwnerToken ();
+  mGblHookRegistry.Mode  = (UINT32)GBL_MODE;
+  Status = gBS->InstallConfigurationTable (&mGblHookRegistryGuid, &mGblHookRegistry);
+  if (EFI_ERROR (Status)) {
+    mGblHookRegistry.Owner = NULL;
+  }
+  return Status;
+}
+
+STATIC VOID
+UnregisterInstalledHooks (VOID)
+{
+  GBL_HOOK_REGISTRY *Registry;
+
+  Registry = FindHookRegistry ();
+  if (Registry == NULL || Registry->Owner != HookOwnerToken ()) {
+    return;
+  }
+  gBS->InstallConfigurationTable (&mGblHookRegistryGuid, NULL);
+  mGblHookRegistry.Owner = NULL;
+}
+
+VOID
+EFIAPI
+ProtocolHook_UninstallAll (
+  VOID
+  )
+{
+  BOOLEAN RestoredAll;
+
+  RestoredAll = TRUE;
+
+  /* Reverse install order.  Each hook verifies that the protocol slot still
+     points at this image's wrapper before restoring its saved original. */
+  RestoredAll = UninstallBlockIoHook () && RestoredAll;
+  RestoredAll = UninstallSpssHook () && RestoredAll;
+  RestoredAll = UninstallQseecomHook () && RestoredAll;
+  RestoredAll = UninstallScmHook () && RestoredAll;
+  RestoredAll = UninstallVerifiedBootHook () && RestoredAll;
+  if (RestoredAll) {
+    UnregisterInstalledHooks ();
+  } else {
+    GBL_INFO ("ProtocolHookLib: uninstall deferred; registry kept active\n");
+  }
+}
+
+STATIC EFI_STATUS
+AbortInstall (
+  IN EFI_STATUS  Status
+  )
+{
+  ProtocolHook_UninstallAll ();
+  return Status;
+}
+
 EFI_STATUS
 EFIAPI
 ProtocolHook_InstallAll (
@@ -38,14 +173,37 @@ ProtocolHook_InstallAll (
   }
   ZeroMem (Result, sizeof (*Result));
 
+  {
+    GBL_HOOK_REGISTRY *Existing;
+
+    Existing = FindHookRegistry ();
+    if (Existing != NULL) {
+      if (Existing->Mode != (UINT32)GBL_MODE) {
+        Print (L"ProtocolHookLib: FATAL — existing hook mode %u mismatches current mode %u\n",
+               Existing->Mode,
+               (UINT32)GBL_MODE);
+        return EFI_ACCESS_DENIED;
+      }
+      PopulateExistingResult (Result);
+      GBL_INFO ("ProtocolHookLib: existing hook registry owner=%p mode=%u current=%p; reusing active hooks\n",
+                Existing->Owner,
+                Existing->Mode,
+                HookOwnerToken ());
+      return EFI_SUCCESS;
+    }
+  }
+
   /* 1. VerifiedBoot -- required for mode-1 fakelock/persistence overlay;
         optional observation-only wrapper in mode-0. */
   Status = InstallVerifiedBootHook ();
+  if (Status == EFI_ALREADY_STARTED) {
+    Status = EFI_SUCCESS;
+  }
   if (EFI_ERROR (Status)) {
 #if (GBL_MODE == 1)
     Print (L"ProtocolHookLib: FATAL — VerifiedBoot install failed (%r), aborting chain-load\n",
            Status);
-    return Status;
+    return AbortInstall (Status);
 #else
     Print (L"ProtocolHookLib: VerifiedBoot install failed (%r) - continuing (mode-0 observation-only)\n",
            Status);
@@ -58,10 +216,13 @@ ProtocolHook_InstallAll (
 
   /* 2. SCM -- required.  Universal TZ_BLOW_SW_FUSE drop. */
   Status = InstallScmHook ();
+  if (Status == EFI_ALREADY_STARTED) {
+    Status = EFI_SUCCESS;
+  }
   if (EFI_ERROR (Status)) {
     Print (L"ProtocolHookLib: FATAL — SCM install failed (%r), aborting chain-load\n",
            Status);
-    return Status;
+    return AbortInstall (Status);
   }
   Result->ScmInstalledSlots = 1;
   Result->ScmExpectedSlots  = 1;
@@ -69,11 +230,14 @@ ProtocolHook_InstallAll (
   /* 3. Qseecom -- required for mode-1 OplusSec suppression; optional
         observation-only wrapper in mode-0. */
   Status = InstallQseecomHook ();
+  if (Status == EFI_ALREADY_STARTED) {
+    Status = EFI_SUCCESS;
+  }
   if (EFI_ERROR (Status)) {
 #if (GBL_MODE == 1)
     Print (L"ProtocolHookLib: FATAL — Qseecom install failed (%r), aborting chain-load\n",
            Status);
-    return Status;
+    return AbortInstall (Status);
 #else
     Print (L"ProtocolHookLib: Qseecom install failed (%r) - continuing (mode-0 observation-only)\n",
            Status);
@@ -87,6 +251,9 @@ ProtocolHook_InstallAll (
   /* 4. SPSS -- optional (observation-only).  Failure is logged but does
         not abort. */
   Status = InstallSpssHook ();
+  if (Status == EFI_ALREADY_STARTED) {
+    Status = EFI_SUCCESS;
+  }
   if (EFI_ERROR (Status)) {
     Print (L"ProtocolHookLib: SPSS install failed (%r) - continuing (observation-only)\n",
            Status);
@@ -99,10 +266,13 @@ ProtocolHook_InstallAll (
   /* 5. BlockIo -- required for Oplus reserve preservation.  This hook
         observes partition reads/writes and swallows oplusreserve1 writes. */
   Status = InstallBlockIoHook ();
+  if (Status == EFI_ALREADY_STARTED) {
+    Status = EFI_SUCCESS;
+  }
   if (EFI_ERROR (Status)) {
     Print (L"ProtocolHookLib: FATAL — BlockIo install failed (%r), aborting chain-load\n",
            Status);
-    return Status;
+    return AbortInstall (Status);
   }
   Result->BlockIoInstalledSlots = 1;
   Result->BlockIoExpectedSlots  = 1;
@@ -114,10 +284,17 @@ ProtocolHook_InstallAll (
 
   if (!Result->UniversalRequiredOk) {
     Print (L"ProtocolHookLib: FATAL — universal baseline incomplete, aborting chain-load\n");
-    return EFI_NOT_READY;
+    return AbortInstall (EFI_NOT_READY);
   }
 
   Result->ModeOverlayOk = TRUE;   /* Mode-specific overlays are inline/opt-in. */
+
+  Status = RegisterInstalledHooks ();
+  if (EFI_ERROR (Status)) {
+    Print (L"ProtocolHookLib: FATAL — hook registry install failed (%r), rolling back\n",
+           Status);
+    return AbortInstall (Status);
+  }
 
   GBL_INFO (
     "ProtocolHookLib: installed (mode=%d,"

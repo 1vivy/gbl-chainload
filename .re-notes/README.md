@@ -11,3 +11,4 @@
 - `sessions/2026-05-13-fastboot-gate-static-close.md` — Static close-out for fastboot lock writes, SCM security-state bits, warning-menu selector 8 token-zero path, and preserve-vector spec.
 - `sessions/2026-05-13-mode1-writeblock-static-final.md` — Final static prep for mode-1 `oplusreserve1` write-swallow: complete writer table, UnlockRecord init failure path, return-value handling, and hook scope decision.
 - `sessions/2026-05-13-user-oplusreserve1-locked-unlocked-diff.md` — Diff of user-provided locked/unlocked `oplusreserve1` images; confirms canonical token block zeroing and adds `scripts/dump-oplusreserve1.py`.
+- `sessions/2026-05-14-warm-reset-fastboot-hang-audit.md` — Incident audit for soft-reset Fastboot splash hang; ranks broad mode-0 reserve write-swallow and hook lifecycle/idempotence as leading suspects.

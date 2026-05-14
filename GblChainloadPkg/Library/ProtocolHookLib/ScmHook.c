@@ -632,6 +632,10 @@ InstallScmHook (VOID)
     return Status;
   }
 
+  /* Set before swaps so ProtocolHook_UninstallAll can roll back if the
+     required SIP slot check fails after optional slots were patched. */
+  gHookedScm = Scm;
+
   /* Per-slot null check + swap. A retail BSP may not populate every
    * slot; we install what's there and report the count. */
 
@@ -681,7 +685,56 @@ InstallScmHook (VOID)
     return EFI_NOT_READY;
   }
 
-  gHookedScm = Scm;
   GBL_INFO ("ScmHook: installed %u of 5 slots\n", (UINT32)Installed);
   return EFI_SUCCESS;
+}
+
+BOOLEAN
+UninstallScmHook (VOID)
+{
+  BOOLEAN RestoredAll = TRUE;
+
+  if (gHookedScm == NULL) {
+    return TRUE;
+  }
+
+  if (gHookedScm->ScmSysCall == HookedScmSysCall) {
+    gHookedScm->ScmSysCall = gOrigScmSysCall;
+  } else if (gOrigScmSysCall != NULL && gHookedScm->ScmSysCall != gOrigScmSysCall) {
+    RestoredAll = FALSE;
+  }
+  if (gHookedScm->ScmFastCall2 == HookedScmFastCall2) {
+    gHookedScm->ScmFastCall2 = gOrigScmFastCall2;
+  } else if (gOrigScmFastCall2 != NULL && gHookedScm->ScmFastCall2 != gOrigScmFastCall2) {
+    RestoredAll = FALSE;
+  }
+  if (gHookedScm->ScmSipSysCall == HookedScmSipSysCall) {
+    gHookedScm->ScmSipSysCall = gOrigScmSipSysCall;
+  } else if (gOrigScmSipSysCall != NULL && gHookedScm->ScmSipSysCall != gOrigScmSipSysCall) {
+    RestoredAll = FALSE;
+  }
+  if (gHookedScm->ScmSendCommand == HookedScmSendCommand) {
+    gHookedScm->ScmSendCommand = gOrigScmSendCommand;
+  } else if (gOrigScmSendCommand != NULL && gHookedScm->ScmSendCommand != gOrigScmSendCommand) {
+    RestoredAll = FALSE;
+  }
+  if (gHookedScm->ScmQseeSysCall == HookedScmQseeSysCall) {
+    gHookedScm->ScmQseeSysCall = gOrigScmQseeSysCall;
+  } else if (gOrigScmQseeSysCall != NULL && gHookedScm->ScmQseeSysCall != gOrigScmQseeSysCall) {
+    RestoredAll = FALSE;
+  }
+
+  if (!RestoredAll) {
+    GBL_INFO ("ScmHook: uninstall deferred; slots no longer point at this wrapper\n");
+    return FALSE;
+  }
+
+  GBL_INFO ("ScmHook: uninstalled\n");
+  gHookedScm         = NULL;
+  gOrigScmSysCall    = NULL;
+  gOrigScmFastCall2  = NULL;
+  gOrigScmSipSysCall = NULL;
+  gOrigScmSendCommand = NULL;
+  gOrigScmQseeSysCall = NULL;
+  return TRUE;
 }

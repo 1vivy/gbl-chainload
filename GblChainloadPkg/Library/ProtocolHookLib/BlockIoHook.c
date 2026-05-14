@@ -315,6 +315,10 @@ InstallBlockIoHook (VOID)
   Installed   = 0;
   ReserveInstalled = 0;
 
+  if (gBlockIoRecordCount != 0) {
+    return EFI_ALREADY_STARTED;
+  }
+
   Status = gBS->LocateHandleBuffer (ByProtocol, &gEfiBlockIoProtocolGuid,
                                     NULL, &HandleCount, &Handles);
   if (EFI_ERROR (Status) || Handles == NULL) {
@@ -399,4 +403,42 @@ InstallBlockIoHook (VOID)
   GBL_INFO ("BlockIoHook: installed %u partition BlockIo records, reserve=%u\n",
             (UINT32)Installed, (UINT32)ReserveInstalled);
   return EFI_SUCCESS;
+}
+
+BOOLEAN
+UninstallBlockIoHook (VOID)
+{
+  UINTN Index;
+  BOOLEAN RestoredAll = TRUE;
+
+  for (Index = 0; Index < gBlockIoRecordCount; Index++) {
+    if (!gBlockIoRecords[Index].Active || gBlockIoRecords[Index].BlockIo == NULL) {
+      continue;
+    }
+
+    if (gBlockIoRecords[Index].BlockIo->ReadBlocks == HookedReadBlocks) {
+      gBlockIoRecords[Index].BlockIo->ReadBlocks = gBlockIoRecords[Index].OriginalReadBlocks;
+    } else if (gBlockIoRecords[Index].OriginalReadBlocks != NULL &&
+               gBlockIoRecords[Index].BlockIo->ReadBlocks != gBlockIoRecords[Index].OriginalReadBlocks) {
+      RestoredAll = FALSE;
+    }
+    if (gBlockIoRecords[Index].BlockIo->WriteBlocks == HookedWriteBlocks) {
+      gBlockIoRecords[Index].BlockIo->WriteBlocks = gBlockIoRecords[Index].OriginalWriteBlocks;
+    } else if (gBlockIoRecords[Index].OriginalWriteBlocks != NULL &&
+               gBlockIoRecords[Index].BlockIo->WriteBlocks != gBlockIoRecords[Index].OriginalWriteBlocks) {
+      RestoredAll = FALSE;
+    }
+  }
+
+  if (!RestoredAll) {
+    GBL_INFO ("BlockIoHook: uninstall deferred; one or more slots no longer point at this wrapper\n");
+    return FALSE;
+  }
+
+  if (gBlockIoRecordCount != 0) {
+    GBL_INFO ("BlockIoHook: uninstalled %u records\n", (UINT32)gBlockIoRecordCount);
+  }
+  ZeroMem (gBlockIoRecords, sizeof (gBlockIoRecords));
+  gBlockIoRecordCount = 0;
+  return TRUE;
 }

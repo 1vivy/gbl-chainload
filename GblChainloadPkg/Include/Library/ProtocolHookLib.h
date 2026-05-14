@@ -30,4 +30,17 @@ ProtocolHook_InstallAll (
   OUT HOOK_INSTALL_RESULT  *Result
   );
 
+/** Restore hooks installed by this image instance.
+
+    This is a failure/cleanup path only.  Do not call it before a successful
+    StartImage() handoff: the chainloaded ABL must continue to see the hooks.
+    Each hook restores a slot only if the slot still points at this image's
+    wrapper, so cleanup is safe after partial install failure or StartImage()
+    returning unexpectedly. **/
+VOID
+EFIAPI
+ProtocolHook_UninstallAll (
+  VOID
+  );
+
 #endif /* PROTOCOL_HOOK_LIB_H_ */

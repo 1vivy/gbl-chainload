@@ -589,3 +589,37 @@ InstallQseecomHook (VOID)
             HookedStartApp, HookedSendCmd, gOriginalStartApp, gOriginalSendCmd);
   return EFI_SUCCESS;
 }
+
+BOOLEAN
+UninstallQseecomHook (VOID)
+{
+  BOOLEAN RestoredAll = TRUE;
+
+  if (gHookedProtocol == NULL) {
+    return TRUE;
+  }
+
+  if (gHookedProtocol->QseecomStartApp == HookedStartApp) {
+    gHookedProtocol->QseecomStartApp = gOriginalStartApp;
+  } else if (gHookedProtocol->QseecomStartApp != gOriginalStartApp) {
+    RestoredAll = FALSE;
+  }
+  if (gHookedProtocol->QseecomSendCmd == HookedSendCmd) {
+    gHookedProtocol->QseecomSendCmd = gOriginalSendCmd;
+  } else if (gHookedProtocol->QseecomSendCmd != gOriginalSendCmd) {
+    RestoredAll = FALSE;
+  }
+
+  if (!RestoredAll) {
+    GBL_INFO ("QseecomHook: uninstall deferred; slots no longer point at this wrapper\n");
+    return FALSE;
+  }
+
+  GBL_INFO ("QseecomHook: uninstalled\n");
+  gHookedProtocol   = NULL;
+  gOriginalStartApp = NULL;
+  gOriginalSendCmd  = NULL;
+  gPhoenixHandle    = (UINT32)-1;
+  gOplusSecHandle   = (UINT32)-1;
+  return TRUE;
+}

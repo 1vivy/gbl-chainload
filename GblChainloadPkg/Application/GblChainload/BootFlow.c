@@ -127,6 +127,7 @@ BootFlowChainLoad (VOID)
   Status = gBS->LoadImage (FALSE, gImageHandle, NULL, Pe, PeSize, &ImageHandle);
   if (EFI_ERROR (Status)) {
     Print (L"BootFlow: FATAL — LoadImage failed (%r)\n", Status);
+    ProtocolHook_UninstallAll ();
     FreePool (Pe);
     return Status;
   }
@@ -140,6 +141,7 @@ BootFlowChainLoad (VOID)
   if (ImageHandle != NULL) {
     gBS->UnloadImage (ImageHandle);
   }
+  ProtocolHook_UninstallAll ();
   FreePool (Pe);
   return EFI_LOAD_ERROR;
 }

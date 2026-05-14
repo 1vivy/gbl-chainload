@@ -27,6 +27,12 @@ EFI_STATUS InstallSpssHook (VOID);
 EFI_STATUS InstallBlockIoHook (VOID);
 EFI_STATUS InstallEbsHook (VOID);
 
+BOOLEAN UninstallQseecomHook (VOID);
+BOOLEAN UninstallScmHook (VOID);
+BOOLEAN UninstallVerifiedBootHook (VOID);
+BOOLEAN UninstallSpssHook (VOID);
+BOOLEAN UninstallBlockIoHook (VOID);
+
 /* ------------------------------------------------------------------
  * Reentry guard
  * ------------------------------------------------------------------ */

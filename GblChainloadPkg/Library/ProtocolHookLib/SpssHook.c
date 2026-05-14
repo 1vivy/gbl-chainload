@@ -155,3 +155,29 @@ InstallSpssHook (VOID)
             HookedShareKeyMintInfo, gOrigShareKeyMintInfo);
   return EFI_SUCCESS;
 }
+
+BOOLEAN
+UninstallSpssHook (VOID)
+{
+  BOOLEAN RestoredAll = TRUE;
+
+  if (gHookedSpss == NULL) {
+    return TRUE;
+  }
+
+  if (gHookedSpss->SPSSDxe_ShareKeyMintInfo == HookedShareKeyMintInfo) {
+    gHookedSpss->SPSSDxe_ShareKeyMintInfo = gOrigShareKeyMintInfo;
+  } else if (gHookedSpss->SPSSDxe_ShareKeyMintInfo != gOrigShareKeyMintInfo) {
+    RestoredAll = FALSE;
+  }
+
+  if (!RestoredAll) {
+    GBL_INFO ("SpssHook: uninstall deferred; slot no longer points at this wrapper\n");
+    return FALSE;
+  }
+
+  GBL_INFO ("SpssHook: uninstalled\n");
+  gHookedSpss          = NULL;
+  gOrigShareKeyMintInfo = NULL;
+  return TRUE;
+}
