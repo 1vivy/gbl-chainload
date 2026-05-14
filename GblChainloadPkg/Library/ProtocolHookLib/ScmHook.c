@@ -26,6 +26,7 @@
 #include <Library/BaseLib.h>
 #include <Library/BaseMemoryLib.h>
 #include <Library/DebugLib.h>
+#include <Library/GblLog.h>
 #include <Library/PrintLib.h>
 #include <Library/UefiBootServicesTableLib.h>
 #include <Library/UefiLib.h>
@@ -247,9 +248,8 @@ DecodeMinkIpcInvoke (
     AsciiSPrint (OpBuf, sizeof (OpBuf), "0x%x", OpId);
   }
 
-  DEBUG ((DEBUG_INFO,
-          "mink | obj=%a | op=%a | argc=%u/%u obj=%u/%u\n",
-          ObjBuf, OpBuf, NBI, NBO, NOI, NOO));
+  GBL_INFO ("mink | obj=%a | op=%a | argc=%u/%u obj=%u/%u\n",
+            ObjBuf, OpBuf, NBI, NBO, NOI, NOO);
 }
 
 /* -----------------------------------------------------------------------
@@ -317,18 +317,17 @@ DecodeSipSmcId (
       /* R[0]=common_rsp.status (1=ok), R[1]=status_0 (fuse bitfield),
        * R[2]=status_1.  status_0 bits: SECBOOT[0] SHK[1] DEBUG_DIS[2]
        * RPMB[5] DEBUG_RE[6].  Mirror of gbl_root LogSecurityState(). */
-      DEBUG ((DEBUG_INFO,
-              "scm-sip | smcid=0x%08x(TZ_INFO_GET_SECURE_STATE)"
-              " | tz_st=%llu | secure_state=0x%08llx | status_1=0x%08llx"
-              " | secboot=%u shk=%u dbg_dis=%u rpmb=%u dbg_re=%u"
-              " | st=%r\n",
-              SmcId, R0, R1, R2,
-              (UINT32)((R1 >> SCM_FUSE_SECBOOT)          & 1u),
-              (UINT32)((R1 >> SCM_FUSE_SHK)              & 1u),
-              (UINT32)((R1 >> SCM_FUSE_DEBUG_DISABLED)   & 1u),
-              (UINT32)((R1 >> SCM_FUSE_RPMB_ENABLED)     & 1u),
-              (UINT32)((R1 >> SCM_FUSE_DEBUG_RE_ENABLED)  & 1u),
-              Status));
+      GBL_INFO ("scm-sip | smcid=0x%08x(TZ_INFO_GET_SECURE_STATE)"
+                " | tz_st=%llu | secure_state=0x%08llx | status_1=0x%08llx"
+                " | secboot=%u shk=%u dbg_dis=%u rpmb=%u dbg_re=%u"
+                " | st=%r\n",
+                SmcId, R0, R1, R2,
+                (UINT32)((R1 >> SCM_FUSE_SECBOOT)          & 1u),
+                (UINT32)((R1 >> SCM_FUSE_SHK)              & 1u),
+                (UINT32)((R1 >> SCM_FUSE_DEBUG_DISABLED)   & 1u),
+                (UINT32)((R1 >> SCM_FUSE_RPMB_ENABLED)     & 1u),
+                (UINT32)((R1 >> SCM_FUSE_DEBUG_RE_ENABLED)  & 1u),
+                Status);
       return TRUE;
 
     case SCM_SIP_TZ_BLOW_SW_FUSE_ID:
@@ -336,47 +335,42 @@ DecodeSipSmcId (
        * This SMC is dropped by UniversalPolicy_ShouldDropScmSip before
        * reaching this decoder — this case is retained for completeness
        * but will not fire for the dropped SIP. */
-      DEBUG ((DEBUG_INFO,
-              "scm-sip | smcid=0x%08x(TZ_BLOW_SW_FUSE_ID)"
-              " | fuse_id=0x%llx | st=%r\n",
-              SmcId, P0, Status));
+      GBL_INFO ("scm-sip | smcid=0x%08x(TZ_BLOW_SW_FUSE_ID)"
+                " | fuse_id=0x%llx | st=%r\n",
+                SmcId, P0, Status);
       return TRUE;
 
     case SCM_SIP_TZ_IS_SW_FUSE_BLOWN_ID:
       /* P[0]=FuseId, R[0]=status, R[1]=blown(0/1). */
-      DEBUG ((DEBUG_INFO,
-              "scm-sip | smcid=0x%08x(TZ_IS_SW_FUSE_BLOWN_ID)"
-              " | fuse_id=0x%llx | blown=%llu | st=%r\n",
-              SmcId, P0, R1, Status));
+      GBL_INFO ("scm-sip | smcid=0x%08x(TZ_IS_SW_FUSE_BLOWN_ID)"
+                " | fuse_id=0x%llx | blown=%llu | st=%r\n",
+                SmcId, P0, R1, Status);
       return TRUE;
 
     case SCM_SIP_TZ_INFO_GET_FEATURE_VER:
       /* P[0]=feature_id (TZ_FVER_QSEE=10 gates rollback path),
        * R[0]=status, R[1]=version. */
-      DEBUG ((DEBUG_INFO,
-              "scm-sip | smcid=0x%08x(TZ_INFO_GET_FEATURE_VERSION_ID)"
-              " | feature_id=0x%llx | version=0x%llx | st=%r\n",
-              SmcId, P0, R1, Status));
+      GBL_INFO ("scm-sip | smcid=0x%08x(TZ_INFO_GET_FEATURE_VERSION_ID)"
+                " | feature_id=0x%llx | version=0x%llx | st=%r\n",
+                SmcId, P0, R1, Status);
       return TRUE;
 
     case SCM_SIP_TZ_UPDATE_ROLLBACK_VER:
       /* Anti-rollback index bump (legacy path, MajorVersion<=5).
        * DROP CANDIDATE for re-flashability — see gbl_root
        * KM_BLOCK_TZ_ROLLBACK scaffold in scm_hook.h:55-72. */
-      DEBUG ((DEBUG_INFO,
-              "scm-sip | smcid=0x%08x(TZ_UPDATE_ROLLBACK_VERSION_ID)"
-              " | p0=0x%llx | DROP-CANDIDATE(NOT-DROPPED) | st=%r\n",
-              SmcId, P0, Status));
+      GBL_INFO ("scm-sip | smcid=0x%08x(TZ_UPDATE_ROLLBACK_VERSION_ID)"
+                " | p0=0x%llx | DROP-CANDIDATE(NOT-DROPPED) | st=%r\n",
+                SmcId, P0, Status);
       return TRUE;
 
     case SCM_SIP_TZ_UPDATE_ROLLBACK_VER_AB:
       /* Anti-rollback bump (newer A/B-aware path, MajorVersion>5).
        * DROP CANDIDATE same reason as above. */
-      DEBUG ((DEBUG_INFO,
-              "scm-sip | smcid=0x%08x"
-              "(TZ_UPDATE_ROLLBACK_VERSION_IF_AB_PARTITION_FEATURE_ENABLED_ID)"
-              " | p0=0x%llx | DROP-CANDIDATE(NOT-DROPPED) | st=%r\n",
-              SmcId, P0, Status));
+      GBL_INFO ("scm-sip | smcid=0x%08x"
+                "(TZ_UPDATE_ROLLBACK_VERSION_IF_AB_PARTITION_FEATURE_ENABLED_ID)"
+                " | p0=0x%llx | DROP-CANDIDATE(NOT-DROPPED) | st=%r\n",
+                SmcId, P0, Status);
       return TRUE;
 
     default:
@@ -413,7 +407,7 @@ HookedScmSysCall (
   /* Cmd is intentionally opaque (caller-defined struct). We log only
    * the dispatch occurrence + status; structural decode requires
    * caller-side context we don't have here. */
-  DEBUG ((DEBUG_INFO, "scm-sys | cmd=%p | st=%r\n", Cmd, Status));
+  GBL_INFO ("scm-sys | cmd=%p | st=%r\n", Cmd, Status);
 
   HookLeave (&gScmGuard);
   return Status;
@@ -445,9 +439,8 @@ HookedScmFastCall2 (
 
   Status = gOrigScmFastCall2 (This, Id, Param0, Param1);
 
-  DEBUG ((DEBUG_INFO,
-          "scm-fast | id=0x%x | p0=0x%x | p1=0x%x | st=%r\n",
-          Id, Param0, Param1, Status));
+  GBL_INFO ("scm-fast | id=0x%x | p0=0x%x | p1=0x%x | st=%r\n",
+            Id, Param0, Param1, Status);
 
   HookLeave (&gScmGuard);
   return Status;
@@ -504,12 +497,11 @@ HookedScmSipSysCall (
     R2 = (Results != NULL)    ? Results[2]    : 0;
     R3 = (Results != NULL)    ? Results[3]    : 0;
 
-    DEBUG ((DEBUG_INFO,
-            "scm-sip | smcid=0x%08x | paramid=0x%08x"
-            " | p0=0x%016lx | p1=0x%016lx | p2=0x%016lx | p3=0x%016lx"
-            " | r0=0x%016lx | r1=0x%016lx | r2=0x%016lx | r3=0x%016lx"
-            " | st=%r\n",
-            SmcId, ParamId, P0, P1, P2, P3, R0, R1, R2, R3, Status));
+    GBL_INFO ("scm-sip | smcid=0x%08x | paramid=0x%08x"
+              " | p0=0x%016lx | p1=0x%016lx | p2=0x%016lx | p3=0x%016lx"
+              " | r0=0x%016lx | r1=0x%016lx | r2=0x%016lx | r3=0x%016lx"
+              " | st=%r\n",
+              SmcId, ParamId, P0, P1, P2, P3, R0, R1, R2, R3, Status);
   }
 
   HookLeave (&gScmGuard);
@@ -554,12 +546,11 @@ HookedScmQseeSysCall (
   R2 = (Results != NULL)    ? Results[2]    : 0;
   R3 = (Results != NULL)    ? Results[3]    : 0;
 
-  DEBUG ((DEBUG_INFO,
-          "scm-qsee | smcid=0x%08x | paramid=0x%08x"
-          " | p0=0x%016lx | p1=0x%016lx | p2=0x%016lx | p3=0x%016lx"
-          " | r0=0x%016lx | r1=0x%016lx | r2=0x%016lx | r3=0x%016lx"
-          " | st=%r\n",
-          SmcId, ParamId, P0, P1, P2, P3, R0, R1, R2, R3, Status));
+  GBL_INFO ("scm-qsee | smcid=0x%08x | paramid=0x%08x"
+            " | p0=0x%016lx | p1=0x%016lx | p2=0x%016lx | p3=0x%016lx"
+            " | r0=0x%016lx | r1=0x%016lx | r2=0x%016lx | r3=0x%016lx"
+            " | st=%r\n",
+            SmcId, ParamId, P0, P1, P2, P3, R0, R1, R2, R3, Status);
 
   HookLeave (&gScmGuard);
   return Status;
@@ -601,11 +592,10 @@ HookedScmSendCommand (
   ScmHexN ((CONST UINT8 *)Rsp, (UINT32)RspLen, 32, RspHex, sizeof (RspHex));
   AppIdValue = (AppId != NULL) ? *AppId : 0;
 
-  DEBUG ((DEBUG_INFO,
-          "scm-send | cmd=%a(0x%x) | appid=%u | sl=%lu | s32=%a"
-          " | rl=%lu | r32=%a | st=%r\n",
-          ScmSendCmdName ((UINT32)CmdId), (UINT32)CmdId, AppIdValue,
-          (UINT64)ReqLen, ReqHex, (UINT64)RspLen, RspHex, Status));
+  VERBOSE ("scm-send | cmd=%a(0x%x) | appid=%u | sl=%lu | s32=%a"
+           " | rl=%lu | r32=%a | st=%r\n",
+           ScmSendCmdName ((UINT32)CmdId), (UINT32)CmdId, AppIdValue,
+           (UINT64)ReqLen, ReqHex, (UINT64)RspLen, RspHex, Status);
 
   /* Decoder A — if this is a send-data (0x06) dispatch, attempt to
    * parse the request buffer as a MinkIPC ObjectInvoke descriptor and
