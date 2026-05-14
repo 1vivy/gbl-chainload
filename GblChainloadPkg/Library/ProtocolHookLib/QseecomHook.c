@@ -244,9 +244,10 @@ KmDecodeKnownCmd (
       UINT32 VMin    = ReadU32At (RspBuf, RspLen, 8);
       UINT32 VBld    = ReadU32At (RspBuf, RspLen, 12);
       UINT32 BId     = ReadU32At (RspBuf, RspLen, 16);
-      GBL_INFO ("qsee-km | cmd=0x%08x(probe) | h=%u | rstatus=0x%x | "
-                "ver=%u.%u.%u | buildId=0x%x | st=%r\n",
-                CmdId, Handle, RStatus, VMaj, VMin, VBld, BId, Status);
+      VERBOSE ("qsee-km | cmd=0x%08x(probe) | h=%u | rstatus=0x%x | "
+               "ver=%u.%u.%u | buildId=0x%x | st=%r\n",
+               CmdId, Handle, RStatus, VMaj, VMin, VBld, BId, Status);
+      (VOID)RStatus; (VOID)VMaj; (VOID)VMin; (VOID)VBld; (VOID)BId;
       break;
     }
 
@@ -266,17 +267,24 @@ KmDecodeKnownCmd (
       break;
     }
 
-    case 0x00000202:
-    case 0x00000203: {
-      /* R/W KM device state — pointer-style payload (12 B). Send:
-       * {cmd, addr_lo, addr_hi}. Pointer carries the bootloader-side
-       * KM device-state struct; TZ reads/writes it in-place. */
+    case 0x00000202: {
+      /* READ_KM_DEVICE_STATE — read query, not a mutation. */
       UINT32 AddrLo = ReadU32At (SendBuf, SendLen, 4);
       UINT32 AddrHi = ReadU32At (SendBuf, SendLen, 8);
-      GBL_INFO ("qsee-km | cmd=0x%08x(%a_KM_DEVICE_STATE) | h=%u | "
+      VERBOSE ("qsee-km | cmd=0x%08x(READ_KM_DEVICE_STATE) | h=%u | "
+               "addr=0x%x_%08x | st=%r\n",
+               CmdId, Handle, AddrHi, AddrLo, Status);
+      (VOID)AddrLo; (VOID)AddrHi;
+      break;
+    }
+
+    case 0x00000203: {
+      /* WRITE_KM_DEVICE_STATE — write mutation, keep as GBL_INFO. */
+      UINT32 AddrLo = ReadU32At (SendBuf, SendLen, 4);
+      UINT32 AddrHi = ReadU32At (SendBuf, SendLen, 8);
+      GBL_INFO ("qsee-km | cmd=0x%08x(WRITE_KM_DEVICE_STATE) | h=%u | "
                 "addr=0x%x_%08x | st=%r\n",
-                CmdId, (CmdId == 0x202) ? "READ" : "WRITE",
-                Handle, AddrHi, AddrLo, Status);
+                CmdId, Handle, AddrHi, AddrLo, Status);
       break;
     }
 
@@ -338,9 +346,9 @@ KmDecodeKnownCmd (
     case 0x00000218: {
       /* FBE_SET_SEED. Sends FBE class-key derivation seed to TZ.
        * MODE-1: DO NOT mutate. */
-      GBL_INFO ("qsee-km | cmd=0x%08x(FBE_SET_SEED) | h=%u | sl=%u | "
-                "st=%r | DO-NOT-MUTATE\n",
-                CmdId, Handle, SendLen, Status);
+      VERBOSE ("qsee-km | cmd=0x%08x(FBE_SET_SEED) | h=%u | sl=%u | "
+               "st=%r | DO-NOT-MUTATE\n",
+               CmdId, Handle, SendLen, Status);
       break;
     }
 
@@ -355,9 +363,10 @@ KmDecodeKnownCmd (
        * is downstream of this output. */
       UINT32 FdrFlag   = ReadU32At (SendBuf, SendLen, 4);
       UINT32 FrsSecLen = ReadU32At (SendBuf, SendLen, 8);
-      GBL_INFO ("qsee-km | cmd=0x%08x(GENERATE_FRS_AND_UDS) | h=%u | "
-                "fdrFlag=0x%x | frsSecLen=%u | st=%r | DO-NOT-MUTATE\n",
-                CmdId, Handle, FdrFlag, FrsSecLen, Status);
+      VERBOSE ("qsee-km | cmd=0x%08x(GENERATE_FRS_AND_UDS) | h=%u | "
+               "fdrFlag=0x%x | frsSecLen=%u | st=%r | DO-NOT-MUTATE\n",
+               CmdId, Handle, FdrFlag, FrsSecLen, Status);
+      (VOID)FdrFlag; (VOID)FrsSecLen;
       break;
     }
 
@@ -502,14 +511,14 @@ HookedSendCmd (
   if (!Wide) {
     HexN (SendBuf, SendLen, 32, SendHex, sizeof (SendHex));
     HexN (RspBuf,  RspLen,  32, RspHex,  sizeof (RspHex));
-    GBL_INFO ("qsee | cmd=0x%08x | h=%u | sl=%u | s32=%a | rl=%u | r32=%a | st=%r\n",
-              CmdId, Handle,
-              SendLen, SendHex,
-              RspLen,  RspHex,
-              Status);
+    VERBOSE ("qsee | cmd=0x%08x | h=%u | sl=%u | s32=%a | rl=%u | r32=%a | st=%r\n",
+             CmdId, Handle,
+             SendLen, SendHex,
+             RspLen,  RspHex,
+             Status);
   } else {
-    GBL_INFO ("qsee | cmd=0x%08x | h=%u | sl=%u | rl=%u | st=%r | wide\n",
-              CmdId, Handle, SendLen, RspLen, Status);
+    VERBOSE ("qsee | cmd=0x%08x | h=%u | sl=%u | rl=%u | st=%r | wide\n",
+             CmdId, Handle, SendLen, RspLen, Status);
     DumpChunked (Handle, "s", SendBuf, SendLen, 192);
     DumpChunked (Handle, "r", RspBuf,  RspLen,  192);
   }
@@ -532,11 +541,11 @@ HookedSendCmd (
       default:         Name = NULL;                   break;
     }
     if (Name != NULL) {
-      GBL_INFO ("qsee-oplussec | cmd=0x%02x(%a) | h=%u | sl=%u | rl=%u | st=%r\n",
-                CmdId, Name, Handle, SendLen, RspLen, Status);
+      VERBOSE ("qsee-oplussec | cmd=0x%02x(%a) | h=%u | sl=%u | rl=%u | st=%r\n",
+               CmdId, Name, Handle, SendLen, RspLen, Status);
     } else {
-      GBL_INFO ("qsee-oplussec | cmd=0x%02x(unknown) | h=%u | sl=%u | rl=%u | st=%r\n",
-                CmdId, Handle, SendLen, RspLen, Status);
+      VERBOSE ("qsee-oplussec | cmd=0x%02x(unknown) | h=%u | sl=%u | rl=%u | st=%r\n",
+               CmdId, Handle, SendLen, RspLen, Status);
     }
   }
 

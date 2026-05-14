@@ -97,10 +97,10 @@ HookedShareKeyMintInfo (
             sizeof (Info->Vbh.Vbh),
             32, VbhHex, sizeof (VbhHex));
 
-  GBL_INFO ("spss-rot | cmd=0x%x | offset=%u | size=%u\n",
-            Info->RootOfTrust.CmdId,
-            Info->RootOfTrust.RotOffset,
-            Info->RootOfTrust.RotSize);
+  VERBOSE ("spss-rot | cmd=0x%x | offset=%u | size=%u\n",
+           Info->RootOfTrust.CmdId,
+           Info->RootOfTrust.RotOffset,
+           Info->RootOfTrust.RotSize);
   VERBOSE ("spss-rot | digest=%a\n", RotHex);
 
   GBL_INFO ("spss-bootstate | cmd=0x%x | ver=%u | offset=%u | size=%u | "
@@ -115,12 +115,12 @@ HookedShareKeyMintInfo (
             Info->BootInfo.BootState.SystemSecurityLevel);
   VERBOSE ("spss-bootstate | pubKey=%a\n", PubKeyHex);
 
-  GBL_INFO ("spss-vbh | cmd=0x%x\n", Info->Vbh.CmdId);
+  VERBOSE ("spss-vbh | cmd=0x%x\n", Info->Vbh.CmdId);
   VERBOSE ("spss-vbh | digest=%a\n", VbhHex);
 
   Status = gOrigShareKeyMintInfo (Info);
 
-  GBL_INFO ("spss-share | st=%r\n", Status);
+  VERBOSE ("spss-share | st=%r\n", Status);
 
   HookLeave (&gSpssGuard);
   return Status;

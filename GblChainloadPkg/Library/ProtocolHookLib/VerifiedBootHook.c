@@ -163,8 +163,8 @@ HookedVBRwDeviceState (
     VbHex16 ((CONST UINT8 *)Buf, (UINTN)BufLen, Hex, sizeof (Hex));
   }
   if (First) {
-    GBL_INFO ("vb-rwstate | op=%a | bufLen=%u | st=%r\n",
-              VbDeviceStateOpName ((UINT32)Op), BufLen, Status);
+    VERBOSE ("vb-rwstate | op=%a | bufLen=%u | st=%r\n",
+             VbDeviceStateOpName ((UINT32)Op), BufLen, Status);
     VERBOSE ("vb-rwstate | first16=%a\n", Hex);
   }
 
@@ -272,7 +272,7 @@ HookedVBSendMilestone (
   }
 
   Status = gOrigVbSendMilestone (This);
-  GBL_INFO ("vb-milestone | st=%r\n", Status);
+  VERBOSE ("vb-milestone | st=%r\n", Status);
 
   HookLeave (&gVbGuard);
   return Status;
@@ -368,7 +368,7 @@ HookedVBIsDeviceSecure (
 
   Status = gOrigVbIsDeviceSecure (This, State);
   Out = (State != NULL) ? (UINT32)*State : 0xFF;
-  GBL_INFO ("vb-secure | state=%u | st=%r\n", Out, Status);
+  VERBOSE ("vb-secure | state=%u | st=%r\n", Out, Status);
 
   HookLeave (&gVbGuard);
   return Status;
@@ -397,8 +397,8 @@ HookedVBGetBootState (
 
   Status = gOrigVbGetBootState (This, BootState);
   BS = (BootState != NULL) ? (UINT32)*BootState : 0xFFFFFFFFu;
-  GBL_INFO ("vb-getstate | bootstate=%a(%u) | st=%r\n",
-            VbBootStateName (BS), BS, Status);
+  VERBOSE ("vb-getstate | bootstate=%a(%u) | st=%r\n",
+           VbBootStateName (BS), BS, Status);
 
   HookLeave (&gVbGuard);
   return Status;
@@ -429,8 +429,8 @@ HookedVBGetCertFingerPrint (
 
   Status = gOrigVbGetCert (This, Buf, BufLen, OutLen);
   OL = (OutLen != NULL) ? *OutLen : 0;
-  GBL_INFO ("vb-cert | bufLen=%lu | outLen=%lu | st=%r\n",
-            (UINT64)BufLen, (UINT64)OL, Status);
+  VERBOSE ("vb-cert | bufLen=%lu | outLen=%lu | st=%r\n",
+           (UINT64)BufLen, (UINT64)OL, Status);
 
   HookLeave (&gVbGuard);
   return Status;
@@ -459,7 +459,7 @@ HookedVBIsKeymasterEnabled (
 
   Status = gOrigVbIsKmEnabled (This, KmEnabled);
   Out = (KmEnabled != NULL) ? (UINT32)*KmEnabled : 0xFF;
-  GBL_INFO ("vb-keymaster-enabled | enabled=%u | st=%r\n", Out, Status);
+  VERBOSE ("vb-keymaster-enabled | enabled=%u | st=%r\n", Out, Status);
 
   HookLeave (&gVbGuard);
   return Status;
