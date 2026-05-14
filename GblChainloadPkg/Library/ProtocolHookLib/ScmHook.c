@@ -672,6 +672,6 @@ InstallScmHook (VOID)
   }
 
   gHookedScm = Scm;
-  Print (L"ScmHook: installed %u of 5 slots\n", (UINT32)Installed);
+  GBL_INFO ("ScmHook: installed %u of 5 slots\n", (UINT32)Installed);
   return EFI_SUCCESS;
 }

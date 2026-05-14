@@ -572,7 +572,7 @@ InstallQseecomHook (VOID)
   Qseecom->QseecomSendCmd  = HookedSendCmd;
   gHookedProtocol          = Qseecom;
 
-  Print (L"QseecomHook: installed StartApp=%p SendCmd=%p (orig start=%p send=%p)\n",
-         HookedStartApp, HookedSendCmd, gOriginalStartApp, gOriginalSendCmd);
+  GBL_INFO ("QseecomHook: installed StartApp=%p SendCmd=%p (orig start=%p send=%p)\n",
+            HookedStartApp, HookedSendCmd, gOriginalStartApp, gOriginalSendCmd);
   return EFI_SUCCESS;
 }

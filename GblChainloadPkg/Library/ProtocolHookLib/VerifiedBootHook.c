@@ -572,6 +572,6 @@ InstallVerifiedBootHook (VOID)
 #endif
 
   gHookedVb = Vb;
-  Print (L"VerifiedBootHook: installed %u of 10 slots\n", (UINT32)Installed);
+  GBL_INFO ("VerifiedBootHook: installed %u of 10 slots\n", (UINT32)Installed);
   return EFI_SUCCESS;
 }
