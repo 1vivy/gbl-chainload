@@ -9,6 +9,7 @@
 
 #include <Uefi.h>
 #include <Uefi/UefiGpt.h>
+#include <Library/BaseLib.h>
 #include <Library/BaseMemoryLib.h>
 #include <Library/DebugLib.h>
 #include <Library/GblLog.h>
@@ -19,6 +20,8 @@
 #include "HookCommon.h"
 
 #define BLOCK_IO_HOOK_MAX_RECORDS  192u
+#define OPLUS_RESERVE1_TOKEN_LASTBLOCK_DELTA  0x3A5ULL
+#define OPLUS_RESERVE1_UNLOCKRECORD_LASTBLOCK_DELTA  0x35CULL
 
 extern EFI_GUID  gEfiPartitionRecordGuid;
 
@@ -151,6 +154,58 @@ TransferBlockCount (
   return (UINT64)((BufferSize + BlockSize - 1) / BlockSize);
 }
 
+STATIC BOOLEAN
+BufferIsAllZero (
+  IN CONST VOID  *Buffer,
+  IN UINTN        BufferSize
+  )
+{
+  CONST UINT8 *Bytes;
+  UINTN        Index;
+
+  if (Buffer == NULL || BufferSize == 0) {
+    return FALSE;
+  }
+
+  Bytes = (CONST UINT8 *)Buffer;
+  for (Index = 0; Index < BufferSize; Index++) {
+    if (Bytes[Index] != 0) {
+      return FALSE;
+    }
+  }
+  return TRUE;
+}
+
+STATIC CONST CHAR8 *
+ReserveWriteReason (
+  IN CONST BLOCK_IO_HOOK_RECORD *Record,
+  IN EFI_LBA                     Lba,
+  IN UINTN                       BufferSize,
+  IN CONST VOID                 *Buffer
+  )
+{
+  EFI_LBA TokenLba;
+  EFI_LBA UnlockRecordLba;
+
+  if (Record == NULL) {
+    return "reserve-write";
+  }
+
+  TokenLba        = Record->LastBlockAtInstall - OPLUS_RESERVE1_TOKEN_LASTBLOCK_DELTA;
+  UnlockRecordLba = Record->LastBlockAtInstall - OPLUS_RESERVE1_UNLOCKRECORD_LASTBLOCK_DELTA;
+
+  if (Lba == TokenLba && BufferIsAllZero (Buffer, BufferSize)) {
+    return "token-zero-write";
+  }
+  if (Lba == TokenLba) {
+    return "token-block-write";
+  }
+  if (Lba == UnlockRecordLba) {
+    return "unlock-record-write";
+  }
+  return "reserve-write";
+}
+
 STATIC EFI_STATUS EFIAPI
 HookedReadBlocks (
   IN  EFI_BLOCK_IO_PROTOCOL  *This,
@@ -196,6 +251,7 @@ HookedWriteBlocks (
 {
   EFI_STATUS            Status;
   BLOCK_IO_HOOK_RECORD *Record;
+  CONST CHAR8          *Reason;
   BOOLEAN               TopLevel;
 
   Record = FindRecordByBlockIo (This);
@@ -207,12 +263,19 @@ HookedWriteBlocks (
 
   if (Record->IsOplusReserve1) {
     if (TopLevel) {
-      GBL_INFO ("blockio | op=write-swallow | p=%a | lba=%Lu | bytes=%u | blocks=%Lu | status=%r\n",
+      Reason = ReserveWriteReason (Record, Lba, BufferSize, Buffer);
+      GBL_INFO ("blockio | op=write-swallow | reason=%a | p=%a | lba=%Lu | bytes=%u | blocks=%Lu | status=%r\n",
+                Reason,
                 Record->PartitionNameAscii,
                 (UINT64)Lba,
                 (UINT32)BufferSize,
                 TransferBlockCount (This, BufferSize),
                 EFI_SUCCESS);
+      if (AsciiStrCmp (Reason, "token-zero-write") == 0) {
+        Print (L"GBL: intercepted reserve token zeroing on %a LBA %Lu; token preserved\n",
+               Record->PartitionNameAscii,
+               (UINT64)Lba);
+      }
     }
     HookLeave (&gBlockIoGuard);
     return EFI_SUCCESS;

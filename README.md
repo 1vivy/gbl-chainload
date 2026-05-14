@@ -6,11 +6,11 @@ EFI System Partition (EFISP) chainloader for OnePlus/Oppo devices using Qualcomm
 
 v2 architecture in flight. See `docs/superpowers/specs/` for the design and `docs/superpowers/plans/` for the implementation plan series.
 
-Working artifacts: `dist/mode-0.efi` (pass-through observation build) and `dist/mode-1.efi` (protocol-hook fakelock via `QCOM_VERIFIEDBOOT_PROTOCOL` mutation; KM/Oplus see locked/green when stock images verify cleanly).
+Working artifacts: `dist/mode-0.efi` (unlocked observation + universal preservation build) and `dist/mode-1.efi` (protocol-hook fakelock via `QCOM_VERIFIEDBOOT_PROTOCOL` mutation; KM/Oplus see locked/green when stock images verify cleanly).
 
 ## Modes
 
-- **mode-0** — pass-through observation build. Patch engine + logfs only; no protocol hooks, no patch9. Useful for capturing logs against unmodified ABL verification behavior.
+- **mode-0** — unlocked observation + universal preservation build. Installs protocol hooks for logging and for the narrow preservation baseline: drop TZ soft-fuse advancement and swallow `oplusreserve1` / `opporeserve1` writes. VB lock-state and OplusSec writes pass through so stock ABL can run the real relock procedure.
 - **mode-1** — protocol-hook fakelock. ABL sees locked DeviceInfo and builds KM SET_ROT/SET_BOOT_STATE off that view.
 - **mode-2** *(not yet implemented)* — TA-payload spoof at QSEE/SPSS boundaries; ABL stays honest; per-OTA typed-struct profile.
 - **mode-3** *(not yet implemented)* — universal baseline only; minimal experiment to gauge KM root-cert leaf survival.
@@ -18,7 +18,7 @@ Working artifacts: `dist/mode-0.efi` (pass-through observation build) and `dist/
 ## Build
 
 ```bash
-./scripts/build.sh --mode 0               # observation build (no hooks, no patch9)
+./scripts/build.sh --mode 0               # unlocked observation + preservation baseline
 ./scripts/build.sh --mode 1               # fakelock production silent
 ./scripts/build.sh --mode 1 --auto --debug --verbose   # fakelock dev capture
 ```
@@ -63,5 +63,23 @@ When adding a new emit in a hook or patch:
 ## Repo conventions
 
 - `GblChainloadPkg/Library/DynamicPatchLib/{universal,oem,mode_1}/` — patches scoped by applicability.
-- `GblChainloadPkg/Library/ProtocolHookLib/UniversalBaseline.c` — hooks every mode ships.
+- `GblChainloadPkg/Library/ProtocolHookLib/UniversalBaseline.c` — narrow policies every mode ships.
 - `GblChainloadPkg/Library/ProtocolHookLib/Mode1Overlay.c` — mode-1-specific hooks atop baseline.
+
+## Mode-0 reserve preservation test plan
+
+Use only RAM-load testing for gbl-chainload itself:
+
+1. Boot/install the mode-0 chainload path.
+2. Install stock firmware.
+3. Perform a relock through the stock bootloader flow.
+4. Unlock again and pull logfs.
+5. Confirm a reserve write swallow was logged for the token block, e.g.
+   `blockio | op=write-swallow | reason=token-zero-write | p=oplusreserve1`.
+
+The token-zero intercept is also printed as vital user-visible output in every
+build:
+
+`GBL: intercepted reserve token zeroing on oplusreserve1 LBA 1114; token preserved`
+
+That line appears when the relock path attempts to zero the token block.

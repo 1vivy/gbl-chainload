@@ -175,10 +175,18 @@ Repo implementation added after the static prep:
   - Matches both `oplusreserve1` and `opporeserve1` case-insensitively with the same prefix/boundary behavior used by reserve lookup code.
 - Runtime behavior:
   - Logs compact logfs-only read/write telemetry: partition, LBA, byte count, block count, and status.
-  - In `GBL_MODE == 1`, swallows all writes to matched reserve1 partitions and returns `EFI_SUCCESS` without calling the original `WriteBlocks`.
+  - Swallows all writes to matched reserve1 partitions in every mode and returns `EFI_SUCCESS` without calling the original `WriteBlocks`.
+  - Logs token-specific reasons for known LBAs, including `reason=token-zero-write` when `LastBlock-0x3a5` receives an all-zero buffer.
   - Uses a per-hook `HOOK_REENTRY_GUARD` so logfs-induced BlockIo recursion skips nested logging.
 - Mode-1 policy:
-  - `InstallAll.c` treats BlockIo as required for mode-1 reserve preservation and includes it in `UniversalRequiredOk` plus install summary counts.
+  - `InstallAll.c` treats BlockIo as required for universal reserve preservation and includes it in `UniversalRequiredOk` plus install summary counts.
+
+Mode-0 relock test plan:
+
+1. Boot/install mode-0, then install stock firmware.
+2. Perform the stock bootloader relock procedure while mode-0 is active.
+3. Unlock again and pull logfs.
+4. Confirm `blockio | op=write-swallow | reason=token-zero-write | p=oplusreserve1` (or `opporeserve1`) is present. The same event also emits vital user-visible output in every build: `GBL: intercepted reserve token zeroing on oplusreserve1 LBA 1114; token preserved`.
 
 Validation:
 
