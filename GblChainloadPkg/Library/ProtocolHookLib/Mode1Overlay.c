@@ -18,6 +18,7 @@
 #if (GBL_MODE == 1)
 
 #include <Library/DebugLib.h>
+#include <Library/GblLog.h>
 #include <Library/DeviceInfo.h>
 
 /* --------------------------------------------------------------------------
@@ -74,9 +75,8 @@ Mode1Policy_OnVbReadConfig_Post (
   B[IsUnlockedOff]       = 0;
   B[IsUnlockCriticalOff] = 0;
 
-  DEBUG ((DEBUG_INFO,
-          "vb-fakelock | READ_CONFIG | is_unlocked %u->0 | is_unlock_critical %u->0\n",
-          (UINT32)OldUnlocked, (UINT32)OldUnlockCritical));
+  GBL_INFO ("vb-fakelock | READ_CONFIG | is_unlocked %u->0 | is_unlock_critical %u->0\n",
+            (UINT32)OldUnlocked, (UINT32)OldUnlockCritical);
 
   return OrigStatus;
 }
@@ -99,10 +99,9 @@ Mode1Policy_OnVbDeviceInit_PrePost (
   Devinfo->is_unlocked        = FALSE;
   Devinfo->is_unlock_critical = FALSE;
 
-  DEBUG ((DEBUG_INFO,
-          "vb-fakelock | VBDeviceInit/%a | is_unlocked %u->0 | is_unlock_critical %u->0\n",
-          IsPre ? "pre" : "post",
-          (UINT32)OldUnlocked, (UINT32)OldUnlockCritical));
+  GBL_INFO ("vb-fakelock | VBDeviceInit/%a | is_unlocked %u->0 | is_unlock_critical %u->0\n",
+            IsPre ? "pre" : "post",
+            (UINT32)OldUnlocked, (UINT32)OldUnlockCritical);
 }
 
 #endif /* GBL_MODE == 1 */
