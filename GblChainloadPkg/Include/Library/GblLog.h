@@ -10,13 +10,22 @@
       GBL_VERBOSE=0: NO-OP (compile-stripped)
       GBL_VERBOSE=1: AsciiPrint(...)         — visible + log
 
-  Both paths reach \UefiLog<N>.txt on canoe — DEBUG via the EDK2
-  DebugLib (UefiDebugLibConOut → ConOut → splitter → SerialIo → UART)
-  and AsciiPrint via UEFI's Print mechanism (same downstream path).
-  The "silent" property of GBL_INFO under GBL_DEBUG=0 is observed
-  canoe behavior of DEBUG-level emits not dominating the framebuffer
-  console. If on-device testing later contradicts that, swap DebugLib
-  to a serial-only variant or re-introduce a thin screen mask.
+  Both paths reach \UefiLog<N>.txt on canoe via DIFFERENT routes —
+  but neither writes to the framebuffer console when running under
+  prod (GBL_DEBUG=0):
+
+    GBL_DEBUG=0 path: DEBUG((DEBUG_INFO, ...)) → PeiDxeDebugLib-
+      ReportStatusCode (mapped in GblChainloadPkg.dsc) →
+      gBS->ReportStatusCode → QCOM's BSP-installed status-code
+      handler → UART log buffer (UefiInfoBlk->UartLogBufferPtr) →
+      \UefiLog<N>.txt at BDS flush. ConOut is NOT in this path, so
+      the framebuffer stays clean. Same mechanism the patched ABL
+      uses (per edk2/QcomModulePkg/QcomModulePkg.dsc when
+      AUTO_VIRT_ABL=0).
+
+    GBL_DEBUG=1 path: AsciiPrint(...) → gST->ConOut->OutputString
+      → ConSplitter → BOTH framebuffer (visible on screen) AND the
+      UART tee → \UefiLog<N>.txt. Used for explicit dev visibility.
 
   Single emit per call site (no UefiLog duplication). The macro picks
   ONE path per build.

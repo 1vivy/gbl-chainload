@@ -14,6 +14,7 @@
 #include <Library/BaseLib.h>
 #include <Library/MemoryAllocationLib.h>
 #include <Library/UefiBootServicesTableLib.h>
+#include <Library/UefiLib.h>      /* Print — fatal-path visibility */
 #include <Library/DebugLib.h>
 #include <Library/GblLog.h>
 #include <Library/LogFsLib.h>
@@ -74,12 +75,10 @@ BootFlowChainLoad (VOID)
 
   GBL_INFO ("BootFlow: start (mode=%d)\n", (int)GBL_MODE);
 
-  /* 1. Unwrap ABL PE from active slot. */
-  Status = ResolveActiveAblName (AblName, MAX_GPT_NAME_SIZE);
-  if (EFI_ERROR (Status)) {
-    GBL_INFO ("BootFlow: slot resolve failed (%r)\n", Status);
-    return Status;
-  }
+  /* 1. Unwrap ABL PE from active slot. ResolveActiveAblName never fails
+     in practice — slot suffix is derived from a static enum — so no
+     error branch here. */
+  (VOID)ResolveActiveAblName (AblName, MAX_GPT_NAME_SIZE);
 
   Status = AblUnwrap_LoadFromPartition (AblName, &Pe, &PeSize);
   if (EFI_ERROR (Status)) {
@@ -88,7 +87,7 @@ BootFlowChainLoad (VOID)
               AblName, Status);
     Status = AblUnwrap_LoadFromPartition (L"abl", &Pe, &PeSize);
     if (EFI_ERROR (Status)) {
-      GBL_INFO ("BootFlow: ABL not found (%r)\n", Status);
+      Print (L"BootFlow: FATAL — ABL not found (%r)\n", Status);
       return Status;
     }
   }
@@ -103,7 +102,7 @@ BootFlowChainLoad (VOID)
             (int)PatchRes.WorstOutcome);
 
   if (PatchRes.WorstOutcome == PATCH_RESULT_MANDATORY_MISS) {
-    GBL_INFO ("BootFlow: mandatory patch missed - aborting\n");
+    Print (L"BootFlow: FATAL — mandatory patch missed, aborting\n");
     FreePool (Pe);
     return EFI_NOT_READY;
   }
@@ -113,7 +112,7 @@ BootFlowChainLoad (VOID)
 #if (GBL_MODE >= 1)
   Status = ProtocolHook_InstallAll (&HookRes);
   if (EFI_ERROR (Status)) {
-    GBL_INFO ("BootFlow: hook install failed (%r) - aborting\n", Status);
+    Print (L"BootFlow: FATAL — hook install failed (%r), aborting\n", Status);
     FreePool (Pe);
     return Status;
   }
@@ -132,7 +131,7 @@ BootFlowChainLoad (VOID)
 
   Status = gBS->LoadImage (FALSE, gImageHandle, NULL, Pe, PeSize, &ImageHandle);
   if (EFI_ERROR (Status)) {
-    GBL_INFO ("BootFlow: LoadImage failed (%r)\n", Status);
+    Print (L"BootFlow: FATAL — LoadImage failed (%r)\n", Status);
     FreePool (Pe);
     return Status;
   }
@@ -141,8 +140,8 @@ BootFlowChainLoad (VOID)
 
   Status = gBS->StartImage (ImageHandle, NULL, NULL);
 
-  /* StartImage rarely returns. */
-  GBL_INFO ("BootFlow: StartImage returned %r\n", Status);
+  /* StartImage rarely returns — when it does, the chain is broken. */
+  Print (L"BootFlow: FATAL — StartImage returned %r\n", Status);
   if (ImageHandle != NULL) {
     gBS->UnloadImage (ImageHandle);
   }

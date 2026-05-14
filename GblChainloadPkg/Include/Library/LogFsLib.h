@@ -4,8 +4,10 @@
   is preserved.
 
   The GblChainload_BootN.txt auto-mirror mechanism has been removed.
-  UefiLog<N>.txt — written via the QCOM SerialPortShLib / DebugLib path —
-  is the sole persistent log destination.
+  UefiLog<N>.txt — written by QCOM's BSP-installed status-code handler
+  (gBS->ReportStatusCode → handler → UART log buffer → BDS flush, the
+  same path PeiDxeDebugLibReportStatusCode targets) — is the sole
+  persistent log destination.
 **/
 #ifndef GBL_CHAINLOAD_LOGFSLIB_H
 #define GBL_CHAINLOAD_LOGFSLIB_H
