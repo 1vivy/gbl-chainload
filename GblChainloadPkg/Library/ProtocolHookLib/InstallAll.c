@@ -17,6 +17,7 @@
 #include <Library/UefiBootServicesTableLib.h>
 #include <Library/DebugLib.h>
 #include <Library/BaseMemoryLib.h>
+#include <Library/GblLog.h>
 
 #include <Library/ProtocolHookLib.h>
 
@@ -116,9 +117,9 @@ ProtocolHook_InstallAll (
 
   Result->ModeOverlayOk = TRUE;   /* Mode-1 overlay inline; mode-2/3 overlays TBD. */
 
-  Print (
-    L"ProtocolHookLib: installed (mode=%d,"
-    L" vb=%u/%u scm=%u/%u qsee=%u/%u spss=%u/%u)\n",
+  GBL_INFO (
+    "ProtocolHookLib: installed (mode=%d,"
+    " vb=%u/%u scm=%u/%u qsee=%u/%u spss=%u/%u)\n",
     (int)GBL_MODE,
     Result->VbInstalledSlots,      Result->VbExpectedSlots,
     Result->ScmInstalledSlots,     Result->ScmExpectedSlots,

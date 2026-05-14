@@ -72,10 +72,10 @@ BootFlowChainLoad (VOID)
   {
     EFI_STATUS  LogStatus = LogFsInit ();
     if (!EFI_ERROR (LogStatus)) {
-      Print (L"BootFlow: logfs re-opened for chainload session\n");
+      GBL_INFO ("BootFlow: logfs re-opened for chainload session\n");
     } else {
-      Print (L"BootFlow: logfs re-open failed (%r) - continuing without logfs\n",
-             LogStatus);
+      GBL_INFO ("BootFlow: logfs re-open failed (%r) - continuing without logfs\n",
+                LogStatus);
     }
   }
 
@@ -144,7 +144,7 @@ BootFlowChainLoad (VOID)
      the chain (the patched ABL or further-chained payloads) can mount it
      if they want.  Without this, the partition stays bound to our driver
      instance and ConnectController returns EFI_NOT_FOUND for the next caller. */
-  Print (L"BootFlow: LogFs close before LoadImage\n");
+  GBL_INFO ("BootFlow: LogFs close before LoadImage\n");
   LogFsClose ();
 
   Status = gBS->LoadImage (FALSE, gImageHandle, NULL, Pe, PeSize, &ImageHandle);
