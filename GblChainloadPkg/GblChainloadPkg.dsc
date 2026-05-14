@@ -97,8 +97,22 @@
   ArmGenericTimerCounterLib|ArmPkg/Library/ArmGenericTimerPhyCounterLib/ArmGenericTimerPhyCounterLib.inf
   Zlib|QcomModulePkg/Library/zlib/zlib.inf
   BaseMemoryLibOptDxe|MdePkg/Library/BaseMemoryLibOptDxe/BaseMemoryLibOptDxe.inf
-  ## Route DEBUG() through gST->ConOut so LogFsLib's DebugSink can mirror it.
-  DebugLib|MdePkg/Library/UefiDebugLibConOut/UefiDebugLibConOut.inf
+  ## Route DEBUG() through QCOM's DebugLib variant — it writes via
+  ## gEfiSerialIoProtocol (SerialPortWrite path), matching gbl_root_canoe
+  ## and the patched ABL's own DebugLib. On canoe:
+  ##   - Pre-handoff (our app stage): gEfiSerialIoProtocol isn't installed
+  ##     yet, so DEBUG no-ops silently. Use Print() for content that must
+  ##     be visible / persisted before handoff.
+  ##   - Post-handoff (hooks fire from within patched ABL): SerialIo is
+  ##     installed by ABL's DXE; DEBUG output reaches the UART log buffer
+  ##     and ultimately \UefiLog<N>.txt at BDS flush. Framebuffer console
+  ##     is not in that path, so DEBUG is silent on screen.
+  ##
+  ## UefiDebugLibConOut (the prior mapping) routed DEBUG through
+  ## gST->ConOut which renders on framebuffer — making prod builds noisy
+  ## on screen. This change matches what every QCOM image in the chain
+  ## uses, so DEBUG behavior is consistent across the boot path.
+  DebugLib|QcomModulePkg/Library/DebugLib/DebugLib.inf
   ReportStatusCodeLib|MdeModulePkg/Library/DxeReportStatusCodeLib/DxeReportStatusCodeLib.inf
   DebugPrintErrorLevelLib|MdeModulePkg/Library/DxeDebugPrintErrorLevelLib/DxeDebugPrintErrorLevelLib.inf
   UefiDriverEntryPoint|MdePkg/Library/UefiDriverEntryPoint/UefiDriverEntryPoint.inf
