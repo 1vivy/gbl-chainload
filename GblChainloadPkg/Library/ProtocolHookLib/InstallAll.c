@@ -65,7 +65,7 @@ ProtocolHook_InstallAll (
         write/reset swallow + mode-1 read/init mutate. */
   Status = InstallVerifiedBootHook ();
   if (EFI_ERROR (Status)) {
-    Print (L"ProtocolHookLib: VerifiedBoot install failed (%r) - abort chain-load\n",
+    Print (L"ProtocolHookLib: FATAL — VerifiedBoot install failed (%r), aborting chain-load\n",
            Status);
     return Status;
   }
@@ -75,7 +75,7 @@ ProtocolHook_InstallAll (
   /* 2. SCM -- required.  Universal TZ_BLOW_SW_FUSE drop. */
   Status = InstallScmHook ();
   if (EFI_ERROR (Status)) {
-    Print (L"ProtocolHookLib: SCM install failed (%r) - abort chain-load\n",
+    Print (L"ProtocolHookLib: FATAL — SCM install failed (%r), aborting chain-load\n",
            Status);
     return Status;
   }
@@ -85,7 +85,7 @@ ProtocolHook_InstallAll (
   /* 3. Qseecom -- required.  Universal OplusSec 0x0A drop. */
   Status = InstallQseecomHook ();
   if (EFI_ERROR (Status)) {
-    Print (L"ProtocolHookLib: Qseecom install failed (%r) - abort chain-load\n",
+    Print (L"ProtocolHookLib: FATAL — Qseecom install failed (%r), aborting chain-load\n",
            Status);
     return Status;
   }
@@ -111,7 +111,7 @@ ProtocolHook_InstallAll (
      Result->QseecomInstalledSlots > 0);
 
   if (!Result->UniversalRequiredOk) {
-    Print (L"ProtocolHookLib: universal baseline incomplete - abort chain-load\n");
+    Print (L"ProtocolHookLib: FATAL — universal baseline incomplete, aborting chain-load\n");
     return EFI_NOT_READY;
   }
 

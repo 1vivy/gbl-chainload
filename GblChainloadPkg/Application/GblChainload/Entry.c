@@ -148,7 +148,7 @@ EnterFastboot (VOID)
   Status = FastbootInitialize ();
   if (EFI_ERROR (Status)) {
     /* Fatal: always show even in DEBUG=0. */
-    Print (L"FastbootInitialize returned %r — dead-end\n", Status);
+    Print (L"FATAL — FastbootInitialize returned %r (dead-end)\n", Status);
   }
 }
 
