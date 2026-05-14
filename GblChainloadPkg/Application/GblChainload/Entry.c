@@ -5,6 +5,7 @@
 #include <Uefi.h>
 #include <Library/UefiLib.h>
 #include <Library/DebugLib.h>
+#include <Library/GblLog.h>
 #include <Library/BaseLib.h>
 #include <Library/BaseMemoryLib.h>
 #include <Library/MemoryAllocationLib.h>
@@ -118,9 +119,8 @@ CommonEarlyInit (
 {
   EFI_STATUS Status;
 
-  DEBUG ((DEBUG_INFO,
-          "gbl-chainload | mode=%d auto=%d debug=%d verbose=%d\n",
-          (int)GBL_MODE, (int)GBL_AUTO, (int)GBL_DEBUG, (int)GBL_VERBOSE));
+  GBL_INFO ("gbl-chainload | mode=%d auto=%d debug=%d verbose=%d\n",
+            (int)GBL_MODE, (int)GBL_AUTO, (int)GBL_DEBUG, (int)GBL_VERBOSE);
 
   DeviceInfoInit ();
   EnumeratePartitions ();
