@@ -60,18 +60,6 @@ When adding a new emit in a hook or patch:
 - `%s` consumes CHAR8\* in `GBL_INFO` / `VERBOSE` / `AsciiPrint`. To print a CHAR16\* string, convert it to ASCII first via `UnicodeStrToAsciiStrS` into a local buffer.
 - `%a` always means ASCII string regardless of macro choice.
 
-### What's NOT in the framework anymore
-
-The PR #19 minimal design dropped these from PR #17:
-
-- `DebugSink` (the `gST->ConOut->OutputString` hook that mirrored to a logfs file)
-- `GblChainload_Boot<N>.txt` (per-boot logfs mirror file)
-- `GBL_DBG_LOGFS_ONLY` error-level bit
-- `GblDebugLib` shim library
-- The screen-mask infrastructure (`gGblScreenMask`, `LogFsSetScreenMask`)
-
-`UefiLog<N>.txt` (rotated by stock BDS via `LogFsLib`'s rotation) is the sole persistent log destination. Pull it from the `logfs` partition or read `/proc/bootloader_log` from a booted recovery / Android.
-
 ## Repo conventions
 
 - `GblChainloadPkg/Library/DynamicPatchLib/{universal,oem,mode_1}/` — patches scoped by applicability.
