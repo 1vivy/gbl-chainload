@@ -1,5 +1,7 @@
 # QCOM UART Log Buffer — Investigation Brief
 
+FYI GBL IS LOADED BY STOCK ABL, THEN WE CHAINLOAD A PATCHED ABL. WE LIVE IN UEFI CONTEXT AFTER XBL.
+
 **Goal:** Determine whether gbl-chainload (a stage-2 EFI UEFI_APPLICATION loaded by stock QCOM GBL/XBL on canoe) can **resize and write into the same UART log buffer** that the patched ABL writes into — the buffer whose contents are eventually flushed to `\UefiLog<N>.txt` on the `logfs` partition by `PlatformBdsLib::WriteLogBufToPartition`.
 
 **Why:** From our app, `DEBUG()` calls and `gEfiSerialIoProtocol` writes do not reach `\UefiLog<N>.txt` (verified on-device with a probe: `LocateHandleBuffer(&gEfiSerialIoProtocolGuid)` returns `EFI_NOT_FOUND`). The patched ABL's content lands in UefiLog through a different path — statically-linked QCOM `SerialPortShLib` calling into `SioPortLib` via QCOM's `ShLib` runtime loader, writing into a RAM ring `UefiInfoBlk->UartLogBufferPtr`. We want our DEBUG output to share that destination, and we want the destination to be 1 MiB instead of the default 32 KiB so verbose-tier hex dumps don't truncate.
