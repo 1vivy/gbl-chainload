@@ -33,6 +33,7 @@
 #include <Library/BaseLib.h>
 #include <Library/BaseMemoryLib.h>
 #include <Library/DebugLib.h>
+#include <Library/GblLog.h>
 #include <Library/DeviceInfo.h>
 #include <Library/UefiBootServicesTableLib.h>
 #include <Library/UefiLib.h>
@@ -162,9 +163,9 @@ HookedVBRwDeviceState (
     VbHex16 ((CONST UINT8 *)Buf, (UINTN)BufLen, Hex, sizeof (Hex));
   }
   if (First) {
-    DEBUG ((DEBUG_INFO,
-            "vb-rwstate | op=%a | bufLen=%u | first16=%a | st=%r\n",
-            VbDeviceStateOpName ((UINT32)Op), BufLen, Hex, Status));
+    GBL_INFO ("vb-rwstate | op=%a | bufLen=%u | st=%r\n",
+              VbDeviceStateOpName ((UINT32)Op), BufLen, Status);
+    VERBOSE ("vb-rwstate | first16=%a\n", Hex);
   }
 
   HookLeave (&gVbGuard);
@@ -212,9 +213,8 @@ HookedVBDeviceInit (
   Unlocked       = (Devinfo != NULL) ? (UINT32)Devinfo->is_unlocked        : 0xFF;
   UnlockCritical = (Devinfo != NULL) ? (UINT32)Devinfo->is_unlock_critical : 0xFF;
   if (First) {
-    DEBUG ((DEBUG_INFO,
-            "vb-init | unlocked=%u | unlockCritical=%u | st=%r\n",
-            Unlocked, UnlockCritical, Status));
+    GBL_INFO ("vb-init | unlocked=%u | unlockCritical=%u | st=%r\n",
+              Unlocked, UnlockCritical, Status);
   }
 
   HookLeave (&gVbGuard);
@@ -246,8 +246,7 @@ HookedVBSendRot (
    * will replace this wrapper to inject our locked-format RoT *before*
    * calling the original (or skip the original entirely and emit our
    * own SCM payload via the saved KM AppId). */
-  DEBUG ((DEBUG_INFO, "vb-send-rot | (Phase B intercept point) | st=%r\n",
-          Status));
+  GBL_INFO ("vb-send-rot | (Phase B intercept point) | st=%r\n", Status);
 
   HookLeave (&gVbGuard);
   return Status;
@@ -273,7 +272,7 @@ HookedVBSendMilestone (
   }
 
   Status = gOrigVbSendMilestone (This);
-  DEBUG ((DEBUG_INFO, "vb-milestone | st=%r\n", Status));
+  GBL_INFO ("vb-milestone | st=%r\n", Status);
 
   HookLeave (&gVbGuard);
   return Status;
@@ -312,9 +311,8 @@ HookedVBVerifyImage (
   PnameSafe[MAX_PNAME_LENGTH] = '\0';
   BS = (BootState != NULL) ? (UINT32)*BootState : 0xFFFFFFFFu;
 
-  DEBUG ((DEBUG_INFO,
-          "vb-verify | pname=\"%a\" | imgLen=%u | bootstate=%a(%u) | st=%r\n",
-          PnameSafe, ImgLen, VbBootStateName (BS), BS, Status));
+  GBL_INFO ("vb-verify | pname=\"%a\" | imgLen=%u | bootstate=%a(%u) | st=%r\n",
+            PnameSafe, ImgLen, VbBootStateName (BS), BS, Status);
 
   HookLeave (&gVbGuard);
   return Status;
@@ -370,7 +368,7 @@ HookedVBIsDeviceSecure (
 
   Status = gOrigVbIsDeviceSecure (This, State);
   Out = (State != NULL) ? (UINT32)*State : 0xFF;
-  DEBUG ((DEBUG_INFO, "vb-secure | state=%u | st=%r\n", Out, Status));
+  GBL_INFO ("vb-secure | state=%u | st=%r\n", Out, Status);
 
   HookLeave (&gVbGuard);
   return Status;
@@ -399,9 +397,8 @@ HookedVBGetBootState (
 
   Status = gOrigVbGetBootState (This, BootState);
   BS = (BootState != NULL) ? (UINT32)*BootState : 0xFFFFFFFFu;
-  DEBUG ((DEBUG_INFO,
-          "vb-getstate | bootstate=%a(%u) | st=%r\n",
-          VbBootStateName (BS), BS, Status));
+  GBL_INFO ("vb-getstate | bootstate=%a(%u) | st=%r\n",
+            VbBootStateName (BS), BS, Status);
 
   HookLeave (&gVbGuard);
   return Status;
@@ -432,9 +429,8 @@ HookedVBGetCertFingerPrint (
 
   Status = gOrigVbGetCert (This, Buf, BufLen, OutLen);
   OL = (OutLen != NULL) ? *OutLen : 0;
-  DEBUG ((DEBUG_INFO,
-          "vb-cert | bufLen=%lu | outLen=%lu | st=%r\n",
-          (UINT64)BufLen, (UINT64)OL, Status));
+  GBL_INFO ("vb-cert | bufLen=%lu | outLen=%lu | st=%r\n",
+            (UINT64)BufLen, (UINT64)OL, Status);
 
   HookLeave (&gVbGuard);
   return Status;
@@ -463,8 +459,7 @@ HookedVBIsKeymasterEnabled (
 
   Status = gOrigVbIsKmEnabled (This, KmEnabled);
   Out = (KmEnabled != NULL) ? (UINT32)*KmEnabled : 0xFF;
-  DEBUG ((DEBUG_INFO, "vb-keymaster-enabled | enabled=%u | st=%r\n",
-          Out, Status));
+  GBL_INFO ("vb-keymaster-enabled | enabled=%u | st=%r\n", Out, Status);
 
   HookLeave (&gVbGuard);
   return Status;
