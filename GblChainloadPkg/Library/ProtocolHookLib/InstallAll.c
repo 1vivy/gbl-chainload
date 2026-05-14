@@ -147,7 +147,14 @@ ProtocolHook_UninstallAll (
   if (RestoredAll) {
     UnregisterInstalledHooks ();
   } else {
-    GBL_INFO ("ProtocolHookLib: uninstall deferred; registry kept active\n");
+    /* Do not leave a config-table pointer to this image's static storage if we
+       are returning through a failure path.  If an outer/foreign wrapper owns a
+       slot and rollback defers, clearing the registry avoids a dangling pointer
+       if the image is later unloaded.  A later same-session GBL may have to
+       inspect/wrap again, which is safer than persistent cross-image state in
+       this Qualcomm UEFI environment. */
+    UnregisterInstalledHooks ();
+    GBL_INFO ("ProtocolHookLib: uninstall deferred; registry cleared\n");
   }
 }
 

@@ -24,8 +24,8 @@ grep -q 'hook registry install failed' "$PHL/InstallAll.c" \
   || { echo "FAIL: InstallAll.c must fail closed if registry install fails"; exit 1; }
 grep -q 'reusing active hooks' "$PHL/InstallAll.c" \
   || { echo "FAIL: InstallAll.c must detect and reuse active registry hooks"; exit 1; }
-grep -q 'registry kept active' "$PHL/InstallAll.c" \
-  || { echo "FAIL: InstallAll.c must keep registry active when uninstall defers"; exit 1; }
+grep -q 'registry cleared' "$PHL/InstallAll.c" \
+  || { echo "FAIL: InstallAll.c must clear registry when uninstall defers"; exit 1; }
 
 for hook in VerifiedBoot Scm Qseecom Spss BlockIo; do
   grep -q "Uninstall${hook}Hook" "$PHL/HookCommon.h" \
