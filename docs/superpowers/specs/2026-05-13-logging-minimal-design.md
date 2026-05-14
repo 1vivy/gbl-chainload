@@ -34,23 +34,25 @@ The simplification falls out of these facts: since `Print()` is the only viable 
 
 ## 3. Tier definitions
 
-| Macro | Build flag | Resolves to |
-|-------|------------|-------------|
-| `Print(L"...")` | always | `gST->ConOut->OutputString` (existing UEFI behaviour) |
-| `DEBUG((DEBUG_ERROR, ...))` / Print-style error emits | always | `Print`-equivalent (always visible + in UefiLog) |
-| `DEBUG((DEBUG_INFO, ...))` | `GBL_DEBUG=0` | NO-OP (compile-stripped) |
-| `DEBUG((DEBUG_INFO, ...))` | `GBL_DEBUG=1` (`--debug`) | `Print`-equivalent |
-| `VERBOSE(fmt, ...)` (new macro, see §4.2) | `GBL_VERBOSE=0` | NO-OP (compile-stripped) |
-| `VERBOSE(fmt, ...)` | `GBL_VERBOSE=1` (`--verbose`) | `Print`-equivalent |
+| Macro / call | Build flag | Resolves to | Screen? | UefiLog? |
+|--------------|------------|-------------|---------|----------|
+| `Print(L"...")` | always | `gST->ConOut->OutputString` | yes | yes |
+| `DEBUG((DEBUG_ERROR, ...))` | always | standard EDK2 DebugLib → ConOut | yes | yes |
+| `GBL_INFO("...")` | `GBL_DEBUG=0` | `DEBUG((DEBUG_INFO, ...))` (efi_debug path) | no (silent per canoe observation) | yes |
+| `GBL_INFO("...")` | `GBL_DEBUG=1` (`--debug`) | `AsciiPrint(...)` (ConOut path) | yes | yes |
+| `VERBOSE("...")` | `GBL_VERBOSE=0` | NO-OP (compile-stripped) | — | — |
+| `VERBOSE("...")` | `GBL_VERBOSE=1` (`--verbose`) | `AsciiPrint(...)` (ConOut path) | yes | yes |
 
-Why error emits are "Print-equivalent" rather than going through `DebugLib`: our current `DebugLib` mapping is `UefiDebugLibConOut` which already routes to ConOut; functionally equivalent. We keep `DEBUG()` syntax for familiarity but the compile-time gate decides whether the call site emits anything at all.
+**Same UefiLog destination either way.** The `GBL_INFO` macro picks between two paths to that destination based on whether the line should ALSO be on screen. Single emit per call site — no duplicate-in-UefiLog issue, because each build uses exactly one of the two paths per call site.
 
-All four output destinations downstream of `Print()`:
+The "silent on canoe under `GBL_DEBUG=0`" property is observed platform behavior for the EDK2 `DEBUG()` call, not a design guarantee. If on-device testing later shows DEBUG content IS noisy on screen under prod builds, revisit by either (a) re-mapping DebugLib to a serial-only variant, or (b) introducing a thin screen-mask. For now we proceed on the observation.
+
+All output destinations downstream of either path:
 - Screen (framebuffer console; on canoe goes quiet post-handoff per BSP behaviour).
-- UART (via splitter → SerialIo → SioPortLib → `0x81CE4000` 64 KiB buffer).
-- Eventually dumped to `\UefiLog<N>.txt` at the next BDS pre-boot flush.
+- UART buffer at `0x81CE4000` (via the QCOM ConOut/splitter/SioPortLib chain).
+- Eventually flushed to `\UefiLog<N>.txt` by stock BDS at pre-boot.
 
-Nothing else. No DebugSink, no logfs mirror, no screen mask.
+Nothing else. No DebugSink, no logfs mirror, no screen mask, no GBL_DBG_LOGFS_ONLY, no direct UART buffer writes, no SerialBufferReInit gymnastics.
 
 ---
 
@@ -65,19 +67,32 @@ Delete the existing `GblChainloadPkg/Library/GblDebugLib/` library entirely. Rep
 ```c
 /** @file GblLog.h — minimal logging API for gbl-chainload.
 
-  All emits go through Print() and ultimately land in \UefiLog<N>.txt
-  via the ConOut → ConSplitter → SerialIo → SioPortLib path.
+  All emits ultimately land in \UefiLog<N>.txt — either via the
+  EDK2 DEBUG() macro (efi_debug → standard DebugLib → UefiLog) or
+  via AsciiPrint() (ConOut path → screen + UefiLog).
 
-  GBL_DEBUG=1 (--debug) enables DEBUG_INFO emits.
-  GBL_VERBOSE=1 (--verbose) enables VERBOSE() emits.
-  Both are compile-time strips; non-flagged builds emit zero code at the
-  call site.
+  GBL_INFO selects between the two at build time:
+    GBL_DEBUG=0: GBL_INFO expands to DEBUG((DEBUG_INFO, ...))
+                 — silent log (via efi_debug)
+    GBL_DEBUG=1: GBL_INFO expands to AsciiPrint(...)
+                 — visible on screen + in UefiLog
+
+  Both paths reach UefiLog. Picking between them is purely about
+  screen visibility. Single emit per call site — no duplicates.
+
+  VERBOSE compile-strips entirely when GBL_VERBOSE=0 (zero code at
+  call sites). Under GBL_VERBOSE=1, expands to AsciiPrint() so the
+  verbose hex dumps from hooks are visible and logged.
+
+  Call sites use CHAR8 ASCII format strings ("foo=%u\n"), not
+  L-prefixed Unicode literals. AsciiPrint widens internally for
+  ConOut; DEBUG takes ASCII natively.
 **/
 
 #ifndef GBL_LOG_H_
 #define GBL_LOG_H_
 
-#include <Library/UefiLib.h>      /* Print */
+#include <Library/UefiLib.h>      /* AsciiPrint, Print */
 #include <Library/DebugLib.h>     /* DEBUG, DEBUG_ERROR, DEBUG_INFO */
 
 #ifndef GBL_DEBUG
@@ -87,28 +102,33 @@ Delete the existing `GblChainloadPkg/Library/GblDebugLib/` library entirely. Rep
 # define GBL_VERBOSE 0
 #endif
 
-/* Always-on errors. Use Print() directly at call sites — no macro wrap. */
+/* Always-on errors. Use Print(L"...") directly at call sites — no
+ * macro wrap. Print is the only thing that must be visible
+ * unconditionally (failures, user prompts). */
 
-/* Debug-tier: stripped in non-debug builds. */
+/* Debug-tier: swap mechanism between DEBUG (silent log) and AsciiPrint
+ * (visible + log). Same destination either way; difference is screen
+ * visibility. */
 #if (GBL_DEBUG == 1)
-# define GBL_DEBUG_INFO(fmt, ...)  Print (fmt, ##__VA_ARGS__)
+# define GBL_INFO(fmt, ...)   AsciiPrint (fmt, ##__VA_ARGS__)
 #else
-# define GBL_DEBUG_INFO(fmt, ...)  do { (void)0; } while (0)
+# define GBL_INFO(fmt, ...)   DEBUG ((DEBUG_INFO, fmt, ##__VA_ARGS__))
 #endif
 
-/* Verbose-tier: stripped in non-verbose builds. */
+/* Verbose-tier: hard compile-strip in non-verbose builds. Zero code
+ * at call sites; format strings absent from .rodata. */
 #if (GBL_VERBOSE == 1)
-# define VERBOSE(fmt, ...)         Print (fmt, ##__VA_ARGS__)
+# define VERBOSE(fmt, ...)    AsciiPrint (fmt, ##__VA_ARGS__)
 #else
-# define VERBOSE(fmt, ...)         do { (void)0; } while (0)
+# define VERBOSE(fmt, ...)    do { (void)0; } while (0)
 #endif
 
 #endif /* GBL_LOG_H_ */
 ```
 
-**Why not just keep `DEBUG((DEBUG_INFO, ...))` instead of inventing `GBL_DEBUG_INFO`:** the standard macro doesn't compile-strip cleanly (it goes through `PcdDebugPrintErrorLevel` runtime checks). Our wrapper does — zero-cost in non-debug builds. Trivially renameable post-spec-approval.
+**Why this works without a screen mask:** under `GBL_DEBUG=0`, `GBL_INFO` resolves to standard `DEBUG((DEBUG_INFO, ...))`. EDK2's DebugLib routes that to the platform DebugLib instance (currently `UefiDebugLibConOut`), which writes via `gST->ConOut->OutputString`. On canoe specifically, observation has it that DEBUG content reaches UefiLog without dominating the framebuffer the way `Print()` calls do — that's the assumption baked into this design. If on-device testing later contradicts this (DEBUG output IS noisy on screen under prod builds), we revisit by either swapping to `UefiDebugLibSerialPort` with a non-null SerialPortLib, or by re-introducing a thin mask. Documenting the assumption explicitly here so future-us doesn't forget.
 
-**Call sites that currently use `DEBUG((DEBUG_INFO, "..."))` get bulk-renamed to `GBL_DEBUG_INFO("...")`.** `DEBUG((DEBUG_ERROR, "..."))` and explicit `Print(L"...")` stay as-is.
+**Call sites that currently use `DEBUG((DEBUG_INFO, "..."))` get bulk-renamed to `GBL_INFO("...")`.** `DEBUG((DEBUG_ERROR, "..."))` and explicit `Print(L"...")` stay as-is. Verbose tier currently expressed as `DEBUG((GBL_DBG_LOGFS_ONLY, ...))` in PR #17 gets bulk-renamed to `VERBOSE("...")`.
 
 ### 4.2 `LogFsLib` — reduced
 
