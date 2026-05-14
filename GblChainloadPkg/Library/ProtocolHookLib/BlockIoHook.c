@@ -1,10 +1,10 @@
-/** @file BlockIoHook.c — verbose EFI_BLOCK_IO_PROTOCOL observation and mode-1 reserve write swallow.
+/** @file BlockIoHook.c — verbose EFI_BLOCK_IO_PROTOCOL observation and reserve write swallow.
 
-  Hooks partition BlockIo ReadBlocks/WriteBlocks slots so mode-1 can preserve
-  OPPO/OnePlus DeepTest state in `oplusreserve1` while still reporting success
-  to ABL callers.  The hook also emits compact verbose read/write telemetry for
-  partition-level BlockIo traffic; this is intentionally general knowledge for
-  later manual scope expansion.
+  Hooks partition BlockIo ReadBlocks/WriteBlocks slots so every mode can
+  preserve OPPO/OnePlus DeepTest state in `oplusreserve1` while still reporting
+  success to ABL callers.  The hook also emits compact verbose read/write
+  telemetry for partition-level BlockIo traffic; this is intentionally general
+  knowledge for later manual scope expansion.
 **/
 
 #include <Uefi.h>
@@ -205,7 +205,6 @@ HookedWriteBlocks (
 
   TopLevel = HookEnter (&gBlockIoGuard);
 
-#if (GBL_MODE == 1)
   if (Record->IsOplusReserve1) {
     if (TopLevel) {
       GBL_INFO ("blockio | op=write-swallow | p=%a | lba=%Lu | bytes=%u | blocks=%Lu | status=%r\n",
@@ -218,7 +217,6 @@ HookedWriteBlocks (
     HookLeave (&gBlockIoGuard);
     return EFI_SUCCESS;
   }
-#endif
 
   Status = Record->OriginalWriteBlocks (This, MediaId, Lba, BufferSize, Buffer);
 

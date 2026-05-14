@@ -5,10 +5,12 @@
 
     Universal-baseline policies (UniversalBaseline.c) live in the slot wrappers
     themselves -- they're called inline from HookedVBRwDeviceState etc.  This
-    dispatcher just ensures the slot wrappers themselves are installed.
+    dispatcher ensures the slot wrappers themselves are installed for every
+    mode, including mode-0 observation builds.
 
-    Mode-1 overlay (Mode1Overlay.c) -- same pattern.  Mode-2/3 overlays
-    are TBD.
+    Mode-1 overlay (Mode1Overlay.c) -- same pattern.  Future mode overlays
+    must opt in explicitly; this dispatcher still installs the universal
+    preservation baseline for every build mode.
 
     EbsHook is declared in HookCommon.h but not yet implemented; it is not
     called here until its source file lands.
@@ -22,27 +24,6 @@
 #include <Library/ProtocolHookLib.h>
 
 #include "HookCommon.h"
-
-#if (GBL_MODE == 0)
-
-EFI_STATUS
-EFIAPI
-ProtocolHook_InstallAll (
-  OUT HOOK_INSTALL_RESULT  *Result
-  )
-{
-  /* Mode-0 -- no protocol hooks installed.  BootFlow.c never calls this
-     in mode-0, but the symbol must still link.  Return EFI_SUCCESS as a
-     defensive default. */
-  if (Result != NULL) {
-    ZeroMem (Result, sizeof (*Result));
-    Result->UniversalRequiredOk = TRUE;
-    Result->ModeOverlayOk       = TRUE;
-  }
-  return EFI_SUCCESS;
-}
-
-#elif (GBL_MODE == 1)
 
 EFI_STATUS
 EFIAPI
@@ -58,7 +39,7 @@ ProtocolHook_InstallAll (
   ZeroMem (Result, sizeof (*Result));
 
   /* 1. VerifiedBoot -- required.  Slot wrapper enforces universal
-        write/reset swallow + mode-1 read/init mutate. */
+        write/reset swallow; mode-1 additionally mutates read/init state. */
   Status = InstallVerifiedBootHook ();
   if (EFI_ERROR (Status)) {
     Print (L"ProtocolHookLib: FATAL — VerifiedBoot install failed (%r), aborting chain-load\n",
@@ -100,7 +81,7 @@ ProtocolHook_InstallAll (
   }
   Result->SpssExpectedSlots = 1;
 
-  /* 5. BlockIo -- required for mode-1 reserve preservation.  This hook
+  /* 5. BlockIo -- required for Oplus reserve preservation.  This hook
         observes partition reads/writes and swallows oplusreserve1 writes. */
   Status = InstallBlockIoHook ();
   if (EFI_ERROR (Status)) {
@@ -123,7 +104,7 @@ ProtocolHook_InstallAll (
     return EFI_NOT_READY;
   }
 
-  Result->ModeOverlayOk = TRUE;   /* Mode-1 overlay inline; mode-2/3 overlays TBD. */
+  Result->ModeOverlayOk = TRUE;   /* Mode-specific overlays are inline/opt-in. */
 
   GBL_INFO (
     "ProtocolHookLib: installed (mode=%d,"
@@ -137,7 +118,3 @@ ProtocolHook_InstallAll (
     );
   return EFI_SUCCESS;
 }
-
-#else
-# error "GBL_MODE must be 0 or 1"
-#endif

@@ -21,12 +21,12 @@
   internal traffic kicked off from our logging path can land on any
   slot via SCM/QSEECOM.
 
-  In mode-1 (GBL_MODE == 1), the device-state protocol slots mutate ABL's
-  downstream view only: READ_CONFIG and VBDeviceInit report locked/non-critical-
-  locked via Mode1Policy_*, while WRITE_CONFIG and VBDeviceResetState are
-  swallowed by UniversalPolicy_* so ABL cannot persist lock-state experiments
-  back to RPMB. Other slots remain pass-through so GREEN/KeyMaster state is
-  produced by ABL's normal code from the locked inputs.
+  In every mode, WRITE_CONFIG and VBDeviceResetState are swallowed by
+  UniversalPolicy_* so ABL cannot persist lock-state experiments back to RPMB.
+  In mode-1 only (GBL_MODE == 1), READ_CONFIG and VBDeviceInit also mutate
+  ABL's downstream view to locked/non-critical-locked via Mode1Policy_*.
+  Other slots remain pass-through so GREEN/KeyMaster state is produced by ABL's
+  normal code from the effective inputs.
 **/
 
 #include <Uefi.h>
@@ -473,10 +473,10 @@ InstallVerifiedBootHook (VOID)
   EFI_STATUS                  Status;
   QCOM_VERIFIEDBOOT_PROTOCOL *Vb = NULL;
   UINTN                       Installed = 0;
-#if (GBL_MODE == 1)
   BOOLEAN                     HaveRwDeviceState = FALSE;
-  BOOLEAN                     HaveDeviceInit    = FALSE;
   BOOLEAN                     HaveResetState    = FALSE;
+#if (GBL_MODE == 1)
+  BOOLEAN                     HaveDeviceInit    = FALSE;
 #endif
 
   if (gHookedVb != NULL) {
@@ -496,9 +496,7 @@ InstallVerifiedBootHook (VOID)
     gOrigVbRwDeviceState = Vb->VBRwDeviceState;
     Vb->VBRwDeviceState  = HookedVBRwDeviceState;
     Installed++;
-#if (GBL_MODE == 1)
     HaveRwDeviceState = TRUE;
-#endif
   } else { Print (L"VerifiedBootHook: VBRwDeviceState NULL — skip\n"); }
 
   if (Vb->VBDeviceInit != NULL) {
@@ -532,9 +530,7 @@ InstallVerifiedBootHook (VOID)
     gOrigVbResetState        = Vb->VBDeviceResetState;
     Vb->VBDeviceResetState   = HookedVBResetState;
     Installed++;
-#if (GBL_MODE == 1)
     HaveResetState = TRUE;
-#endif
   } else { Print (L"VerifiedBootHook: VBDeviceResetState NULL — skip\n"); }
 
   if (Vb->VBIsDeviceSecure != NULL) {
@@ -561,12 +557,17 @@ InstallVerifiedBootHook (VOID)
     Installed++;
   } else { Print (L"VerifiedBootHook: VBIsKeymasterEnabled NULL — skip\n"); }
 
+  if (!HaveRwDeviceState || !HaveResetState) {
+    Print (L"VerifiedBootHook: universal required slots missing "
+           L"(rw=%u reset=%u)\n",
+           (UINT32)HaveRwDeviceState, (UINT32)HaveResetState);
+    return EFI_NOT_READY;
+  }
+
 #if (GBL_MODE == 1)
-  if (!HaveRwDeviceState || !HaveDeviceInit || !HaveResetState) {
-    Print (L"VerifiedBootHook: mode-1 required slots missing "
-           L"(rw=%u init=%u reset=%u)\n",
-           (UINT32)HaveRwDeviceState, (UINT32)HaveDeviceInit,
-           (UINT32)HaveResetState);
+  if (!HaveDeviceInit) {
+    Print (L"VerifiedBootHook: mode-1 required slots missing (init=%u)\n",
+           (UINT32)HaveDeviceInit);
     return EFI_NOT_READY;
   }
 #endif

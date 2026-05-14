@@ -55,9 +55,7 @@ BootFlowChainLoad (VOID)
   UINT32               PeSize = 0;
   PATCH_RESULT         PatchRes = {0};
   EFI_HANDLE           ImageHandle = NULL;
-#if (GBL_MODE >= 1)
   HOOK_INSTALL_RESULT  HookRes = {0};
-#endif
 
   /* logfs was closed by EnterFastboot. Re-open here so BootFlow's per-step
      output (patch outcomes, hook install, transition) is persisted to logfs
@@ -108,17 +106,14 @@ BootFlowChainLoad (VOID)
   }
 
   /* 3. Install protocol hooks (universal baseline + mode-N overlay).
-        Mode-0 skips this entirely — no fakelock, no SCM/OplusSec drops. */
-#if (GBL_MODE >= 1)
+        Mode-0 installs the universal observation/preservation hooks but no
+        fakelock overlay. */
   Status = ProtocolHook_InstallAll (&HookRes);
   if (EFI_ERROR (Status)) {
     Print (L"BootFlow: FATAL — hook install failed (%r), aborting\n", Status);
     FreePool (Pe);
     return Status;
   }
-#else
-  GBL_INFO ("BootFlow: mode-0 — skipping ProtocolHook_InstallAll\n");
-#endif
 
   /* 4. LoadImage + StartImage. */
 

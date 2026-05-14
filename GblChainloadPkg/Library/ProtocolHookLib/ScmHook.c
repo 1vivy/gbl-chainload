@@ -19,7 +19,8 @@
   would still recurse. Shared `gScmGuard` collapses every nested SCM
   dispatch into a silent pass-through until the outer call returns.
 
-  No request/response mutation. Mutation lives in Phase B/C libs.
+  UniversalBaseline.c may drop selected SIP calls (notably TZ_BLOW_SW_FUSE)
+  before they reach firmware. Other traffic is observation/pass-through.
 **/
 
 #include <Uefi.h>
@@ -619,6 +620,7 @@ InstallScmHook (VOID)
   EFI_STATUS         Status;
   QCOM_SCM_PROTOCOL *Scm = NULL;
   UINTN              Installed = 0;
+  BOOLEAN            HaveSipSysCall = FALSE;
 
   if (gHookedScm != NULL) {
     return EFI_ALREADY_STARTED;
@@ -653,6 +655,7 @@ InstallScmHook (VOID)
     gOrigScmSipSysCall = Scm->ScmSipSysCall;
     Scm->ScmSipSysCall = HookedScmSipSysCall;
     Installed++;
+    HaveSipSysCall = TRUE;
   } else {
     Print (L"ScmHook: ScmSipSysCall slot is NULL — skipping\n");
   }
@@ -671,6 +674,11 @@ InstallScmHook (VOID)
     Installed++;
   } else {
     Print (L"ScmHook: ScmQseeSysCall slot is NULL — skipping\n");
+  }
+
+  if (!HaveSipSysCall) {
+    Print (L"ScmHook: universal required ScmSipSysCall slot missing\n");
+    return EFI_NOT_READY;
   }
 
   gHookedScm = Scm;
