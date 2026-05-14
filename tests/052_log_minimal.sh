@@ -11,8 +11,8 @@
 # 6. No GblDebugLib source remains (legacy from PR #17 — should not be
 #    present on this branch which was cut from main).
 # 7. BootFlow.c calls LogFsClose() before gBS->LoadImage(...).
-# 8. LogFsLib.h still exports its core API: LogFsInit / LogFsWrite /
-#    LogFsFlush / LogFsClose / LogFsIsReady.
+# 8. LogFsLib.h exports ONLY LogFsInit and LogFsClose; LogFsWrite, LogFsFlush,
+#    LogFsIsReady, LogFsInstallDebugSink, LogFsRemoveDebugSink are absent.
 #
 # Host-side only; on-device verification is manual per CLAUDE.md.
 
@@ -88,12 +88,18 @@ else
   fail=1
 fi
 
-# ── Check 8: LogFsLib.h public API intact ──────────────────────────────────
+# ── Check 8: LogFsLib.h trimmed API — only Init + Close present ────────────
 LF=GblChainloadPkg/Include/Library/LogFsLib.h
 if [ -f "$LF" ]; then
-  for sym in LogFsInit LogFsWrite LogFsFlush LogFsClose LogFsIsReady; do
+  for sym in LogFsInit LogFsClose; do
     if ! grep -q "$sym" "$LF"; then
       echo "FAIL: LogFsLib.h missing $sym" >&2
+      fail=1
+    fi
+  done
+  for sym in LogFsWrite LogFsFlush LogFsIsReady LogFsInstallDebugSink LogFsRemoveDebugSink; do
+    if grep -q "$sym" "$LF"; then
+      echo "FAIL: LogFsLib.h still exports $sym (should have been removed)" >&2
       fail=1
     fi
   done

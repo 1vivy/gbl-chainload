@@ -132,9 +132,6 @@ CommonEarlyInit (
   if (Status == EFI_NOT_FOUND) {
     /* Always show fatal/recovery messages even with GBL_DEBUG=0. */
     Print (L"!!! LOGFS PARTITION NOT FOUND - LOGGING TO CONSOLE ONLY !!!\n");
-  } else if (!EFI_ERROR (Status)) {
-    LogFsInstallDebugSink ();
-    LogFsFlush ();
   }
 }
 
@@ -144,8 +141,6 @@ EnterFastboot (VOID)
   EFI_STATUS Status;
 
   SCR_PRINT (L"gbl-chainload: entering FastbootLib\n");
-  LogFsFlush ();
-  LogFsRemoveDebugSink ();
   LogFsClose ();
 
   Status = FastbootInitialize ();
@@ -161,14 +156,12 @@ TryChainLoad (VOID)
   EFI_STATUS Status;
 
   SCR_PRINT (L"gbl-chainload: chain-loading patched ABL\n");
-  LogFsFlush ();
 
   Status = BootFlowChainLoad ();
 
   /* On return, BootFlow already logged. Fall through to fastboot as recovery. */
   SCR_PRINT (L"gbl-chainload: BootFlow returned %r — falling to fastboot\n",
              Status);
-  LogFsFlush ();
 }
 
 EFI_STATUS

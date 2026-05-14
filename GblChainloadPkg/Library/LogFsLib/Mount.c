@@ -1,6 +1,6 @@
 /** @file Mount.c — locate the `logfs` GPT-labeled partition, connect its
   block-IO controller, open the SimpleFileSystem, and stash the Root file
-  handle for use by Rotation.c and PostGblLog.c.
+  handle for use by Rotation.c.
 
   Ported from gbl_root_canoe LinuxLoader.c:277 (`MountLogFsForUefiLog`),
   with `#ifndef DISABLE_PRINT*` guards replaced by standard EDK2 `DEBUG`
@@ -19,20 +19,12 @@
 #include <Protocol/LoadedImage.h>
 #include <Protocol/SimpleFileSystem.h>
 
-/* Module-private state shared across Mount / Rotation / PostGblLog. */
+/* Module-private state shared across Mount / Rotation. */
 EFI_FILE_PROTOCOL *gLogFsRoot = NULL;
-EFI_FILE_PROTOCOL *gPostGblLog = NULL;
-BOOLEAN            gLogFsReady = FALSE;
 
-#define LOGFS_FLUSH_THRESHOLD  4096
-
-STATIC UINTN       gLogFsDirtyBytes = 0;
-
-/* Forward declarations (siblings provide). */
+/* Forward declaration (Rotation.c provides). */
 extern VOID LogFsRotateUefiLog (IN EFI_FILE_PROTOCOL *Root,
                                 IN BOOLEAN            DeleteSource);
-extern EFI_STATUS LogFsOpenPostGblLog (IN EFI_FILE_PROTOCOL *Root,
-                                       OUT EFI_FILE_PROTOCOL **OutFile);
 
 /* TRUE if our image was loaded by an FV-bearing parent (i.e. stock ABL
  * loaded us out of the gbl partition's FV). FALSE when running via
@@ -172,7 +164,7 @@ LogFsInit (VOID)
 {
   EFI_STATUS Status;
 
-  if (gLogFsReady) {
+  if (gLogFsRoot != NULL) {
     return EFI_SUCCESS;
   }
 
@@ -184,7 +176,7 @@ LogFsInit (VOID)
     return Status;
   }
 
-  /* Step 2: archive pre-GBL UefiLog1.txt → UefiLogSaved{0..4}.txt.
+  /* Archive pre-GBL UefiLog1.txt → UefiLogSaved{0..4}.txt.
    * FV-loaded primary GBL rotates destructively so BDS starts a fresh log.
    * Staged payloads snapshot only, preserving the outer loader's open file. */
   if (IsLoadedFromFv ()) {
@@ -197,122 +189,17 @@ LogFsInit (VOID)
     LogFsRotateUefiLog (gLogFsRoot, FALSE);
   }
 
-  Status = LogFsOpenPostGblLog (gLogFsRoot, &gPostGblLog);
-  if (EFI_ERROR (Status)) {
-    DEBUG ((DEBUG_WARN, "LogFs: post-GBL log open failed: %r\n", Status));
-    LogFsClose ();
-    Print (L"LogFsLib: finished — post-GBL log open failed (%r)\n", Status);
-    return Status;
-  }
-
-  gLogFsReady = TRUE;
   Print (L"LogFsLib: finished\n");
   return EFI_SUCCESS;
-}
-
-BOOLEAN
-EFIAPI
-LogFsIsReady (VOID)
-{
-  return gLogFsReady;
 }
 
 EFI_STATUS
 EFIAPI
 LogFsClose (VOID)
 {
-  if (gPostGblLog != NULL) {
-    gPostGblLog->Flush (gPostGblLog);
-    gPostGblLog->Close (gPostGblLog);
-    gPostGblLog = NULL;
-  }
   if (gLogFsRoot != NULL) {
     gLogFsRoot->Close (gLogFsRoot);
     gLogFsRoot = NULL;
   }
-  gLogFsReady = FALSE;
-  gLogFsDirtyBytes = 0;
   return EFI_SUCCESS;
-}
-
-EFI_STATUS
-EFIAPI
-LogFsFlush (VOID)
-{
-  if (!gLogFsReady || gPostGblLog == NULL) {
-    return EFI_NOT_READY;
-  }
-  gLogFsDirtyBytes = 0;
-  return gPostGblLog->Flush (gPostGblLog);
-}
-
-EFI_STATUS
-EFIAPI
-LogFsWrite (
-  IN CONST CHAR8 *Buf,
-  IN UINTN Len
-  )
-{
-  EFI_STATUS Status;
-  UINTN      Size;
-
-  if (!gLogFsReady || gPostGblLog == NULL || Buf == NULL || Len == 0) {
-    return EFI_NOT_READY;
-  }
-
-  Size   = Len;
-  Status = gPostGblLog->Write (gPostGblLog, &Size, (VOID *)Buf);
-  if (EFI_ERROR (Status)) {
-    return Status;
-  }
-
-  gLogFsDirtyBytes += Size;
-  if (gLogFsDirtyBytes >= LOGFS_FLUSH_THRESHOLD) {
-    gLogFsDirtyBytes = 0;
-    return gPostGblLog->Flush (gPostGblLog);
-  }
-
-  return EFI_SUCCESS;
-}
-
-EFI_STATUS
-EFIAPI
-LogFsWriteBlob (
-  IN CONST CHAR16 *FileName,
-  IN CONST VOID   *Data,
-  IN UINTN         Len
-  )
-{
-  EFI_STATUS         Status;
-  EFI_FILE_PROTOCOL *Blob = NULL;
-  UINTN              Size;
-
-  if (!gLogFsReady || gLogFsRoot == NULL ||
-      FileName == NULL || Data == NULL || Len == 0) {
-    return EFI_NOT_READY;
-  }
-
-  /* Delete first so existing longer blobs cannot leave stale tail bytes on
-   * SimpleFS/FAT implementations that do not truncate on CREATE|WRITE. */
-  Status = gLogFsRoot->Open (gLogFsRoot, &Blob, (CHAR16 *)FileName,
-                             EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE, 0);
-  if (!EFI_ERROR (Status) && Blob != NULL) {
-    Blob->Delete (Blob);
-    Blob = NULL;
-  }
-
-  Status = gLogFsRoot->Open (gLogFsRoot, &Blob, (CHAR16 *)FileName,
-                             EFI_FILE_MODE_CREATE | EFI_FILE_MODE_WRITE |
-                             EFI_FILE_MODE_READ, 0);
-  if (EFI_ERROR (Status) || Blob == NULL) {
-    return Status;
-  }
-
-  Size   = Len;
-  Status = Blob->Write (Blob, &Size, (VOID *)Data);
-  if (!EFI_ERROR (Status)) {
-    Blob->Flush (Blob);
-  }
-  Blob->Close (Blob);
-  return Status;
 }

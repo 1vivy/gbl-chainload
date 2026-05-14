@@ -72,8 +72,6 @@ BootFlowChainLoad (VOID)
   {
     EFI_STATUS  LogStatus = LogFsInit ();
     if (!EFI_ERROR (LogStatus)) {
-      LogFsInstallDebugSink ();
-      LogFsFlush ();
       Print (L"BootFlow: logfs re-opened for chainload session\n");
     } else {
       Print (L"BootFlow: logfs re-open failed (%r) - continuing without logfs\n",
@@ -105,7 +103,6 @@ BootFlowChainLoad (VOID)
     }
   }
   GBL_INFO ("BootFlow: ABL loaded — %u bytes\n", PeSize);
-  LogFsFlush ();
 
   /* 2. Initialize patch table aggregator + apply patches. */
   DynamicPatchLib_EnsureInit ();
@@ -117,8 +114,6 @@ BootFlowChainLoad (VOID)
   SCR_PRINT (L"BootFlow: patches applied=%u missed=%u worst=%d\n",
              PatchRes.AppliedCount, PatchRes.MissedCount,
              (int)PatchRes.WorstOutcome);
-
-  LogFsFlush ();
 
   if (PatchRes.WorstOutcome == PATCH_RESULT_MANDATORY_MISS) {
     DEBUG ((DEBUG_ERROR, "BootFlow: mandatory patch missed - aborting\n"));
@@ -138,7 +133,6 @@ BootFlowChainLoad (VOID)
     FreePool (Pe);
     return Status;
   }
-  LogFsFlush ();
 #else
   GBL_INFO ("BootFlow: mode-0 — skipping ProtocolHook_InstallAll\n");
   SCR_PRINT (L"BootFlow: mode-0 -- skipping ProtocolHook_InstallAll\n");
@@ -150,8 +144,7 @@ BootFlowChainLoad (VOID)
      the chain (the patched ABL or further-chained payloads) can mount it
      if they want.  Without this, the partition stays bound to our driver
      instance and ConnectController returns EFI_NOT_FOUND for the next caller. */
-  Print (L"BootFlow: LogFs flush+close before LoadImage\n");
-  LogFsFlush ();
+  Print (L"BootFlow: LogFs close before LoadImage\n");
   LogFsClose ();
 
   Status = gBS->LoadImage (FALSE, gImageHandle, NULL, Pe, PeSize, &ImageHandle);

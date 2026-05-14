@@ -1,6 +1,7 @@
 ## @file LogFsLib.inf
-#  Mount the logfs partition, rotate UefiLog history, open a clean post-GBL
-#  log file. Step 2 of bring-up; later steps add the DEBUG sink.
+#  Mount the logfs partition and rotate UefiLog history.
+#  GblChainload_BootN.txt and the DebugSink have been removed; UefiLog
+#  rotation is the sole purpose of this library.
 ##
 
 [Defines]
@@ -14,8 +15,6 @@
 [Sources]
   Mount.c
   Rotation.c
-  PostGblLog.c
-  DebugSink.c
 
 [Packages]
   MdePkg/MdePkg.dec
@@ -27,7 +26,6 @@
   BaseMemoryLib
   DebugLib
   PrintLib
-  MemoryAllocationLib
   UefiBootServicesTableLib
   BootLib
 
