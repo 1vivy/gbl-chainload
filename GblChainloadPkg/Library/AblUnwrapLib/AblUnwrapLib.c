@@ -10,6 +10,7 @@
 #include <Library/BaseLib.h>
 #include <Library/BaseMemoryLib.h>
 #include <Library/DebugLib.h>
+#include <Library/GblLog.h>
 #include <Library/MemoryAllocationLib.h>
 #include <Library/UefiBootServicesTableLib.h>
 #include <Library/LinuxLoaderLib.h>
@@ -342,10 +343,9 @@ FindPe32InSectionStream (
     }
     SecType = Buf[Offset + 3];
 
-    DEBUG ((DEBUG_VERBOSE,
-            "AblUnwrap: section @ 0x%x type=0x%02x size=0x%x hdr=%u\n",
-            (UINT32)Offset, (UINT32)SecType,
-            (UINT32)SecSize, (UINT32)SecHdrSize));
+    VERBOSE ("AblUnwrap: section @ 0x%x type=0x%02x size=0x%x hdr=%u\n",
+             (UINT32)Offset, (UINT32)SecType,
+             (UINT32)SecSize, (UINT32)SecHdrSize);
 
     if (SecSize < SecHdrSize || SecSize == 0 ||
         SecSize > BufSize - Offset) {
@@ -381,9 +381,8 @@ FindPe32InSectionStream (
       UINT8 *CompData  = SecData + 5;
       UINTN  CompLen   = SecDataSize - 5;
 
-      DEBUG ((DEBUG_VERBOSE,
-              "AblUnwrap: COMPRESSION type=0x%02x uncomp=%u comp=%u\n",
-              (UINT32)CompType, ReadLe32 (SecData), (UINT32)CompLen));
+      VERBOSE ("AblUnwrap: COMPRESSION type=0x%02x uncomp=%u comp=%u\n",
+               (UINT32)CompType, ReadLe32 (SecData), (UINT32)CompLen);
 
       if (CompType == EFI_NOT_COMPRESSED) {
         UINTN CompDataOff     = (UINTN)(CompData - Buf);
@@ -423,8 +422,8 @@ FindPe32InSectionStream (
           FreePool (Dest);
           break;
         }
-        DEBUG ((DEBUG_VERBOSE, "AblUnwrap: LZMA decompressed %u bytes\n",
-                DestSize));
+        VERBOSE ("AblUnwrap: LZMA decompressed %u bytes\n",
+                 DestSize);
         UINT8 *Pe = NULL;
         UINTN  PeSz = 0;
         if (FindPe32InSectionStream (Dest, DestSize, &Pe, &PeSz)) {
@@ -468,9 +467,8 @@ FindPe32InSectionStream (
       InnerData = Buf + Offset + DataOffField;
       InnerSize = SecSize - DataOffField;
 
-      DEBUG ((DEBUG_VERBOSE,
-              "AblUnwrap: GUID_DEFINED off=%u inner=%u\n",
-              (UINT32)DataOffField, (UINT32)InnerSize));
+      VERBOSE ("AblUnwrap: GUID_DEFINED off=%u inner=%u\n",
+               (UINT32)DataOffField, (UINT32)InnerSize);
 
       if (InnerSize > BufSize - (Offset + DataOffField)) {
         break;
@@ -500,8 +498,7 @@ FindPe32InSectionStream (
           FreePool (Dest);
           break;
         }
-        DEBUG ((DEBUG_VERBOSE,
-                "AblUnwrap: GUID-LZMA decompressed %u bytes\n", DestSize));
+        GBL_INFO ("AblUnwrap: GUID-LZMA decompressed %u bytes\n", DestSize);
         UINT8 *Pe = NULL;
         UINTN  PeSz = 0;
         if (FindPe32InSectionStream (Dest, DestSize, &Pe, &PeSz)) {
@@ -540,9 +537,8 @@ FindPe32InSectionStream (
 
     case EFI_SECTION_FIRMWARE_VOLUME_IMAGE:
     {
-      DEBUG ((DEBUG_VERBOSE,
-              "AblUnwrap: FV_IMAGE section, scanning %u bytes\n",
-              (UINT32)SecDataSize));
+      VERBOSE ("AblUnwrap: FV_IMAGE section, scanning %u bytes\n",
+               (UINT32)SecDataSize);
       UINT8 *Pe = NULL;
       UINTN  PeSz = 0;
       if (ScanAndFindPe32 (SecData, SecDataSize, &Pe, &PeSz)) {
@@ -738,16 +734,15 @@ AblUnwrap_LoadFromPartition (
   /* Try simple FV-at-offset-N search first (covers canoe). */
   FvPtr = FindFirmwareVolume ((UINT8 *)PartBuf, PartSize, &FvSize);
   if (FvPtr != NULL) {
-    DEBUG ((DEBUG_INFO,
-            "AblUnwrap: FV @ offset 0x%lx size 0x%lx\n",
-            (UINT64)((UINT8 *)FvPtr - (UINT8 *)PartBuf), (UINT64)FvSize));
+    GBL_INFO ("AblUnwrap: FV @ offset 0x%lx size 0x%lx\n",
+              (UINT64)((UINT8 *)FvPtr - (UINT8 *)PartBuf), (UINT64)FvSize);
     if (FindPe32InFv (FvPtr, FvSize, &Pe, &PeSize)) {
       goto Found;
     }
   }
 
   /* Fallback: scan for embedded "_FVH" anywhere in the partition. */
-  DEBUG ((DEBUG_INFO, "AblUnwrap: simple FV scan failed, trying _FVH scan\n"));
+  GBL_INFO ("AblUnwrap: simple FV scan failed, trying _FVH scan\n");
   if (ScanAndFindPe32 ((UINT8 *)PartBuf, PartSize, &Pe, &PeSize)) {
     goto Found;
   }
@@ -757,7 +752,7 @@ AblUnwrap_LoadFromPartition (
   return EFI_NOT_FOUND;
 
 Found:
-  DEBUG ((DEBUG_INFO, "AblUnwrap: PE/TE size 0x%lx\n", (UINT64)PeSize));
+  GBL_INFO ("AblUnwrap: PE/TE size 0x%lx\n", (UINT64)PeSize);
   FreePool (PartBuf);
   *OutPe     = Pe;
   *OutPeSize = (UINT32)PeSize;
