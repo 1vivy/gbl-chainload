@@ -16,6 +16,7 @@
 #include <Library/UefiBootServicesTableLib.h>
 #include <Library/UefiLib.h>
 #include <Library/DebugLib.h>
+#include <Library/GblLog.h>
 #include <Library/LogFsLib.h>
 #include <Library/PartitionTableUpdate.h>
 #include <Library/AblUnwrapLib.h>
@@ -80,7 +81,7 @@ BootFlowChainLoad (VOID)
     }
   }
 
-  DEBUG ((DEBUG_INFO, "BootFlow: start (mode=%d)\n", (int)GBL_MODE));
+  GBL_INFO ("BootFlow: start (mode=%d)\n", (int)GBL_MODE);
   SCR_PRINT (L"BootFlow: start (mode=%d)\n", (int)GBL_MODE);
 
   /* 1. Unwrap ABL PE from active slot. */
@@ -94,8 +95,8 @@ BootFlowChainLoad (VOID)
   Status = AblUnwrap_LoadFromPartition (AblName, &Pe, &PeSize);
   if (EFI_ERROR (Status)) {
     /* Some Qualcomm devices ship a single non-A/B `abl` partition. */
-    DEBUG ((DEBUG_INFO, "BootFlow: %s lookup failed (%r), trying 'abl'\n",
-            AblName, Status));
+    GBL_INFO ("BootFlow: %s lookup failed (%r), trying 'abl'\n",
+              AblName, Status);
     Status = AblUnwrap_LoadFromPartition (L"abl", &Pe, &PeSize);
     if (EFI_ERROR (Status)) {
       DEBUG ((DEBUG_ERROR, "BootFlow: ABL not found (%r)\n", Status));
@@ -103,17 +104,16 @@ BootFlowChainLoad (VOID)
       return Status;
     }
   }
-  DEBUG ((DEBUG_INFO, "BootFlow: ABL loaded — %u bytes\n", PeSize));
+  GBL_INFO ("BootFlow: ABL loaded — %u bytes\n", PeSize);
   LogFsFlush ();
 
   /* 2. Initialize patch table aggregator + apply patches. */
   DynamicPatchLib_EnsureInit ();
   DynamicPatch_Apply (Pe, PeSize, &PatchRes);
 
-  DEBUG ((DEBUG_INFO,
-          "BootFlow: patches applied=%u missed=%u worst=%d\n",
-          PatchRes.AppliedCount, PatchRes.MissedCount,
-          (int)PatchRes.WorstOutcome));
+  GBL_INFO ("BootFlow: patches applied=%u missed=%u worst=%d\n",
+            PatchRes.AppliedCount, PatchRes.MissedCount,
+            (int)PatchRes.WorstOutcome);
   SCR_PRINT (L"BootFlow: patches applied=%u missed=%u worst=%d\n",
              PatchRes.AppliedCount, PatchRes.MissedCount,
              (int)PatchRes.WorstOutcome);
@@ -140,7 +140,7 @@ BootFlowChainLoad (VOID)
   }
   LogFsFlush ();
 #else
-  DEBUG ((DEBUG_INFO, "BootFlow: mode-0 — skipping ProtocolHook_InstallAll\n"));
+  GBL_INFO ("BootFlow: mode-0 — skipping ProtocolHook_InstallAll\n");
   SCR_PRINT (L"BootFlow: mode-0 -- skipping ProtocolHook_InstallAll\n");
 #endif
 
@@ -162,7 +162,7 @@ BootFlowChainLoad (VOID)
     return Status;
   }
 
-  DEBUG ((DEBUG_INFO, "BootFlow: handing off to patched ABL\n"));
+  GBL_INFO ("BootFlow: handing off to patched ABL\n");
   SCR_PRINT (L"BootFlow: handing off to patched ABL\n");
 
   Status = gBS->StartImage (ImageHandle, NULL, NULL);
