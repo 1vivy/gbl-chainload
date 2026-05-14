@@ -119,8 +119,10 @@ CommonEarlyInit (
 {
   EFI_STATUS Status;
 
-  GBL_INFO ("gbl-chainload | mode=%d auto=%d debug=%d verbose=%d\n",
-            (int)GBL_MODE, (int)GBL_AUTO, (int)GBL_DEBUG, (int)GBL_VERBOSE);
+  GBL_INFO ("gbl-chainload %a mode=%d auto=%d debug=%d verbose=%d (%a %a)\n",
+            GBL_CHAINLOAD_VERSION,
+            (int)GBL_MODE, (int)GBL_AUTO, (int)GBL_DEBUG, (int)GBL_VERBOSE,
+            __DATE__, __TIME__);
 
   DeviceInfoInit ();
   EnumeratePartitions ();
@@ -172,14 +174,6 @@ GblChainloadEntry (
   )
 {
   GBL_KEY_ACTION Key;
-
-  /* Banner: always to logfs/DEBUG, screen only under GBL_DEBUG=1. */
-  SCR_PRINT (L"\ngbl-chainload %a — mode=%d auto=%d debug=%d verbose=%d"
-             L" (%a %a)\n",
-             GBL_CHAINLOAD_VERSION,
-             (int)GBL_MODE, (int)GBL_AUTO,
-             (int)GBL_DEBUG, (int)GBL_VERBOSE,
-             __DATE__, __TIME__);
 
   CommonEarlyInit (ImageHandle);
 

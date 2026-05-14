@@ -14,7 +14,6 @@
 #include <Library/BaseLib.h>
 #include <Library/MemoryAllocationLib.h>
 #include <Library/UefiBootServicesTableLib.h>
-#include <Library/UefiLib.h>
 #include <Library/DebugLib.h>
 #include <Library/GblLog.h>
 #include <Library/LogFsLib.h>
@@ -29,12 +28,6 @@
 
 #ifndef GBL_DEBUG
 # define GBL_DEBUG 0
-#endif
-
-#if (GBL_DEBUG == 1)
-# define SCR_PRINT(...)  Print (__VA_ARGS__)
-#else
-# define SCR_PRINT(...)  do {} while (0)
 #endif
 
 /** Build the active abl partition name (L"abl_a" or L"abl_b") into Out. */
@@ -80,13 +73,11 @@ BootFlowChainLoad (VOID)
   }
 
   GBL_INFO ("BootFlow: start (mode=%d)\n", (int)GBL_MODE);
-  SCR_PRINT (L"BootFlow: start (mode=%d)\n", (int)GBL_MODE);
 
   /* 1. Unwrap ABL PE from active slot. */
   Status = ResolveActiveAblName (AblName, MAX_GPT_NAME_SIZE);
   if (EFI_ERROR (Status)) {
-    DEBUG ((DEBUG_ERROR, "BootFlow: slot resolve failed (%r)\n", Status));
-    SCR_PRINT (L"BootFlow: slot resolve failed (%r)\n", Status);
+    GBL_INFO ("BootFlow: slot resolve failed (%r)\n", Status);
     return Status;
   }
 
@@ -97,8 +88,7 @@ BootFlowChainLoad (VOID)
               AblName, Status);
     Status = AblUnwrap_LoadFromPartition (L"abl", &Pe, &PeSize);
     if (EFI_ERROR (Status)) {
-      DEBUG ((DEBUG_ERROR, "BootFlow: ABL not found (%r)\n", Status));
-      SCR_PRINT (L"BootFlow: ABL not found (%r)\n", Status);
+      GBL_INFO ("BootFlow: ABL not found (%r)\n", Status);
       return Status;
     }
   }
@@ -111,13 +101,9 @@ BootFlowChainLoad (VOID)
   GBL_INFO ("BootFlow: patches applied=%u missed=%u worst=%d\n",
             PatchRes.AppliedCount, PatchRes.MissedCount,
             (int)PatchRes.WorstOutcome);
-  SCR_PRINT (L"BootFlow: patches applied=%u missed=%u worst=%d\n",
-             PatchRes.AppliedCount, PatchRes.MissedCount,
-             (int)PatchRes.WorstOutcome);
 
   if (PatchRes.WorstOutcome == PATCH_RESULT_MANDATORY_MISS) {
-    DEBUG ((DEBUG_ERROR, "BootFlow: mandatory patch missed - aborting\n"));
-    SCR_PRINT (L"BootFlow: mandatory patch missed - aborting\n");
+    GBL_INFO ("BootFlow: mandatory patch missed - aborting\n");
     FreePool (Pe);
     return EFI_NOT_READY;
   }
@@ -127,15 +113,12 @@ BootFlowChainLoad (VOID)
 #if (GBL_MODE >= 1)
   Status = ProtocolHook_InstallAll (&HookRes);
   if (EFI_ERROR (Status)) {
-    DEBUG ((DEBUG_ERROR, "BootFlow: hook install failed (%r) - aborting\n",
-            Status));
-    SCR_PRINT (L"BootFlow: hook install failed (%r) - aborting\n", Status);
+    GBL_INFO ("BootFlow: hook install failed (%r) - aborting\n", Status);
     FreePool (Pe);
     return Status;
   }
 #else
   GBL_INFO ("BootFlow: mode-0 — skipping ProtocolHook_InstallAll\n");
-  SCR_PRINT (L"BootFlow: mode-0 -- skipping ProtocolHook_InstallAll\n");
 #endif
 
   /* 4. LoadImage + StartImage. */
@@ -149,20 +132,17 @@ BootFlowChainLoad (VOID)
 
   Status = gBS->LoadImage (FALSE, gImageHandle, NULL, Pe, PeSize, &ImageHandle);
   if (EFI_ERROR (Status)) {
-    DEBUG ((DEBUG_ERROR, "BootFlow: LoadImage failed (%r)\n", Status));
-    SCR_PRINT (L"BootFlow: LoadImage failed (%r)\n", Status);
+    GBL_INFO ("BootFlow: LoadImage failed (%r)\n", Status);
     FreePool (Pe);
     return Status;
   }
 
   GBL_INFO ("BootFlow: handing off to patched ABL\n");
-  SCR_PRINT (L"BootFlow: handing off to patched ABL\n");
 
   Status = gBS->StartImage (ImageHandle, NULL, NULL);
 
   /* StartImage rarely returns. */
-  DEBUG ((DEBUG_WARN, "BootFlow: StartImage returned %r\n", Status));
-  SCR_PRINT (L"BootFlow: StartImage returned %r\n", Status);
+  GBL_INFO ("BootFlow: StartImage returned %r\n", Status);
   if (ImageHandle != NULL) {
     gBS->UnloadImage (ImageHandle);
   }
