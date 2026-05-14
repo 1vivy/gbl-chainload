@@ -97,22 +97,25 @@
   ArmGenericTimerCounterLib|ArmPkg/Library/ArmGenericTimerPhyCounterLib/ArmGenericTimerPhyCounterLib.inf
   Zlib|QcomModulePkg/Library/zlib/zlib.inf
   BaseMemoryLibOptDxe|MdePkg/Library/BaseMemoryLibOptDxe/BaseMemoryLibOptDxe.inf
-  ## Route DEBUG() through QCOM's DebugLib variant — it writes via
-  ## gEfiSerialIoProtocol (SerialPortWrite path), matching gbl_root_canoe
-  ## and the patched ABL's own DebugLib. On canoe:
-  ##   - Pre-handoff (our app stage): gEfiSerialIoProtocol isn't installed
-  ##     yet, so DEBUG no-ops silently. Use Print() for content that must
-  ##     be visible / persisted before handoff.
-  ##   - Post-handoff (hooks fire from within patched ABL): SerialIo is
-  ##     installed by ABL's DXE; DEBUG output reaches the UART log buffer
-  ##     and ultimately \UefiLog<N>.txt at BDS flush. Framebuffer console
-  ##     is not in that path, so DEBUG is silent on screen.
+  ## Route DEBUG() through ReportStatusCode — the same mechanism the
+  ## patched ABL uses (QcomModulePkg.dsc maps DebugLib to this lib when
+  ## AUTO_VIRT_ABL=0). The QCOM BSP installs a system-wide status-code
+  ## handler at XBL → EL1 transition that routes the formatted strings
+  ## to the UART log buffer (UefiInfoBlk->UartLogBufferPtr → \UefiLog<N>.txt
+  ## at BDS flush). The handler doesn't touch ConOut, so DEBUG output is
+  ## silent on the framebuffer console — matching ABL's behavior exactly.
   ##
-  ## UefiDebugLibConOut (the prior mapping) routed DEBUG through
-  ## gST->ConOut which renders on framebuffer — making prod builds noisy
-  ## on screen. This change matches what every QCOM image in the chain
-  ## uses, so DEBUG behavior is consistent across the boot path.
-  DebugLib|QcomModulePkg/Library/DebugLib/DebugLib.inf
+  ## Prior failed attempts:
+  ##   - UefiDebugLibConOut: routed via gST->ConOut → splitter →
+  ##     framebuffer + UART. Hook content reached UefiLog but was also
+  ##     visible on screen (prod-noisy).
+  ##   - QcomModulePkg/Library/DebugLib: tries LocateProtocol(SerialIo)
+  ##     which returns NOT_FOUND on canoe at our stage. DEBUG dropped
+  ##     entirely → prod UefiLog empty.
+  ##
+  ## ReportStatusCodeLib (already mapped below) provides the
+  ## ReportStatusCode entry point this DebugLib calls into.
+  DebugLib|MdeModulePkg/Library/PeiDxeDebugLibReportStatusCode/PeiDxeDebugLibReportStatusCode.inf
   ReportStatusCodeLib|MdeModulePkg/Library/DxeReportStatusCodeLib/DxeReportStatusCodeLib.inf
   DebugPrintErrorLevelLib|MdeModulePkg/Library/DxeDebugPrintErrorLevelLib/DxeDebugPrintErrorLevelLib.inf
   UefiDriverEntryPoint|MdePkg/Library/UefiDriverEntryPoint/UefiDriverEntryPoint.inf
