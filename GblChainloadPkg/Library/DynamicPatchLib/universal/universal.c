@@ -2,6 +2,10 @@
 
   ## Patch 1 — EFISP recursion fix
 
+  We could totally replace this patch with our new blockio hook LOL, and
+  return an EFI FAILURE when ABL tries to load the "efisp" partition. But,
+  a runtime hook for it would be not worth it, and the outcome is same.
+
   After our gbl-chainload.efi is loaded by stock ABL, it LoadImages an
   unwrapped copy of ABL from the abl partition.  That second-stage ABL,
   if it sees the "efisp" partition label in its own search, will load
