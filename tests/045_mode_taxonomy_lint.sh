@@ -50,19 +50,27 @@ grep -q 'patch1-efisp-recursion' "$PKG/universal/universal.c" \
 grep -q 'patch7-orange-screen' "$PKG/oem/oneplus_canoe.c" \
   || { echo "FAIL: patch7 must be in oem/oneplus_canoe.c"; exit 1; }
 
-# 8. UniversalBaseline policies wired into slot wrappers.
-grep -q 'UniversalPolicy_OnVbWriteConfig' \
-  GblChainloadPkg/Library/ProtocolHookLib/VerifiedBootHook.c \
-  || { echo "FAIL: VerifiedBootHook missing UniversalPolicy_OnVbWriteConfig call"; exit 1; }
-grep -q 'UniversalPolicy_OnVbReset' \
-  GblChainloadPkg/Library/ProtocolHookLib/VerifiedBootHook.c \
-  || { echo "FAIL: VerifiedBootHook missing UniversalPolicy_OnVbReset call"; exit 1; }
+# 8. Universal preservation is narrow: TZ soft-fuse drop plus reserve writes.
 grep -q 'UniversalPolicy_ShouldDropScmSip' \
   GblChainloadPkg/Library/ProtocolHookLib/ScmHook.c \
   || { echo "FAIL: ScmHook missing universal SIP drop"; exit 1; }
-grep -q 'UniversalPolicy_ShouldDropQseeOplusSec' \
+grep -q 'IsOplusReserve1' \
+  GblChainloadPkg/Library/ProtocolHookLib/BlockIoHook.c \
+  || { echo "FAIL: BlockIoHook missing reserve partition classification"; exit 1; }
+grep -q 'op=write-swallow' \
+  GblChainloadPkg/Library/ProtocolHookLib/BlockIoHook.c \
+  || { echo "FAIL: BlockIoHook missing reserve write swallow"; exit 1; }
+
+# VB/OplusSec persistence suppression is mode-1 overlay, not universal mode-0 policy.
+grep -q 'Mode1Policy_OnVbWriteConfig' \
+  GblChainloadPkg/Library/ProtocolHookLib/VerifiedBootHook.c \
+  || { echo "FAIL: VerifiedBootHook missing mode-1 VB write swallow"; exit 1; }
+grep -q 'Mode1Policy_OnVbReset' \
+  GblChainloadPkg/Library/ProtocolHookLib/VerifiedBootHook.c \
+  || { echo "FAIL: VerifiedBootHook missing mode-1 VB reset swallow"; exit 1; }
+grep -q 'Mode1Policy_ShouldDropQseeOplusSec' \
   GblChainloadPkg/Library/ProtocolHookLib/QseecomHook.c \
-  || { echo "FAIL: QseecomHook missing universal OplusSec drop"; exit 1; }
+  || { echo "FAIL: QseecomHook missing mode-1 OplusSec drop"; exit 1; }
 
 # 9. ProtocolHook_InstallAll exists.
 grep -q 'ProtocolHook_InstallAll' \

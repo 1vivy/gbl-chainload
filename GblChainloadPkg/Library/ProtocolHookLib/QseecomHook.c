@@ -24,6 +24,7 @@
 #include <Library/UefiLib.h>
 #include <Protocol/EFIQseecom.h>
 #include "HookCommon.h"
+#include "Mode1Overlay.h"
 #include "UniversalBaseline.h"
 
 STATIC QCOM_QSEECOM_SEND_CMD_APP gOriginalSendCmd  = NULL;
@@ -482,6 +483,22 @@ HookedSendCmd (
     return EFI_NOT_READY;
   }
 
+  if (SendBuf != NULL && SendLen >= sizeof (UINT32)) {
+    CopyMem (&CmdId, SendBuf, sizeof (CmdId));
+  }
+
+#if (GBL_MODE == 1)
+  /* Mode-1 policy: drop certain OplusSec commands before forwarding, including
+     reentrant calls. */
+  if (Handle == gOplusSecHandle && Handle != (UINT32)-1) {
+    EFI_STATUS FakeStatus;
+    if (Mode1Policy_ShouldDropQseeOplusSec (CmdId, &FakeStatus)) {
+      HookLeave (&gQseecomSendGuard);
+      return FakeStatus;
+    }
+  }
+#endif
+
   if (!First) {
     Status = gOriginalSendCmd (This, Handle, SendBuf, SendLen, RspBuf, RspLen);
     HookLeave (&gQseecomSendGuard);
@@ -489,19 +506,6 @@ HookedSendCmd (
   }
 
   Wide = IsPhoenixShape (Handle, SendLen, RspLen);
-
-  if (SendBuf != NULL && SendLen >= sizeof (UINT32)) {
-    CopyMem (&CmdId, SendBuf, sizeof (CmdId));
-  }
-
-  /* Universal policy: drop certain OplusSec commands before forwarding. */
-  if (Handle == gOplusSecHandle && Handle != (UINT32)-1) {
-    EFI_STATUS FakeStatus;
-    if (UniversalPolicy_ShouldDropQseeOplusSec (CmdId, &FakeStatus)) {
-      HookLeave (&gQseecomSendGuard);
-      return FakeStatus;
-    }
-  }
 
   Status = gOriginalSendCmd (This, Handle, SendBuf, SendLen, RspBuf, RspLen);
 

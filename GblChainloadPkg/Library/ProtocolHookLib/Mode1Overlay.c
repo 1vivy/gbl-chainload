@@ -1,6 +1,6 @@
 /** @file Mode1Overlay.c — mode-1-scope hook policy implementation.
 
-  Contains the two fakelock mutators that are exclusive to mode-1:
+  Contains fakelock and persistence-suppression policies exclusive to mode-1:
 
     Mode1Policy_OnVbReadConfig_Post  — post-call: clears is_unlocked +
         is_unlock_critical in the raw READ_CONFIG device-state buffer
@@ -10,7 +10,7 @@
     Mode1Policy_OnVbDeviceInit_PrePost — pre/post-call: clears the same
         two fields in the device_info_vb_t struct passed to VBDeviceInit.
 
-  Both functions are compiled-out entirely in non-mode-1 builds via the
+  These functions are compiled-out entirely in non-mode-1 builds via the
   GBL_MODE == 1 guard in Mode1Overlay.h.
 **/
 #include "Mode1Overlay.h"
@@ -20,6 +20,8 @@
 #include <Library/DebugLib.h>
 #include <Library/GblLog.h>
 #include <Library/DeviceInfo.h>
+
+#define OPLUSSEC_CMD_WRITE_RPMB_BOOT_INFO  0x0AU
 
 /* --------------------------------------------------------------------------
  * Internal helpers (mirrors dirty VbOffsetOf* / VbForceDeviceInfoBufferLocked)
@@ -102,6 +104,40 @@ Mode1Policy_OnVbDeviceInit_PrePost (
   GBL_INFO ("vb-fakelock | VBDeviceInit/%a | is_unlocked %u->0 | is_unlock_critical %u->0\n",
             IsPre ? "pre" : "post",
             (UINT32)OldUnlocked, (UINT32)OldUnlockCritical);
+}
+
+EFI_STATUS EFIAPI
+Mode1Policy_OnVbWriteConfig (
+  IN UINT32  Op,
+  IN VOID   *Buf,
+  IN UINT32  BufLen
+  )
+{
+  GBL_INFO ("vb-rwstate | op=WRITE_CONFIG | bufLen=%u | swallowed (mode-1)\n",
+            BufLen);
+  return EFI_SUCCESS;
+}
+
+EFI_STATUS EFIAPI
+Mode1Policy_OnVbReset (VOID)
+{
+  GBL_INFO ("vb-reset | swallowed (mode-1)\n");
+  return EFI_SUCCESS;
+}
+
+BOOLEAN
+Mode1Policy_ShouldDropQseeOplusSec (
+  IN  UINT32       CmdId,
+  OUT EFI_STATUS  *FakeStatus
+  )
+{
+  if (CmdId == OPLUSSEC_CMD_WRITE_RPMB_BOOT_INFO) {
+    *FakeStatus = EFI_SUCCESS;
+    GBL_INFO ("qsee-oplussec | cmd=0x%02x(write_rpmb_boot_info) | DROPPED (mode-1)\n",
+              CmdId);
+    return TRUE;
+  }
+  return FALSE;
 }
 
 #endif /* GBL_MODE == 1 */

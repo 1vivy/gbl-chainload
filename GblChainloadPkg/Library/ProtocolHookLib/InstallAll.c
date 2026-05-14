@@ -1,16 +1,16 @@
 /** @file InstallAll.c -- universal + per-mode hook dispatcher.
 
     Returns EFI_SUCCESS only if all required slot wrappers installed.
-    On any error, caller must abort chain-load and fall through to FastbootLib.
+    On required errors, caller must abort chain-load and fall through to
+    FastbootLib; optional observation-only hooks may fail open.
 
-    Universal-baseline policies (UniversalBaseline.c) live in the slot wrappers
-    themselves -- they're called inline from HookedVBRwDeviceState etc.  This
-    dispatcher ensures the slot wrappers themselves are installed for every
-    mode, including mode-0 observation builds.
+    Universal-baseline policies live in the slot wrappers themselves.  This
+    dispatcher installs the wrappers needed for every mode: mode-0 gets
+    observation plus the narrow preservation baseline; mode-1 layers its
+    fakelock/persistence overlay on top.
 
     Mode-1 overlay (Mode1Overlay.c) -- same pattern.  Future mode overlays
-    must opt in explicitly; this dispatcher still installs the universal
-    preservation baseline for every build mode.
+    must opt in explicitly.
 
     EbsHook is declared in HookCommon.h but not yet implemented; it is not
     called here until its source file lands.
@@ -38,15 +38,22 @@ ProtocolHook_InstallAll (
   }
   ZeroMem (Result, sizeof (*Result));
 
-  /* 1. VerifiedBoot -- required.  Slot wrapper enforces universal
-        write/reset swallow; mode-1 additionally mutates read/init state. */
+  /* 1. VerifiedBoot -- required for mode-1 fakelock/persistence overlay;
+        optional observation-only wrapper in mode-0. */
   Status = InstallVerifiedBootHook ();
   if (EFI_ERROR (Status)) {
+#if (GBL_MODE == 1)
     Print (L"ProtocolHookLib: FATAL — VerifiedBoot install failed (%r), aborting chain-load\n",
            Status);
     return Status;
+#else
+    Print (L"ProtocolHookLib: VerifiedBoot install failed (%r) - continuing (mode-0 observation-only)\n",
+           Status);
+    Result->VbInstalledSlots = 0;
+#endif
+  } else {
+    Result->VbInstalledSlots = 1;
   }
-  Result->VbInstalledSlots = 1;
   Result->VbExpectedSlots  = 1;
 
   /* 2. SCM -- required.  Universal TZ_BLOW_SW_FUSE drop. */
@@ -59,14 +66,22 @@ ProtocolHook_InstallAll (
   Result->ScmInstalledSlots = 1;
   Result->ScmExpectedSlots  = 1;
 
-  /* 3. Qseecom -- required.  Universal OplusSec 0x0A drop. */
+  /* 3. Qseecom -- required for mode-1 OplusSec suppression; optional
+        observation-only wrapper in mode-0. */
   Status = InstallQseecomHook ();
   if (EFI_ERROR (Status)) {
+#if (GBL_MODE == 1)
     Print (L"ProtocolHookLib: FATAL — Qseecom install failed (%r), aborting chain-load\n",
            Status);
     return Status;
+#else
+    Print (L"ProtocolHookLib: Qseecom install failed (%r) - continuing (mode-0 observation-only)\n",
+           Status);
+    Result->QseecomInstalledSlots = 0;
+#endif
+  } else {
+    Result->QseecomInstalledSlots = 1;
   }
-  Result->QseecomInstalledSlots = 1;
   Result->QseecomExpectedSlots  = 1;
 
   /* 4. SPSS -- optional (observation-only).  Failure is logged but does
@@ -94,9 +109,7 @@ ProtocolHook_InstallAll (
 
   /* Aggregate -- all required hooks must be installed. */
   Result->UniversalRequiredOk =
-    (Result->VbInstalledSlots    > 0 &&
-     Result->ScmInstalledSlots   > 0 &&
-     Result->QseecomInstalledSlots > 0 &&
+    (Result->ScmInstalledSlots   > 0 &&
      Result->BlockIoInstalledSlots > 0);
 
   if (!Result->UniversalRequiredOk) {

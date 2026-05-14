@@ -28,6 +28,28 @@ Mode1Policy_OnVbDeviceInit_PrePost (
   IN     BOOLEAN           IsPre
   );
 
+/** Mode-1 policy for VBRwDeviceState(WRITE_CONFIG). Returns EFI_SUCCESS and
+    does NOT forward to the original. **/
+EFI_STATUS EFIAPI
+Mode1Policy_OnVbWriteConfig (
+  IN UINT32  Op,
+  IN VOID   *Buf,
+  IN UINT32  BufLen
+  );
+
+/** Mode-1 policy for VBDeviceResetState. Returns EFI_SUCCESS without
+    forwarding. **/
+EFI_STATUS EFIAPI
+Mode1Policy_OnVbReset (VOID);
+
+/** Mode-1 policy for OplusSec cmd 0x0A write_rpmb_boot_info. Caller already
+    determined Handle == OplusSec. **/
+BOOLEAN
+Mode1Policy_ShouldDropQseeOplusSec (
+  IN  UINT32       CmdId,
+  OUT EFI_STATUS  *FakeStatus
+  );
+
 #endif /* GBL_MODE == 1 */
 
 #endif /* MODE1_OVERLAY_H_ */
