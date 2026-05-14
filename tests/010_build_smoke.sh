@@ -42,7 +42,11 @@ PROBES=(
   'first16='          # VerifiedBootHook payload hex
 )
 
-for v in dist/mode-1-auto.efi dist/mode-1-auto-debug.efi; do
+# Non-verbose artifacts produced by this script: mode-0.efi and mode-1.efi.
+# Both are GBL_VERBOSE=0 builds, so VERBOSE() format-string fragments must
+# be absent from .rodata. (mode-0 has fewer hook call sites but still
+# includes AblUnwrap; mode-1 has all of them.)
+for v in dist/mode-0.efi dist/mode-1.efi; do
   [ -f "$v" ] || continue
   for p in "${PROBES[@]}"; do
     n=$(strings "$v" 2>/dev/null | grep -c "$p" || true)
