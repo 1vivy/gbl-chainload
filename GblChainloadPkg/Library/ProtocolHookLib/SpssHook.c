@@ -21,6 +21,7 @@
 #include <Library/BaseLib.h>
 #include <Library/BaseMemoryLib.h>
 #include <Library/DebugLib.h>
+#include <Library/GblLog.h>
 #include <Library/UefiBootServicesTableLib.h>
 #include <Library/UefiLib.h>
 #include <Protocol/EFISPSS.h>
@@ -96,33 +97,30 @@ HookedShareKeyMintInfo (
             sizeof (Info->Vbh.Vbh),
             32, VbhHex, sizeof (VbhHex));
 
-  DEBUG ((DEBUG_INFO,
-          "spss-rot | cmd=0x%x | offset=%u | size=%u | digest=%a\n",
-          Info->RootOfTrust.CmdId,
-          Info->RootOfTrust.RotOffset,
-          Info->RootOfTrust.RotSize,
-          RotHex));
+  VERBOSE ("spss-rot | cmd=0x%x | offset=%u | size=%u\n",
+           Info->RootOfTrust.CmdId,
+           Info->RootOfTrust.RotOffset,
+           Info->RootOfTrust.RotSize);
+  VERBOSE ("spss-rot | digest=%a\n", RotHex);
 
-  DEBUG ((DEBUG_INFO,
-          "spss-bootstate | cmd=0x%x | ver=%u | offset=%u | size=%u | "
-          "unlocked=%u | pubKey=%a | color=%u | sysVer=0x%x | sysSpl=0x%x\n",
-          Info->BootInfo.CmdId,
-          Info->BootInfo.Version,
-          Info->BootInfo.Offset,
-          Info->BootInfo.Size,
-          Info->BootInfo.BootState.IsUnlocked,
-          PubKeyHex,
-          Info->BootInfo.BootState.Color,
-          Info->BootInfo.BootState.SystemVersion,
-          Info->BootInfo.BootState.SystemSecurityLevel));
+  GBL_INFO ("spss-bootstate | cmd=0x%x | ver=%u | offset=%u | size=%u | "
+            "unlocked=%u | color=%u | sysVer=0x%x | sysSpl=0x%x\n",
+            Info->BootInfo.CmdId,
+            Info->BootInfo.Version,
+            Info->BootInfo.Offset,
+            Info->BootInfo.Size,
+            Info->BootInfo.BootState.IsUnlocked,
+            Info->BootInfo.BootState.Color,
+            Info->BootInfo.BootState.SystemVersion,
+            Info->BootInfo.BootState.SystemSecurityLevel);
+  VERBOSE ("spss-bootstate | pubKey=%a\n", PubKeyHex);
 
-  DEBUG ((DEBUG_INFO,
-          "spss-vbh | cmd=0x%x | digest=%a\n",
-          Info->Vbh.CmdId, VbhHex));
+  VERBOSE ("spss-vbh | cmd=0x%x\n", Info->Vbh.CmdId);
+  VERBOSE ("spss-vbh | digest=%a\n", VbhHex);
 
   Status = gOrigShareKeyMintInfo (Info);
 
-  DEBUG ((DEBUG_INFO, "spss-share | st=%r\n", Status));
+  VERBOSE ("spss-share | st=%r\n", Status);
 
   HookLeave (&gSpssGuard);
   return Status;
@@ -153,7 +151,7 @@ InstallSpssHook (VOID)
   Spss->SPSSDxe_ShareKeyMintInfo = HookedShareKeyMintInfo;
   gHookedSpss                    = Spss;
 
-  Print (L"SpssHook: installed ShareKeyMintInfo=%p (orig=%p)\n",
-         HookedShareKeyMintInfo, gOrigShareKeyMintInfo);
+  GBL_INFO ("SpssHook: installed ShareKeyMintInfo=%p (orig=%p)\n",
+            HookedShareKeyMintInfo, gOrigShareKeyMintInfo);
   return EFI_SUCCESS;
 }

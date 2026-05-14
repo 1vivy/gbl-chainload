@@ -1,6 +1,6 @@
 /** @file Mount.c — locate the `logfs` GPT-labeled partition, connect its
   block-IO controller, open the SimpleFileSystem, and stash the Root file
-  handle for use by Rotation.c and PostGblLog.c.
+  handle for use by Rotation.c.
 
   Ported from gbl_root_canoe LinuxLoader.c:277 (`MountLogFsForUefiLog`),
   with `#ifndef DISABLE_PRINT*` guards replaced by standard EDK2 `DEBUG`
@@ -18,21 +18,14 @@
 #include <Protocol/FirmwareVolume2.h>
 #include <Protocol/LoadedImage.h>
 #include <Protocol/SimpleFileSystem.h>
+#include <Library/GblLog.h>
 
-/* Module-private state shared across Mount / Rotation / PostGblLog. */
+/* Module-private state shared across Mount / Rotation. */
 EFI_FILE_PROTOCOL *gLogFsRoot = NULL;
-EFI_FILE_PROTOCOL *gPostGblLog = NULL;
-BOOLEAN            gLogFsReady = FALSE;
 
-#define LOGFS_FLUSH_THRESHOLD  4096
-
-STATIC UINTN       gLogFsDirtyBytes = 0;
-
-/* Forward declarations (siblings provide). */
+/* Forward declaration (Rotation.c provides). */
 extern VOID LogFsRotateUefiLog (IN EFI_FILE_PROTOCOL *Root,
                                 IN BOOLEAN            DeleteSource);
-extern EFI_STATUS LogFsOpenPostGblLog (IN EFI_FILE_PROTOCOL *Root,
-                                       OUT EFI_FILE_PROTOCOL **OutFile);
 
 /* TRUE if our image was loaded by an FV-bearing parent (i.e. stock ABL
  * loaded us out of the gbl partition's FV). FALSE when running via
@@ -91,11 +84,11 @@ MountLogFsRoot (
   HandleFilter.PartitionLabel = L"logfs";
   MaxHandles = ARRAY_SIZE (HandleInfoList);
 
-  Print (L"LogFs: [1/5] calling GetBlkIOHandles (label='logfs')\n");
+  GBL_INFO ("LogFs: [1/5] calling GetBlkIOHandles (label='logfs')\n");
   Status = GetBlkIOHandles (BlkIoAttrib, &HandleFilter,
                             HandleInfoList, &MaxHandles);
-  Print (L"LogFs: [1/5] GetBlkIOHandles returned %r handles=%u\n",
-         Status, MaxHandles);
+  GBL_INFO ("LogFs: [1/5] GetBlkIOHandles returned %r handles=%u\n",
+            Status, MaxHandles);
   if (EFI_ERROR (Status) || MaxHandles != 1) {
     Print (L"LogFs: [1/5] FAIL — no logfs partition found (want 1 handle)\n");
     return EFI_NOT_FOUND;
@@ -106,7 +99,7 @@ MountLogFsRoot (
     Print (L"LogFs: [1/5] FAIL — handle pointer is NULL\n");
     return EFI_NOT_FOUND;
   }
-  Print (L"LogFs: [1/5] handle=%p OK\n", Handle);
+  GBL_INFO ("LogFs: [1/5] handle=%p OK\n", Handle);
 
   /* [2/5] Try HandleProtocol(SimpleFileSystem) directly first.
    * On canoe the platform BDS may have already connected FAT to the logfs
@@ -115,16 +108,16 @@ MountLogFsRoot (
    * re-probe.  EFI_NOT_FOUND from ConnectController means no driver bound
    * this time, but the protocol may still appear if the platform's FAT
    * driver is already managing the handle under a different context. */
-  Print (L"LogFs: [2/5] probe SimpleFileSystem before ConnectController\n");
+  GBL_INFO ("LogFs: [2/5] probe SimpleFileSystem before ConnectController\n");
   Status = gBS->HandleProtocol (Handle,
                                 &gEfiSimpleFileSystemProtocolGuid,
                                 (VOID **)&Fs);
-  Print (L"LogFs: [2/5] direct HandleProtocol(SimpleFS) returned %r\n", Status);
+  GBL_INFO ("LogFs: [2/5] direct HandleProtocol(SimpleFS) returned %r\n", Status);
   if (EFI_ERROR (Status)) {
     /* Not yet connected — attempt ConnectController to trigger driver binding. */
-    Print (L"LogFs: [2/5] calling gBS->ConnectController\n");
+    GBL_INFO ("LogFs: [2/5] calling gBS->ConnectController\n");
     Status = gBS->ConnectController (Handle, NULL, NULL, TRUE);
-    Print (L"LogFs: [2/5] ConnectController returned %r\n", Status);
+    GBL_INFO ("LogFs: [2/5] ConnectController returned %r\n", Status);
     /* EFI_NOT_FOUND = no driver bound right now but may still be available
      * via a pre-existing connection; EFI_ALREADY_STARTED = already bound.
      * Either way, proceed to the HandleProtocol probe below. */
@@ -134,18 +127,18 @@ MountLogFsRoot (
       Print (L"LogFs: [2/5] FAIL — ConnectController unexpected error\n");
       return Status;
     }
-    Print (L"LogFs: [2/5] ConnectController done (%r), re-probing SimpleFS\n", Status);
+    GBL_INFO ("LogFs: [2/5] ConnectController done (%r), re-probing SimpleFS\n", Status);
     Fs = NULL;
   }
 
-  Print (L"LogFs: [3/5] calling gBS->HandleProtocol (SimpleFileSystem)\n");
+  GBL_INFO ("LogFs: [3/5] calling gBS->HandleProtocol (SimpleFileSystem)\n");
   if (Fs == NULL) {
     Status = gBS->HandleProtocol (Handle,
                                   &gEfiSimpleFileSystemProtocolGuid,
                                   (VOID **)&Fs);
-    Print (L"LogFs: [3/5] HandleProtocol(SimpleFS) returned %r\n", Status);
+    GBL_INFO ("LogFs: [3/5] HandleProtocol(SimpleFS) returned %r\n", Status);
   } else {
-    Print (L"LogFs: [3/5] SimpleFS already obtained in [2/5] probe\n");
+    GBL_INFO ("LogFs: [3/5] SimpleFS already obtained in [2/5] probe\n");
     Status = EFI_SUCCESS;
   }
   if (EFI_ERROR (Status)) {
@@ -153,15 +146,15 @@ MountLogFsRoot (
     return Status;
   }
 
-  Print (L"LogFs: [4/5] calling Fs->OpenVolume\n");
+  GBL_INFO ("LogFs: [4/5] calling Fs->OpenVolume\n");
   Status = Fs->OpenVolume (Fs, &Root);
-  Print (L"LogFs: [4/5] OpenVolume returned %r\n", Status);
+  GBL_INFO ("LogFs: [4/5] OpenVolume returned %r\n", Status);
   if (EFI_ERROR (Status)) {
     Print (L"LogFs: [4/5] FAIL — OpenVolume failed\n");
     return Status;
   }
 
-  Print (L"LogFs: [5/5] mount succeeded — root=%p\n", Root);
+  GBL_INFO ("LogFs: [5/5] mount succeeded — root=%p\n", Root);
   *OutRoot = Root;
   return EFI_SUCCESS;
 }
@@ -172,11 +165,11 @@ LogFsInit (VOID)
 {
   EFI_STATUS Status;
 
-  if (gLogFsReady) {
+  if (gLogFsRoot != NULL) {
     return EFI_SUCCESS;
   }
 
-  Print (L"LogFsLib: start\n");
+  GBL_INFO ("LogFsLib: start\n");
 
   Status = MountLogFsRoot (&gLogFsRoot);
   if (EFI_ERROR (Status)) {
@@ -184,7 +177,7 @@ LogFsInit (VOID)
     return Status;
   }
 
-  /* Step 2: archive pre-GBL UefiLog1.txt → UefiLogSaved{0..4}.txt.
+  /* Archive pre-GBL UefiLog1.txt → UefiLogSaved{0..4}.txt.
    * FV-loaded primary GBL rotates destructively so BDS starts a fresh log.
    * Staged payloads snapshot only, preserving the outer loader's open file. */
   if (IsLoadedFromFv ()) {
@@ -197,122 +190,17 @@ LogFsInit (VOID)
     LogFsRotateUefiLog (gLogFsRoot, FALSE);
   }
 
-  Status = LogFsOpenPostGblLog (gLogFsRoot, &gPostGblLog);
-  if (EFI_ERROR (Status)) {
-    DEBUG ((DEBUG_WARN, "LogFs: post-GBL log open failed: %r\n", Status));
-    LogFsClose ();
-    Print (L"LogFsLib: finished — post-GBL log open failed (%r)\n", Status);
-    return Status;
-  }
-
-  gLogFsReady = TRUE;
-  Print (L"LogFsLib: finished\n");
+  GBL_INFO ("LogFsLib: finished\n");
   return EFI_SUCCESS;
-}
-
-BOOLEAN
-EFIAPI
-LogFsIsReady (VOID)
-{
-  return gLogFsReady;
 }
 
 EFI_STATUS
 EFIAPI
 LogFsClose (VOID)
 {
-  if (gPostGblLog != NULL) {
-    gPostGblLog->Flush (gPostGblLog);
-    gPostGblLog->Close (gPostGblLog);
-    gPostGblLog = NULL;
-  }
   if (gLogFsRoot != NULL) {
     gLogFsRoot->Close (gLogFsRoot);
     gLogFsRoot = NULL;
   }
-  gLogFsReady = FALSE;
-  gLogFsDirtyBytes = 0;
   return EFI_SUCCESS;
-}
-
-EFI_STATUS
-EFIAPI
-LogFsFlush (VOID)
-{
-  if (!gLogFsReady || gPostGblLog == NULL) {
-    return EFI_NOT_READY;
-  }
-  gLogFsDirtyBytes = 0;
-  return gPostGblLog->Flush (gPostGblLog);
-}
-
-EFI_STATUS
-EFIAPI
-LogFsWrite (
-  IN CONST CHAR8 *Buf,
-  IN UINTN Len
-  )
-{
-  EFI_STATUS Status;
-  UINTN      Size;
-
-  if (!gLogFsReady || gPostGblLog == NULL || Buf == NULL || Len == 0) {
-    return EFI_NOT_READY;
-  }
-
-  Size   = Len;
-  Status = gPostGblLog->Write (gPostGblLog, &Size, (VOID *)Buf);
-  if (EFI_ERROR (Status)) {
-    return Status;
-  }
-
-  gLogFsDirtyBytes += Size;
-  if (gLogFsDirtyBytes >= LOGFS_FLUSH_THRESHOLD) {
-    gLogFsDirtyBytes = 0;
-    return gPostGblLog->Flush (gPostGblLog);
-  }
-
-  return EFI_SUCCESS;
-}
-
-EFI_STATUS
-EFIAPI
-LogFsWriteBlob (
-  IN CONST CHAR16 *FileName,
-  IN CONST VOID   *Data,
-  IN UINTN         Len
-  )
-{
-  EFI_STATUS         Status;
-  EFI_FILE_PROTOCOL *Blob = NULL;
-  UINTN              Size;
-
-  if (!gLogFsReady || gLogFsRoot == NULL ||
-      FileName == NULL || Data == NULL || Len == 0) {
-    return EFI_NOT_READY;
-  }
-
-  /* Delete first so existing longer blobs cannot leave stale tail bytes on
-   * SimpleFS/FAT implementations that do not truncate on CREATE|WRITE. */
-  Status = gLogFsRoot->Open (gLogFsRoot, &Blob, (CHAR16 *)FileName,
-                             EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE, 0);
-  if (!EFI_ERROR (Status) && Blob != NULL) {
-    Blob->Delete (Blob);
-    Blob = NULL;
-  }
-
-  Status = gLogFsRoot->Open (gLogFsRoot, &Blob, (CHAR16 *)FileName,
-                             EFI_FILE_MODE_CREATE | EFI_FILE_MODE_WRITE |
-                             EFI_FILE_MODE_READ, 0);
-  if (EFI_ERROR (Status) || Blob == NULL) {
-    return Status;
-  }
-
-  Size   = Len;
-  Status = Blob->Write (Blob, &Size, (VOID *)Data);
-  if (!EFI_ERROR (Status)) {
-    Blob->Flush (Blob);
-  }
-  Blob->Close (Blob);
-  return Status;
 }

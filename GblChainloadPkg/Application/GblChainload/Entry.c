@@ -5,6 +5,7 @@
 #include <Uefi.h>
 #include <Library/UefiLib.h>
 #include <Library/DebugLib.h>
+#include <Library/GblLog.h>
 #include <Library/BaseLib.h>
 #include <Library/BaseMemoryLib.h>
 #include <Library/MemoryAllocationLib.h>
@@ -118,9 +119,10 @@ CommonEarlyInit (
 {
   EFI_STATUS Status;
 
-  DEBUG ((DEBUG_INFO,
-          "gbl-chainload | mode=%d auto=%d debug=%d verbose=%d\n",
-          (int)GBL_MODE, (int)GBL_AUTO, (int)GBL_DEBUG, (int)GBL_VERBOSE));
+  GBL_INFO ("gbl-chainload %a mode=%d auto=%d debug=%d verbose=%d (%a %a)\n",
+            GBL_CHAINLOAD_VERSION,
+            (int)GBL_MODE, (int)GBL_AUTO, (int)GBL_DEBUG, (int)GBL_VERBOSE,
+            __DATE__, __TIME__);
 
   DeviceInfoInit ();
   EnumeratePartitions ();
@@ -132,9 +134,6 @@ CommonEarlyInit (
   if (Status == EFI_NOT_FOUND) {
     /* Always show fatal/recovery messages even with GBL_DEBUG=0. */
     Print (L"!!! LOGFS PARTITION NOT FOUND - LOGGING TO CONSOLE ONLY !!!\n");
-  } else if (!EFI_ERROR (Status)) {
-    LogFsInstallDebugSink ();
-    LogFsFlush ();
   }
 }
 
@@ -144,14 +143,12 @@ EnterFastboot (VOID)
   EFI_STATUS Status;
 
   SCR_PRINT (L"gbl-chainload: entering FastbootLib\n");
-  LogFsFlush ();
-  LogFsRemoveDebugSink ();
   LogFsClose ();
 
   Status = FastbootInitialize ();
   if (EFI_ERROR (Status)) {
     /* Fatal: always show even in DEBUG=0. */
-    Print (L"FastbootInitialize returned %r — dead-end\n", Status);
+    Print (L"FATAL — FastbootInitialize returned %r (dead-end)\n", Status);
   }
 }
 
@@ -161,14 +158,12 @@ TryChainLoad (VOID)
   EFI_STATUS Status;
 
   SCR_PRINT (L"gbl-chainload: chain-loading patched ABL\n");
-  LogFsFlush ();
 
   Status = BootFlowChainLoad ();
 
   /* On return, BootFlow already logged. Fall through to fastboot as recovery. */
   SCR_PRINT (L"gbl-chainload: BootFlow returned %r — falling to fastboot\n",
              Status);
-  LogFsFlush ();
 }
 
 EFI_STATUS
@@ -179,14 +174,6 @@ GblChainloadEntry (
   )
 {
   GBL_KEY_ACTION Key;
-
-  /* Banner: always to logfs/DEBUG, screen only under GBL_DEBUG=1. */
-  SCR_PRINT (L"\ngbl-chainload %a — mode=%d auto=%d debug=%d verbose=%d"
-             L" (%a %a)\n",
-             GBL_CHAINLOAD_VERSION,
-             (int)GBL_MODE, (int)GBL_AUTO,
-             (int)GBL_DEBUG, (int)GBL_VERBOSE,
-             __DATE__, __TIME__);
 
   CommonEarlyInit (ImageHandle);
 

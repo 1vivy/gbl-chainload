@@ -14,8 +14,9 @@
 #include <Library/BaseLib.h>
 #include <Library/MemoryAllocationLib.h>
 #include <Library/UefiBootServicesTableLib.h>
-#include <Library/UefiLib.h>
+#include <Library/UefiLib.h>      /* Print — fatal-path visibility */
 #include <Library/DebugLib.h>
+#include <Library/GblLog.h>
 #include <Library/LogFsLib.h>
 #include <Library/PartitionTableUpdate.h>
 #include <Library/AblUnwrapLib.h>
@@ -28,12 +29,6 @@
 
 #ifndef GBL_DEBUG
 # define GBL_DEBUG 0
-#endif
-
-#if (GBL_DEBUG == 1)
-# define SCR_PRINT(...)  Print (__VA_ARGS__)
-#else
-# define SCR_PRINT(...)  do {} while (0)
 #endif
 
 /** Build the active abl partition name (L"abl_a" or L"abl_b") into Out. */
@@ -71,58 +66,43 @@ BootFlowChainLoad (VOID)
   {
     EFI_STATUS  LogStatus = LogFsInit ();
     if (!EFI_ERROR (LogStatus)) {
-      LogFsInstallDebugSink ();
-      LogFsFlush ();
-      Print (L"BootFlow: logfs re-opened for chainload session\n");
+      GBL_INFO ("BootFlow: logfs re-opened for chainload session\n");
     } else {
-      Print (L"BootFlow: logfs re-open failed (%r) - continuing without logfs\n",
-             LogStatus);
+      GBL_INFO ("BootFlow: logfs re-open failed (%r) - continuing without logfs\n",
+                LogStatus);
     }
   }
 
-  DEBUG ((DEBUG_INFO, "BootFlow: start (mode=%d)\n", (int)GBL_MODE));
-  SCR_PRINT (L"BootFlow: start (mode=%d)\n", (int)GBL_MODE);
+  GBL_INFO ("BootFlow: start (mode=%d)\n", (int)GBL_MODE);
 
-  /* 1. Unwrap ABL PE from active slot. */
-  Status = ResolveActiveAblName (AblName, MAX_GPT_NAME_SIZE);
-  if (EFI_ERROR (Status)) {
-    DEBUG ((DEBUG_ERROR, "BootFlow: slot resolve failed (%r)\n", Status));
-    SCR_PRINT (L"BootFlow: slot resolve failed (%r)\n", Status);
-    return Status;
-  }
+  /* 1. Unwrap ABL PE from active slot. ResolveActiveAblName never fails
+     in practice — slot suffix is derived from a static enum — so no
+     error branch here. */
+  (VOID)ResolveActiveAblName (AblName, MAX_GPT_NAME_SIZE);
 
   Status = AblUnwrap_LoadFromPartition (AblName, &Pe, &PeSize);
   if (EFI_ERROR (Status)) {
     /* Some Qualcomm devices ship a single non-A/B `abl` partition. */
-    DEBUG ((DEBUG_INFO, "BootFlow: %s lookup failed (%r), trying 'abl'\n",
-            AblName, Status));
+    GBL_INFO ("BootFlow: %s lookup failed (%r), trying 'abl'\n",
+              AblName, Status);
     Status = AblUnwrap_LoadFromPartition (L"abl", &Pe, &PeSize);
     if (EFI_ERROR (Status)) {
-      DEBUG ((DEBUG_ERROR, "BootFlow: ABL not found (%r)\n", Status));
-      SCR_PRINT (L"BootFlow: ABL not found (%r)\n", Status);
+      Print (L"BootFlow: FATAL — ABL not found (%r)\n", Status);
       return Status;
     }
   }
-  DEBUG ((DEBUG_INFO, "BootFlow: ABL loaded — %u bytes\n", PeSize));
-  LogFsFlush ();
+  GBL_INFO ("BootFlow: ABL loaded — %u bytes\n", PeSize);
 
   /* 2. Initialize patch table aggregator + apply patches. */
   DynamicPatchLib_EnsureInit ();
   DynamicPatch_Apply (Pe, PeSize, &PatchRes);
 
-  DEBUG ((DEBUG_INFO,
-          "BootFlow: patches applied=%u missed=%u worst=%d\n",
-          PatchRes.AppliedCount, PatchRes.MissedCount,
-          (int)PatchRes.WorstOutcome));
-  SCR_PRINT (L"BootFlow: patches applied=%u missed=%u worst=%d\n",
-             PatchRes.AppliedCount, PatchRes.MissedCount,
-             (int)PatchRes.WorstOutcome);
-
-  LogFsFlush ();
+  GBL_INFO ("BootFlow: patches applied=%u missed=%u worst=%d\n",
+            PatchRes.AppliedCount, PatchRes.MissedCount,
+            (int)PatchRes.WorstOutcome);
 
   if (PatchRes.WorstOutcome == PATCH_RESULT_MANDATORY_MISS) {
-    DEBUG ((DEBUG_ERROR, "BootFlow: mandatory patch missed - aborting\n"));
-    SCR_PRINT (L"BootFlow: mandatory patch missed - aborting\n");
+    Print (L"BootFlow: FATAL — mandatory patch missed, aborting\n");
     FreePool (Pe);
     return EFI_NOT_READY;
   }
@@ -132,16 +112,12 @@ BootFlowChainLoad (VOID)
 #if (GBL_MODE >= 1)
   Status = ProtocolHook_InstallAll (&HookRes);
   if (EFI_ERROR (Status)) {
-    DEBUG ((DEBUG_ERROR, "BootFlow: hook install failed (%r) - aborting\n",
-            Status));
-    SCR_PRINT (L"BootFlow: hook install failed (%r) - aborting\n", Status);
+    Print (L"BootFlow: FATAL — hook install failed (%r), aborting\n", Status);
     FreePool (Pe);
     return Status;
   }
-  LogFsFlush ();
 #else
-  DEBUG ((DEBUG_INFO, "BootFlow: mode-0 — skipping ProtocolHook_InstallAll\n"));
-  SCR_PRINT (L"BootFlow: mode-0 -- skipping ProtocolHook_InstallAll\n");
+  GBL_INFO ("BootFlow: mode-0 — skipping ProtocolHook_InstallAll\n");
 #endif
 
   /* 4. LoadImage + StartImage. */
@@ -150,26 +126,22 @@ BootFlowChainLoad (VOID)
      the chain (the patched ABL or further-chained payloads) can mount it
      if they want.  Without this, the partition stays bound to our driver
      instance and ConnectController returns EFI_NOT_FOUND for the next caller. */
-  Print (L"BootFlow: LogFs flush+close before LoadImage\n");
-  LogFsFlush ();
+  GBL_INFO ("BootFlow: LogFs close before LoadImage\n");
   LogFsClose ();
 
   Status = gBS->LoadImage (FALSE, gImageHandle, NULL, Pe, PeSize, &ImageHandle);
   if (EFI_ERROR (Status)) {
-    DEBUG ((DEBUG_ERROR, "BootFlow: LoadImage failed (%r)\n", Status));
-    SCR_PRINT (L"BootFlow: LoadImage failed (%r)\n", Status);
+    Print (L"BootFlow: FATAL — LoadImage failed (%r)\n", Status);
     FreePool (Pe);
     return Status;
   }
 
-  DEBUG ((DEBUG_INFO, "BootFlow: handing off to patched ABL\n"));
-  SCR_PRINT (L"BootFlow: handing off to patched ABL\n");
+  GBL_INFO ("BootFlow: handing off to patched ABL\n");
 
   Status = gBS->StartImage (ImageHandle, NULL, NULL);
 
-  /* StartImage rarely returns. */
-  DEBUG ((DEBUG_WARN, "BootFlow: StartImage returned %r\n", Status));
-  SCR_PRINT (L"BootFlow: StartImage returned %r\n", Status);
+  /* StartImage rarely returns — when it does, the chain is broken. */
+  Print (L"BootFlow: FATAL — StartImage returned %r\n", Status);
   if (ImageHandle != NULL) {
     gBS->UnloadImage (ImageHandle);
   }
