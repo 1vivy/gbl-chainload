@@ -31,6 +31,7 @@
   UefiLib
   BaseLib
   BaseMemoryLib
+  MemoryAllocationLib
   DebugLib
   PrintLib
   HobLib
