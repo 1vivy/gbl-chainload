@@ -221,4 +221,22 @@
       TimerLib|ArmPkg/Library/ArmArchTimerLib/ArmArchTimerLib.inf
       DebugPrintErrorLevelLib|MdePkg/Library/BaseDebugPrintErrorLevelLib/BaseDebugPrintErrorLevelLib.inf
       DevicePathLib|MdePkg/Library/UefiDevicePathLib/UefiDevicePathLib.inf
+      # Dependencies pulled in by LogFsLib for the inventory-to-file write.
+      PerformanceLib|MdeModulePkg/Library/DxePerformanceLib/DxePerformanceLib.inf
+      ArmLib|ArmPkg/Library/ArmLib/ArmBaseLib.inf
+      CacheMaintenanceLib|ArmPkg/Library/ArmCacheMaintenanceLib/ArmCacheMaintenanceLib.inf
+      DxeServicesTableLib|MdePkg/Library/DxeServicesTableLib/DxeServicesTableLib.inf
+      ArmSmcLib|ArmPkg/Library/ArmSmcLib/ArmSmcLib.inf
+      FdtLib|EmbeddedPkg/Library/FdtLib/FdtLib.inf
+      LibUfdt|EmbeddedPkg/Library/LibUfdt/LibUfdt.inf
+      Zlib|QcomModulePkg/Library/zlib/zlib.inf
+      OpenDice|QcomModulePkg/Library/OpenDice/open-dice.inf
+      AesLib|QcomModulePkg/Library/aes/AesLib.inf
+      UbsanLib|QcomModulePkg/Library/UbsanLib/UbsanLib.inf
+      Lz4Lib|QcomModulePkg/Library/lz4/lib/Lz4Lib.inf
+      LoadFVLib|QcomModulePkg/Library/LoadFVLib/LoadFVLib.inf
+      AvbLib|QcomModulePkg/Library/avb/AvbLib.inf
+      StackCanary|QcomModulePkg/Library/StackCanary/StackCanary.inf
+      BootLib|QcomModulePkg/Library/BootLib/BootLib.inf
+      LogFsLib|GblChainloadPkg/Library/LogFsLib/LogFsLib.inf
   }

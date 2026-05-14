@@ -23,6 +23,7 @@
   MdePkg/MdePkg.dec
   MdeModulePkg/MdeModulePkg.dec
   ArmPkg/ArmPkg.dec
+  GblChainloadPkg/GblChainloadPkg.dec
 
 [LibraryClasses]
   UefiApplicationEntryPoint
@@ -34,8 +35,12 @@
   PrintLib
   HobLib
   TimerLib
+  LogFsLib
 
 [Protocols]
+  gEfiLoadedImageProtocolGuid
+  gEfiFirmwareVolume2ProtocolGuid
+  gEfiSimpleFileSystemProtocolGuid
 
 [Guids]
 
