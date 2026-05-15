@@ -45,5 +45,10 @@ BINS += poison_byte
 poison_byte: poison_byte.c
 	$(CC) $(CFLAGS) -o $@ $<
 
+BINS += inject_efisp
+
+inject_efisp: inject_efisp.c
+	$(CC) $(CFLAGS) -o $@ $<
+
 clean:
 	rm -f $(BINS)
