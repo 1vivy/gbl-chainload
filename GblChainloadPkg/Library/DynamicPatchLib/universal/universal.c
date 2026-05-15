@@ -18,7 +18,7 @@
   proceeds to its normal boot path.
 
   Faithful port of gbl_root_canoe tools/patchlib.h:patch_abl_gbl.
-  Mandatory — abort chain-load if this patch misses.
+  Optional — updated ABLs may no longer contain the GBL/EFISP loader path.
 **/
 
 #include "../../../Include/Library/PatchDesc.h"
@@ -54,7 +54,7 @@ CONST PATCH_DESC kUniversalPatches[] = {
   {
     .Name      = "patch1-efisp-recursion",
     .Scope     = SCOPE_UNIVERSAL,
-    .Mandatory = TRUE,
+    .Mandatory = FALSE,
     .Apply     = ApplyEfispRecursion,
   },
 };
