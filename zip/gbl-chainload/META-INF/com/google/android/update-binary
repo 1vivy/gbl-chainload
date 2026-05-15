@@ -1,0 +1,94 @@
+#!/sbin/sh
+# gbl-chainload recovery installer. User-run from custom recovery only.
+
+OUTFD="$2"
+ZIPFILE="$3"
+
+ui_print() {
+  if [ -n "$OUTFD" ] && [ -e "/proc/self/fd/$OUTFD" ]; then
+    echo "ui_print $1" > "/proc/self/fd/$OUTFD"
+    echo "ui_print" > "/proc/self/fd/$OUTFD"
+  else
+    echo "$1"
+  fi
+}
+
+abort() {
+  ui_print "ERROR: $1"
+  exit 1
+}
+
+need_cmd() {
+  command -v "$1" >/dev/null 2>&1 || abort "missing required recovery command: $1"
+}
+
+need_cmd awk
+need_cmd cat
+need_cmd cp
+need_cmd dd
+need_cmd mkdir
+need_cmd mount
+need_cmd sha256sum
+need_cmd sync
+need_cmd umount
+need_cmd unzip
+
+WORK=/tmp/gbl-chainload-install
+MNT=/tmp/gbl-chainload-efisp
+MANIFEST="$WORK/manifest"
+EFI="$WORK/gbl-chainload.efi"
+BACKUP_ABL=/sdcard/backup_abl.img
+
+rm -rf "$WORK"
+mkdir -p "$WORK" "$MNT" || abort "failed to create work directories"
+
+unzip -p "$ZIPFILE" payload/manifest > "$MANIFEST" || abort "failed to extract manifest"
+unzip -p "$ZIPFILE" payload/gbl-chainload.efi > "$EFI" || abort "failed to extract EFI payload"
+
+get_manifest() {
+  awk -F= -v key="$1" '$1 == key { print $2; exit }' "$MANIFEST"
+}
+
+EXPECTED_BACKUP_SHA="$(get_manifest backup_abl_sha256)"
+EXPECTED_EFI_SHA="$(get_manifest efi_sha256)"
+EXPECTED_EFI_SIZE="$(get_manifest efi_size)"
+EFISP_DEST="$(get_manifest efisp_dest)"
+[ -n "$EFISP_DEST" ] || EFISP_DEST=gbl-chainload.efi
+
+[ -f "$BACKUP_ABL" ] || abort "expected fallback ABL at $BACKUP_ABL"
+ACTUAL_BACKUP_SHA="$(sha256sum "$BACKUP_ABL" | awk '{print $1}')"
+[ "$ACTUAL_BACKUP_SHA" = "$EXPECTED_BACKUP_SHA" ] || abort "$BACKUP_ABL hash mismatch"
+
+ACTUAL_EFI_SHA="$(sha256sum "$EFI" | awk '{print $1}')"
+[ "$ACTUAL_EFI_SHA" = "$EXPECTED_EFI_SHA" ] || abort "EFI payload hash mismatch"
+
+ACTUAL_EFI_SIZE="$(wc -c < "$EFI" | tr -d ' ')"
+[ "$ACTUAL_EFI_SIZE" = "$EXPECTED_EFI_SIZE" ] || abort "EFI payload size mismatch"
+[ "$ACTUAL_EFI_SIZE" -le 3145728 ] || abort "EFI payload exceeds 3MiB EFISP size assumption"
+
+EFISP_BLOCK=""
+for p in /dev/block/by-name/efisp /dev/block/bootdevice/by-name/efisp; do
+  if [ -e "$p" ]; then
+    EFISP_BLOCK="$p"
+    break
+  fi
+done
+[ -n "$EFISP_BLOCK" ] || abort "could not find efisp block device"
+
+ui_print "Mounting EFISP from $EFISP_BLOCK"
+mount -t vfat "$EFISP_BLOCK" "$MNT" || abort "failed to mount EFISP as vfat"
+
+if [ -f "$MNT/$EFISP_DEST" ]; then
+  TS="$(date +%Y%m%d-%H%M%S 2>/dev/null || echo unknown)"
+  cp "$MNT/$EFISP_DEST" "/sdcard/gbl-chainload_${EFISP_DEST}.${TS}.bak" \
+    || { umount "$MNT"; abort "failed to back up existing EFISP payload"; }
+fi
+
+dd if="$EFI" of="$MNT/$EFISP_DEST" bs=1048576 conv=fsync \
+  || { umount "$MNT"; abort "failed to install gbl-chainload EFI"; }
+sync
+umount "$MNT" || abort "failed to unmount EFISP"
+
+ui_print "Installed gbl-chainload EFI to EFISP:$EFISP_DEST"
+ui_print "Verified fallback ABL: $BACKUP_ABL"
+exit 0

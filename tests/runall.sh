@@ -19,6 +19,8 @@ echo "== 051_gbl_root_canoe_regression =="
 bash tests/051_gbl_root_canoe_regression.sh
 echo "== 053_cache_abl_lint =="
 bash tests/053_cache_abl_lint.sh
+echo "== 054_gbl_zip_lint =="
+bash tests/054_gbl_zip_lint.sh
 
 # Carried-forward signature lint, if present.
 if [[ -f tests/030_signature_lint.sh ]]; then
