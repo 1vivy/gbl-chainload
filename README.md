@@ -4,18 +4,17 @@ EFI System Partition (EFISP) chainloader for OnePlus/Oppo devices using Qualcomm
 
 ## Status
 
-v2 architecture in flight. See `docs/superpowers/specs/` for the design and `docs/superpowers/plans/` for the implementation plan series.
+v2 shim is usable for mode-0 and mode-1. Project documentation, reverse-engineering findings, and the current milestone marker live in [`docs/project/`](docs/project/).
 
 Working artifacts: `dist/mode-0.efi` (unlocked observation + universal preservation build) and `dist/mode-1.efi` (protocol-hook fakelock via `QCOM_VERIFIEDBOOT_PROTOCOL` mutation; KM/Oplus see locked/green when stock images verify cleanly).
 
-Mode-1 supports the "stock recovery + custom system" use case by default. Custom recovery + normal boot requires a disk-side graft of stock vbmeta — see [`docs/re/recovery-normal-boot-fix-paths.md`](docs/re/recovery-normal-boot-fix-paths.md). Both a host script and a device-side companion module are Phase-2 work; neither ships today.
+Mode-1 supports the "stock recovery + custom system" use case by default. Custom recovery + normal boot requires a disk-side graft of stock vbmeta — see [`docs/project/next-milestone.md`](docs/project/next-milestone.md). Both a host script and a device-side companion module remain next-milestone work; neither ships today.
 
 ## Modes
 
 - **mode-0** — unlocked observation + universal preservation build. Installs protocol hooks for logging and for the narrow preservation baseline: drop TZ soft-fuse advancement and swallow `oplusreserve1` / `opporeserve1` writes. VB lock-state and OplusSec writes pass through so stock ABL can run the real relock procedure.
 - **mode-1** — protocol-hook fakelock. ABL sees locked DeviceInfo and builds KM SET_ROT/SET_BOOT_STATE off that view.
 - **mode-2** *(not yet implemented)* — TA-payload spoof at QSEE/SPSS boundaries; ABL stays honest; per-OTA typed-struct profile.
-- **mode-3** *(not yet implemented)* — universal baseline only; minimal experiment to gauge KM root-cert leaf survival.
 
 ## Build
 

@@ -18,7 +18,7 @@
               clean OK + populated SlotData and takes the success branch.
       Subsumes patch9's Site V (caller-side AVE force) AND Site G/C
       (caller-side post-call gate skip) into one libavb-internal patch.
-      See docs/re/patch10-libavb-force-success.md.
+      See docs/project/re-findings.md.
 
     patch6 — lock-state fastboot-gate.  Mode-1 fakelocks the VerifiedBoot
     view; ABL's in-fastboot command dispatcher then refuses flash / erase /
@@ -28,7 +28,7 @@
       Pattern A — `CBZ Wn, L_error` jumps INTO the error block.  NOP the CBZ.
       Pattern B — `B.NE skip_error` jumps PAST the error block.  Rewrite to
                    unconditional `B skip_error` with the same target.
-    See docs/re/abl-lock-state-fastboot-gate.md for the RE pass. **/
+    See docs/project/re-findings.md for the RE pass. **/
 
 #include "../../../Include/Library/PatchDesc.h"
 #include "../Internal/ScanLib.h"

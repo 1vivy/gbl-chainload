@@ -16,12 +16,12 @@
       Site G/C (caller-side post-call gate skip). Anchor is byte-identical
       across infiniti (OnePlus 15) and myron (Xiaomi K90 Pro Max) — both
       compile the same QcomModulePkg/Library/avb/libavb source.
-      See docs/re/patch10-libavb-force-success.md for the RE pass.
+      See docs/project/re-findings.md for the RE pass.
 
     patch6 — lock-state fastboot-gate strings.  Each gate's error path loads
       one of these strings via an ADRP+ADD pair.  patch6 finds each string
       in .rodata, locates the ADRP+ADD in .text targeting it, and rewrites
-      the preceding gate.  See `docs/re/abl-lock-state-fastboot-gate.md`. **/
+      the preceding gate.  See `docs/project/re-findings.md`. **/
 
 #ifndef DPL_MODE_1_SIGNATURES_H_
 #define DPL_MODE_1_SIGNATURES_H_
@@ -64,7 +64,7 @@ STATIC CONST CHAR8 kPatch10AnchorStr[] =
    Each gate's error path loads one of these strings via an ADRP+ADD pair.
    patch6 finds each string in .rodata, locates the ADRP+ADD in .text
    targeting it, and rewrites the preceding gate.  See
-   `docs/re/abl-lock-state-fastboot-gate.md` for the byte-level treatment. */
+   `docs/project/re-findings.md` for the byte-level treatment. */
 
 STATIC CONST CHAR8 kPatch6FlashingStr[]       = "Flashing is not allowed in Lock State";
 STATIC CONST CHAR8 kPatch6EraseStr[]          = "Erase is not allowed in Lock State";

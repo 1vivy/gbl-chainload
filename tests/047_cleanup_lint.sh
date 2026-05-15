@@ -33,7 +33,7 @@ check_no_match_in "EBS-mutate knob" 'GBL_DEBUG_EBS_MUTATE' \
 # 2. UDT helper
 check_absent "UDT helper artifacts" \
   tests/043_update_device_tree_callsite_anchor.sh \
-  docs/re/update-device-tree-callsite-helper.md
+  docs/project/update-device-tree-callsite-helper.md
 check_no_match_in "UDT helper symbols" \
   'kUpdateDtbHelperHex|ApplyUpdateDeviceTreeLogHelper|FindUpdateDeviceTreeCallsite' \
   GblChainloadPkg
@@ -53,7 +53,7 @@ if cd edk2 && git log --oneline | grep -iE 'toggle.primary.os|shell-boot|get-sta
 fi
 cd "$REPO_ROOT"
 
-# 6. Mode sprawl knobs — must not appear in source tree (excluding docs/.re-notes)
+# 6. Mode sprawl knobs — must not appear in source tree (excluding docs/project)
 check_no_match_in "mode sprawl knobs in app" \
   'AUTO_DEBUG_MODE|MODE_DEBUG\b|MODE_TEMPLATE|FAKELOCKED|MINIMAL\b|MODE_1\b' \
   GblChainloadPkg/Application

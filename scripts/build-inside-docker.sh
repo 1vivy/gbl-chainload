@@ -3,7 +3,7 @@
 # called directly from the host.
 #
 # Env vars consumed:
-#   GBL_MODE    — integer 1/2/3 (default 1)
+#   GBL_MODE    — integer 0/1 today (default 1); mode 2 is planned
 #   GBL_AUTO    — 0/1 (default 0)
 #   GBL_DEBUG   — 0/1 (default 0)
 #   GBL_VERBOSE — 0/1 (default 0)

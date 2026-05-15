@@ -24,7 +24,7 @@ while [[ $# -gt 0 ]]; do
       cat <<EOF
 Usage: $0 --mode {0|1} [--auto] [--debug] [--verbose]
 
-Mode 0: pass-through (no overlay, no patch9 v2, no protocol hooks).
+Mode 0: honest unlocked observation + universal preservation baseline; no fakelock overlay.
 Mode 1: fakelocked chainload (default).
 EOF
       exit 0 ;;

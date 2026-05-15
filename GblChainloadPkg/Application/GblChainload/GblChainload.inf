@@ -1,6 +1,6 @@
 ## @file
 #  GblChainload application — single-mode dispatcher.
-#  GBL_MODE (1/2/3), GBL_AUTO, GBL_DEBUG, GBL_VERBOSE are set via BuildOptions
+#  GBL_MODE (0/1 today; mode 2 planned), GBL_AUTO, GBL_DEBUG, GBL_VERBOSE are set via BuildOptions
 #  in the DSC; one binary per mode is produced.
 #
 #  [Packages] / [LibraryClasses] / [Protocols] / [Guids] / [FixedPcd] carried
