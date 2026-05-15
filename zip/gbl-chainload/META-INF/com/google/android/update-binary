@@ -1,0 +1,91 @@
+#!/sbin/sh
+OUTFD=$2; ZIP=$3
+ui_print() { echo -e "ui_print $1\nui_print" >&"$OUTFD"; }
+abort()    { ui_print "ABORT: $1"; cleanup; exit 1; }
+cleanup()  { mountpoint -q /mnt/efisp 2>/dev/null && umount /mnt/efisp; }
+trap cleanup EXIT
+
+ui_print "gbl-chainload installer"
+ui_print "======================="
+
+mkdir -p /tmp/gbl
+unzip -o "$ZIP" -d /tmp/gbl >/dev/null
+chmod 755 /tmp/gbl/bin/*
+
+# --- pre-flight (fail loudly, no rollback work needed) -----------------
+SLOT_SUFFIX=$(getprop ro.boot.slot_suffix)
+ACTIVE=${SLOT_SUFFIX#_}
+case "$ACTIVE" in
+  a) INACTIVE=b ;;
+  b) INACTIVE=a ;;
+  *) abort "no slot suffix; not an A/B device?" ;;
+esac
+
+ABL_INACTIVE=/dev/block/by-name/abl_$INACTIVE
+[ -r "$ABL_INACTIVE" ]          || abort "cannot read $ABL_INACTIVE"
+[ -f /sdcard/backup_abl.img ]   || abort "/sdcard/backup_abl.img missing"
+[ -b /dev/block/by-name/efisp ] || abort "/dev/block/by-name/efisp missing"
+
+# Sanity: confirm EFISP currently holds a PE (first 2 bytes == "MZ").
+HEAD2=$(dd if=/dev/block/by-name/efisp bs=1 count=2 2>/dev/null | xxd -p)
+[ "$HEAD2" = "4d5a" ] || abort "EFISP does not currently look like a PE (first 2B != MZ)"
+
+# --- single abort prompt -----------------------------------------------
+ui_print "About to:"
+ui_print "  1. read $ABL_INACTIVE  (new OTA ABL)"
+ui_print "  2. fv-unwrap + patch + pack -> GBLP1 overlay"
+ui_print "  3. concat with base EFI -> installed.efi"
+ui_print "  4. backup current EFISP -> /sdcard/efisp.bak"
+ui_print "  5. dd installed.efi -> /dev/block/by-name/efisp"
+ui_print "  6. SHA-verify EFISP; restore from backup on mismatch"
+ui_print "  7. dd /sdcard/backup_abl.img -> $ABL_INACTIVE"
+ui_print ""
+ui_print "Vol-DOWN within 5s to ABORT. Any other key (or timeout) continues."
+KEY=$(timeout 5 getevent -lqc 5 2>/dev/null \
+        | grep -m1 -oE 'KEY_(VOLUMEUP|VOLUMEDOWN)' || true)
+[ "$KEY" = "KEY_VOLUMEDOWN" ] && abort "user aborted (vol-down)"
+
+# --- non-interactive remainder -----------------------------------------
+ui_print "[1/7] reading $ABL_INACTIVE"
+dd if="$ABL_INACTIVE" of=/tmp/gbl/abl_inactive.img bs=1M 2>/dev/null
+
+ui_print "[2/7] fv-unwrap + abl-patcher + gbl-pack"
+/tmp/gbl/bin/fv-unwrap /tmp/gbl/abl_inactive.img /tmp/gbl/extracted.efi \
+  || abort "fv-unwrap failed (new ABL format?)"
+/tmp/gbl/bin/abl-patcher --in /tmp/gbl/extracted.efi --out /tmp/gbl/patched.efi \
+  || abort "abl-patcher failed (no matching signatures?)"
+/tmp/gbl/bin/gbl-pack \
+  --cached-abl /tmp/gbl/patched.efi \
+  --source     /tmp/gbl/abl_inactive.img \
+  --extracted  /tmp/gbl/extracted.efi \
+  --out        /tmp/gbl/payload.bin \
+  || abort "gbl-pack failed (efisp-scan or sanity gate?)"
+
+ui_print "[3/7] concat base EFI + payload -> installed.efi"
+cat /tmp/gbl/base/gbl-chainload.efi /tmp/gbl/payload.bin > /tmp/gbl/installed.efi
+
+ui_print "[4/7] backup current EFISP -> /sdcard/efisp.bak"
+EFISP_SIZE=$(blockdev --getsize64 /dev/block/by-name/efisp)
+dd if=/dev/block/by-name/efisp of=/sdcard/efisp.bak bs=1M \
+  count=$((EFISP_SIZE / 1048576)) 2>/dev/null
+sync
+
+ui_print "[5/7] dd installed.efi -> EFISP (with SHA verify + backup)"
+/tmp/gbl/bin/gbl-commit \
+  --src /tmp/gbl/installed.efi \
+  --dst /dev/block/by-name/efisp \
+  --backup /sdcard/efisp.bak \
+  --verify \
+  || abort "EFISP write/verify failed (backup restored)"
+
+ui_print "[6/7] verify done by gbl-commit --verify"
+
+ui_print "[7/7] restore loader ABL: /sdcard/backup_abl.img -> $ABL_INACTIVE"
+dd if=/sdcard/backup_abl.img of="$ABL_INACTIVE" bs=1M conv=fsync 2>/dev/null \
+  || abort "abl restore failed (gbl-chainload may not load on next boot)"
+sync
+
+ui_print ""
+ui_print "DONE. Reboot to use cached gbl-chainload."
+ui_print "On boot failure: hold Vol-Up at boot to reach FastbootLib."
+exit 0
