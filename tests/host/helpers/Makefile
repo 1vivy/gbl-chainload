@@ -50,5 +50,10 @@ BINS += inject_efisp
 inject_efisp: inject_efisp.c
 	$(CC) $(CFLAGS) -o $@ $<
 
+BINS += locate_overlay_host
+
+locate_overlay_host: locate_overlay_host.c
+	$(CC) $(CFLAGS) -o $@ $<
+
 clean:
 	rm -f $(BINS)
