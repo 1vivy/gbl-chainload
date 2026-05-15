@@ -3,8 +3,9 @@
     Sequence:
       1. ResolveActiveAblName + AblUnwrap_LoadFromPartition
       2. DynamicPatchLib_EnsureInit + DynamicPatch_Apply (abort on mandatory miss)
-      3. ProtocolHook_InstallAll (universal baseline + mode-N overlay; fail-closed)
-      4. LoadImage + StartImage  (does not return on success)
+      3. LoadImage patched ABL PE (before protocol hooks to keep failures clean)
+      4. ProtocolHook_InstallAll (universal baseline + mode-N overlay; fail-closed)
+      5. StartImage  (does not return on success)
 
     On any error (partition read fail / mandatory patch miss / hook install fail
     / LoadImage fail), return non-success — Entry.c falls through to FastbootLib.
@@ -22,6 +23,7 @@
 #include <Library/AblUnwrapLib.h>
 #include <Library/DynamicPatchLib.h>
 #include <Library/ProtocolHookLib.h>
+#include <Library/CachedAblLib.h>
 
 #ifndef GBL_MODE
 # error "GBL_MODE must be defined"
@@ -73,49 +75,56 @@ BootFlowChainLoad (VOID)
 
   GBL_INFO ("BootFlow: start (mode=%d)\n", (int)GBL_MODE);
 
-  /* 1. Unwrap ABL PE from active slot. ResolveActiveAblName never fails
-     in practice — slot suffix is derived from a static enum — so no
-     error branch here. */
-  (VOID)ResolveActiveAblName (AblName, MAX_GPT_NAME_SIZE);
-
-  Status = AblUnwrap_LoadFromPartition (AblName, &Pe, &PeSize);
-  if (EFI_ERROR (Status)) {
-    /* Some Qualcomm devices ship a single non-A/B `abl` partition. */
-    GBL_INFO ("BootFlow: %s lookup failed (%r), trying 'abl'\n",
-              AblName, Status);
-    Status = AblUnwrap_LoadFromPartition (L"abl", &Pe, &PeSize);
+  /* 1. Prefer a build-time cached, already-patched ABL PE when present. The
+        dynamic patch engine deliberately skips that payload to avoid applying
+        binary rewrites twice. */
+  CachedAbl_LogMetadata ();
+  if (CachedAbl_IsPresent ()) {
+    Status = CachedAbl_CopyPe (&Pe, &PeSize);
     if (EFI_ERROR (Status)) {
-      Print (L"BootFlow: FATAL — ABL not found (%r)\n", Status);
+      Print (L"BootFlow: FATAL — cached ABL copy failed (%r)\n", Status);
       return Status;
     }
+    GBL_INFO ("BootFlow: cached ABL PE loaded — %u bytes; dynamic patches skipped\n",
+              PeSize);
+  } else {
+    /* Unwrap ABL PE from active slot. ResolveActiveAblName never fails
+       in practice — slot suffix is derived from a static enum — so no
+       error branch here. */
+    (VOID)ResolveActiveAblName (AblName, MAX_GPT_NAME_SIZE);
+
+    Status = AblUnwrap_LoadFromPartition (AblName, &Pe, &PeSize);
+    if (EFI_ERROR (Status)) {
+      /* Some Qualcomm devices ship a single non-A/B `abl` partition. */
+      GBL_INFO ("BootFlow: %s lookup failed (%r), trying 'abl'\n",
+                AblName, Status);
+      Status = AblUnwrap_LoadFromPartition (L"abl", &Pe, &PeSize);
+      if (EFI_ERROR (Status)) {
+        Print (L"BootFlow: FATAL — ABL not found (%r)\n", Status);
+        return Status;
+      }
+    }
+    GBL_INFO ("BootFlow: ABL loaded — %u bytes\n", PeSize);
+
+    /* 2. Initialize patch table aggregator + apply patches. */
+    DynamicPatchLib_EnsureInit ();
+    DynamicPatch_Apply (Pe, PeSize, &PatchRes);
+
+    GBL_INFO ("BootFlow: patches applied=%u missed=%u worst=%d\n",
+              PatchRes.AppliedCount, PatchRes.MissedCount,
+              (int)PatchRes.WorstOutcome);
+
+    if (PatchRes.WorstOutcome == PATCH_RESULT_MANDATORY_MISS) {
+      Print (L"BootFlow: FATAL — mandatory patch missed, aborting\n");
+      FreePool (Pe);
+      return EFI_NOT_READY;
+    }
   }
-  GBL_INFO ("BootFlow: ABL loaded — %u bytes\n", PeSize);
 
-  /* 2. Initialize patch table aggregator + apply patches. */
-  DynamicPatchLib_EnsureInit ();
-  DynamicPatch_Apply (Pe, PeSize, &PatchRes);
-
-  GBL_INFO ("BootFlow: patches applied=%u missed=%u worst=%d\n",
-            PatchRes.AppliedCount, PatchRes.MissedCount,
-            (int)PatchRes.WorstOutcome);
-
-  if (PatchRes.WorstOutcome == PATCH_RESULT_MANDATORY_MISS) {
-    Print (L"BootFlow: FATAL — mandatory patch missed, aborting\n");
-    FreePool (Pe);
-    return EFI_NOT_READY;
-  }
-
-  /* 3. Install protocol hooks (universal baseline + mode-N overlay).
-        Mode-0 installs the universal observation/preservation hooks but no
-        fakelock overlay. */
-  Status = ProtocolHook_InstallAll (&HookRes);
-  if (EFI_ERROR (Status)) {
-    Print (L"BootFlow: FATAL — hook install failed (%r), aborting\n", Status);
-    FreePool (Pe);
-    return Status;
-  }
-
-  /* 4. LoadImage + StartImage. */
+  /* 3. Load the patched ABL image before installing protocol hooks.  LoadImage
+        parses/registers the child image but does not execute it; doing this
+        first keeps LoadImage failures from returning to our fastboot recovery
+        surface with global protocol vtables already hooked. */
 
   /* Proper transition: release the logfs partition handle so the next EFI in
      the chain (the patched ABL or further-chained payloads) can mount it
@@ -131,6 +140,20 @@ BootFlowChainLoad (VOID)
     return Status;
   }
 
+  /* 4. Install protocol hooks (universal baseline + mode-N overlay).
+        Mode-0 installs the universal observation/preservation hooks but no
+        fakelock overlay. */
+  Status = ProtocolHook_InstallAll (&HookRes);
+  if (EFI_ERROR (Status)) {
+    Print (L"BootFlow: FATAL — hook install failed (%r), aborting\n", Status);
+    if (ImageHandle != NULL) {
+      gBS->UnloadImage (ImageHandle);
+    }
+    FreePool (Pe);
+    return Status;
+  }
+
+  /* 5. StartImage. */
   GBL_INFO ("BootFlow: handing off to patched ABL\n");
 
   Status = gBS->StartImage (ImageHandle, NULL, NULL);

@@ -27,6 +27,8 @@
   ScanLib|Include/Library/ScanLib.h
   ## Minimal AVB structure parser — no external libavb dependency.
   AvbParseLib|Include/Library/AvbParseLib.h
+  ## Optional build-time cached, pre-patched ABL PE payload.
+  CachedAblLib|Include/Library/CachedAblLib.h
 
 [Guids]
   ## Token space GUID for GblChainloadPkg PCDs.

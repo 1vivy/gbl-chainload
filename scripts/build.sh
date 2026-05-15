@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # scripts/build.sh — wrap docker EDK-II build with mode/flag selection.
 #
-# Usage: scripts/build.sh --mode {0|1} [--auto] [--debug] [--verbose]
+# Usage: scripts/build.sh --mode {0|1} [--auto] [--debug] [--verbose] [--cache-abl <abl.img>]
 #
 # Output: dist/mode-<N>[flags].efi
 set -euo pipefail
@@ -13,6 +13,7 @@ MODE=1
 AUTO=0
 DEBUG=0
 VERBOSE=0
+CACHE_ABL=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -20,12 +21,17 @@ while [[ $# -gt 0 ]]; do
     --auto)    AUTO=1;       shift   ;;
     --debug)   DEBUG=1;      shift   ;;
     --verbose) VERBOSE=1;    shift   ;;
+    --cache-abl) CACHE_ABL="$2"; shift 2 ;;
     -h|--help)
       cat <<EOF
-Usage: $0 --mode {0|1} [--auto] [--debug] [--verbose]
+Usage: $0 --mode {0|1} [--auto] [--debug] [--verbose] [--cache-abl <abl.img>]
 
 Mode 0: honest unlocked observation + universal preservation baseline; no fakelock overlay.
 Mode 1: fakelocked chainload (default).
+
+--cache-abl embeds an already host-patched cached ABL PE into the EFI. At
+runtime, gbl-chainload uses that cached PE and deliberately skips dynamic ABL
+patching for it.
 EOF
       exit 0 ;;
     *) echo "unknown flag: $1" >&2; exit 2 ;;
@@ -45,6 +51,7 @@ SUFFIX=""
 [[ $AUTO    -eq 1 ]] && SUFFIX+="-auto"
 [[ $DEBUG   -eq 1 ]] && SUFFIX+="-debug"
 [[ $VERBOSE -eq 1 ]] && SUFFIX+="-verbose"
+[[ -n "$CACHE_ABL" ]] && SUFFIX+="-cache-abl"
 BUILD_NAME="mode-${MODE}${SUFFIX}"
 ARTIFACT="dist/${BUILD_NAME}.efi"
 
@@ -70,7 +77,25 @@ rm -rf Build/
 
 mkdir -p dist Build
 
-echo "==> Building $ARTIFACT (mode=$MODE auto=$AUTO debug=$DEBUG verbose=$VERBOSE)"
+GBL_HAS_CACHED_ABL=0
+GBL_CACHE_ABL_INPUT=""
+if [[ -n "$CACHE_ABL" ]]; then
+  if [[ ! -f "$CACHE_ABL" ]]; then
+    echo "error: --cache-abl input not found: $CACHE_ABL" >&2
+    exit 2
+  fi
+  CACHE_SIZE=$(stat -c%s "$CACHE_ABL")
+  if [[ "$CACHE_SIZE" -le 0 || "$CACHE_SIZE" -gt $((4 * 1024 * 1024)) ]]; then
+    echo "error: --cache-abl input size must be >0 and <=4MiB (got $CACHE_SIZE)" >&2
+    exit 2
+  fi
+  mkdir -p Build/cache-abl
+  cp "$CACHE_ABL" Build/cache-abl/source-abl.img
+  GBL_HAS_CACHED_ABL=1
+  GBL_CACHE_ABL_INPUT=/work/Build/cache-abl/source-abl.img
+fi
+
+echo "==> Building $ARTIFACT (mode=$MODE auto=$AUTO debug=$DEBUG verbose=$VERBOSE cache_abl=$GBL_HAS_CACHED_ABL)"
 
 # Run the in-container build. Mount repo at /work.
 "$DOCKER" run --rm \
@@ -82,6 +107,8 @@ echo "==> Building $ARTIFACT (mode=$MODE auto=$AUTO debug=$DEBUG verbose=$VERBOS
   -e GBL_DEBUG="$DEBUG" \
   -e GBL_VERBOSE="$VERBOSE" \
   -e GBL_BUILD_NAME="$BUILD_NAME" \
+  -e GBL_HAS_CACHED_ABL="$GBL_HAS_CACHED_ABL" \
+  -e GBL_CACHE_ABL_INPUT="$GBL_CACHE_ABL_INPUT" \
   "$IMAGE_TAG" \
   bash scripts/build-inside-docker.sh
 
@@ -99,4 +126,9 @@ if [[ -z "$EDK_OUT" || ! -f "$EDK_OUT" ]]; then
   fi
 fi
 cp "$EDK_OUT" "$ARTIFACT"
-echo "==> Built $ARTIFACT ($(stat -c%s "$ARTIFACT") bytes)"
+ARTIFACT_SIZE=$(stat -c%s "$ARTIFACT")
+if [[ "$GBL_HAS_CACHED_ABL" -eq 1 && "$ARTIFACT_SIZE" -gt 3145728 ]]; then
+  echo "ERROR: cache-ABL artifact exceeds 3MiB EFISP size assumption ($ARTIFACT_SIZE bytes)" >&2
+  exit 1
+fi
+echo "==> Built $ARTIFACT (${ARTIFACT_SIZE} bytes)"

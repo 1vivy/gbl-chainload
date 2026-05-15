@@ -65,6 +65,7 @@
   DEFINE GBL_AUTO                         = 0
   DEFINE GBL_DEBUG                        = 0
   DEFINE GBL_VERBOSE                      = 0
+  DEFINE GBL_HAS_CACHED_ABL               = 0
 
   # Build name — single string identifier substituted into log banner,
   # FastbootMenu display, and the build-name getvar. build-inside-docker.sh
@@ -131,6 +132,7 @@
   DynamicPatchLib|GblChainloadPkg/Library/DynamicPatchLib/DynamicPatchLib.inf
   ProtocolHookLib|GblChainloadPkg/Library/ProtocolHookLib/ProtocolHookLib.inf
   AvbParseLib|GblChainloadPkg/Library/AvbParseLib/AvbParseLib.inf
+  CachedAblLib|GblChainloadPkg/Library/CachedAblLib/CachedAblLib.inf
 
 [LibraryClasses.AARCH64]
   ArmLib|ArmPkg/Library/ArmLib/ArmBaseLib.inf
@@ -157,6 +159,7 @@
   GCC:*_*_*_CC_FLAGS = -DGBL_AUTO=$(GBL_AUTO)
   GCC:*_*_*_CC_FLAGS = -DGBL_DEBUG=$(GBL_DEBUG)
   GCC:*_*_*_CC_FLAGS = -DGBL_VERBOSE=$(GBL_VERBOSE)
+  GCC:*_*_*_CC_FLAGS = -DGBL_HAS_CACHED_ABL=$(GBL_HAS_CACHED_ABL)
   GCC:*_*_*_CC_FLAGS = -DGBL_BUILD_NAME=\"$(GBL_BUILD_NAME)\"
 
   # Workarounds for this Qualcomm edk2 fork against modern Ubuntu GCC:
@@ -225,4 +228,5 @@
       AblUnwrapLib|GblChainloadPkg/Library/AblUnwrapLib/AblUnwrapLib.inf
       DynamicPatchLib|GblChainloadPkg/Library/DynamicPatchLib/DynamicPatchLib.inf
       ProtocolHookLib|GblChainloadPkg/Library/ProtocolHookLib/ProtocolHookLib.inf
+      CachedAblLib|GblChainloadPkg/Library/CachedAblLib/CachedAblLib.inf
   }

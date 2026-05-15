@@ -52,6 +52,12 @@ Evidence to preserve:
 
 ## Patch anchors and fixtures
 
+- `LinuxLoaderEntry` contains an early EFISP GBL probe before normal/recovery/fastboot routing: it builds the UTF-16 label `efisp`, finds the matching BlockIo partition, reads the whole partition into memory, calls BootServices `LoadImage(SourceBuffer=partition bytes)`, then `StartImage`.
+- This is a real recursion hazard for chainloading: stock ABL loads `gbl-chainload` from EFISP; `gbl-chainload` starts a cached/second-stage ABL; if that cached ABL still has the EFISP GBL probe and EFISP still contains `gbl-chainload`, it can loop ABL -> GBL -> cached ABL -> GBL until watchdog/reset.
+- `patch1-efisp-recursion` is therefore a safety patch, not cosmetic. It rewrites the cached/second-stage ABL's UTF-16 `efisp` partition-label string to `nulls`, causing the EFISP probe to fail closed and allowing the cached ABL to continue into its normal boot path.
+- `patch1` can be optional only for ABL builds where the UTF-16 `efisp` loader label is genuinely absent after patching. The cache-ABL preparation flow should fail closed if a prepared cached ABL still contains UTF-16 `efisp` after patching.
+- In the inspected `LinuxLoader_infiniti.efi`, GBL `LoadImage` failure and GBL `StartImage` return are non-fatal to stock ABL: both paths fall through after the EFISP probe and continue boot-mode routing. This does not protect against crashes/hangs/corrupted BootServices state; it only describes clean EFI status returns.
+- `gbl-chainload` itself does not normally return cleanly to stock ABL on chainload failure: `Entry.c` falls through to its FastbootLib recovery surface and then spins. BootFlow now loads the nested patched ABL image before installing global protocol hooks, so nested-ABL `LoadImage` failures happen before hook side effects.
 - `patch6` lock-state fastboot gate anchors on refusal strings such as “Flashing is not allowed in Lock State”, “Erase is not allowed in Lock State”, “Slot Change is not allowed in Lock State”, and “Snapshot Cancel is not allowed in Lock State”. The rewrite is on the preceding branch gate, not on the strings themselves.
 - `patch10` anchors on the unique libavb string `Persistent values required for AVB_HASHTREE_ERROR_MODE_MANAGED_RESTART_AND_EIO`, walks back to the `avb_slot_verify` PACIASP function entry, forces allow-verification-error at entry, and forces OK at exit.
 - Fixture coverage lives under `tests/images/`; keep the fixture README as the live map for which raw FV wrappers or extracted PEs each patch test consumes.

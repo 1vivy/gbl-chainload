@@ -10,13 +10,15 @@ Progress marker: **v2 shim is usable for mode-0 and mode-1; next milestone is th
 - Mode-1 supports the **stock recovery + custom system** use case by default.
 - Reserve token preservation is backed by static RE and user-provided locked/unlocked `oplusreserve1` diffs.
 
+## Delivered in this branch / ready for PR
+
+- **Cache-ABL build/runtime plumbing exists.** `scripts/build.sh --cache-abl <abl.img>` host-unwraps and host-patches a supplied OTA ABL/FV image, embeds the patched PE into gbl-chainload, and the runtime deliberately skips dynamic patching for that cached payload. Cache generation fails closed if the prepared payload still contains LinuxLoader's UTF-16 `efisp` loader label, preventing ABL -> GBL -> cached ABL recursion.
+- **Recovery graft host tooling exists.** `scripts/graft-recovery-vbmeta.py` grafts stock recovery AVB metadata/footer onto a custom recovery image. Recovery ZIP packaging has been removed from this PR and should be handled in a separate delivery PR.
+- **Mode-3 is dropped from the roadmap.** It was never implemented and should be removed from user-facing expectations.
+
 ## Known limits
 
-- **Custom recovery + normal Android boot is not fixed yet.** The selected fix is a disk-side recovery vbmeta/footer graft, delivered by host tooling and/or an on-device module.
-- **Cache-ABL flow is not implemented yet.** Future OTAs may remove or change the GBL/EFISP loader path; the next milestone should first teach gbl-chainload to carry a cached ABL as a static patch that the dynamic patch engine deliberately skips, then expose that build path with `scripts/build.sh --cache-abl`.
-- **ZIP-based OTA companion flow is not implemented yet.** Preferred user flow is: flash OTA from custom recovery, then flash a gbl-chainload ZIP and a recovery-graft ZIP. Users park a known-good fallback ABL at `/sdcard/backup_abl.img` before relying on the flow.
-- **Mode-2 profile lifecycle is not implemented yet.** Mode-2 should consume a parked profile such as `/sdcard/gbl-chainload_profile.xml`; if missing, the mode-2 ZIP can build/populate it from `/sdcard/stock_vbmeta.img`.
-- **Mode-3 is dropped from the roadmap.** It was never implemented and should be removed from user-facing expectations.
+- ZIP/recovery installation workflows are intentionally not part of this PR. On-device cached ABL/profile insertion needs a separate design and PR after researching insert methods that are testable before flashing.
 
 ## Repo state notes
 

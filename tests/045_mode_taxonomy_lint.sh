@@ -81,4 +81,16 @@ test -f GblChainloadPkg/Library/ProtocolHookLib/ProtocolHookLib.inf \
 test -f GblChainloadPkg/Include/Library/ProtocolHookLib.h \
   || { echo "FAIL: missing public ProtocolHookLib.h"; exit 1; }
 
+# 10. Mode-3 is dropped from user-facing mode taxonomy. Keep this scoped to
+# gbl-chainload-controlled surfaces so unrelated upstream EDK2 "mode 3" text
+# does not trip the lint.
+if grep -RnE --exclude=045_mode_taxonomy_lint.sh \
+    'GBL_MODE[[:space:]]*==[[:space:]]*3|mode-3|SCOPE_MODE_3' \
+    GblChainloadPkg scripts tests \
+    edk2/QcomModulePkg/Library/FastbootLib \
+    edk2/QcomModulePkg/Library/BootLib 2>/dev/null; then
+  echo "FAIL: mode-3 must not be advertised or gated in active surfaces"
+  exit 1
+fi
+
 echo "ok 045_mode_taxonomy_lint"
