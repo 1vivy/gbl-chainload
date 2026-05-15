@@ -3,6 +3,7 @@
    raw read (production path). */
 #include <Uefi.h>
 #include <Library/BaseLib.h>
+#include <Library/BaseMemoryLib.h>
 #include <Library/UefiBootServicesTableLib.h>
 #include <Library/MemoryAllocationLib.h>
 #include <Library/DebugLib.h>

@@ -7,7 +7,7 @@
   INF_VERSION                    = 0x00010005
   BASE_NAME                      = GblPayloadLib
   FILE_GUID                      = 2f9d0f19-6623-4770-9761-8926011e1126
-  MODULE_TYPE                    = UEFI_APPLICATION
+  MODULE_TYPE                    = BASE
   VERSION_STRING                 = 1.0
   LIBRARY_CLASS                  = GblPayloadLib
 
@@ -23,8 +23,8 @@
 [Packages]
   MdePkg/MdePkg.dec
   MdeModulePkg/MdeModulePkg.dec
-  CryptoPkg/CryptoPkg.dec
   GblChainloadPkg/GblChainloadPkg.dec
+  QcomModulePkg/QcomModulePkg.dec
 
 [LibraryClasses]
   BaseLib
@@ -32,5 +32,4 @@
   MemoryAllocationLib
   UefiBootServicesTableLib
   DebugLib
-  BaseCryptLib
-  GblLog
+  BootLib

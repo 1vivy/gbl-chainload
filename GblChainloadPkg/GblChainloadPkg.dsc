@@ -131,6 +131,7 @@
   DynamicPatchLib|GblChainloadPkg/Library/DynamicPatchLib/DynamicPatchLib.inf
   ProtocolHookLib|GblChainloadPkg/Library/ProtocolHookLib/ProtocolHookLib.inf
   AvbParseLib|GblChainloadPkg/Library/AvbParseLib/AvbParseLib.inf
+  GblPayloadLib|GblChainloadPkg/Library/GblPayloadLib/GblPayloadLib.inf
 
 [LibraryClasses.AARCH64]
   ArmLib|ArmPkg/Library/ArmLib/ArmBaseLib.inf
@@ -162,7 +163,9 @@
   # Workarounds for this Qualcomm edk2 fork against modern Ubuntu GCC:
   #  - __FORTIFY_SOURCE: BaseLib.h:148 macro space-bug workaround
   #  - -fno-stack-protector: Ubuntu gcc default-on stack-protector breaks -nostdlib
-  GCC:*_*_AARCH64_CC_FLAGS = -D__FORTIFY_SOURCE -fno-stack-protector -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-error=unused-function -Wno-error=array-parameter -DGBL_EXPERIMENTAL_FASTBOOT_CMDS=1
+  # Force DWARF4: Ubuntu 22.04 binutils-aarch64-linux-gnu (ld 2.38) does not
+  # understand DWARF5 FORM 0x23. Clang 14 on this image defaults to DWARF5.
+  GCC:*_*_AARCH64_CC_FLAGS = -gdwarf-4 -D__FORTIFY_SOURCE -fno-stack-protector -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-error=unused-function -Wno-error=array-parameter -DGBL_EXPERIMENTAL_FASTBOOT_CMDS=1
 
   !if $(VERIFIED_BOOT_LE)
       GCC:*_*_*_CC_FLAGS = -DVERIFIED_BOOT_LE
@@ -225,4 +228,5 @@
       AblUnwrapLib|GblChainloadPkg/Library/AblUnwrapLib/AblUnwrapLib.inf
       DynamicPatchLib|GblChainloadPkg/Library/DynamicPatchLib/DynamicPatchLib.inf
       ProtocolHookLib|GblChainloadPkg/Library/ProtocolHookLib/ProtocolHookLib.inf
+      GblPayloadLib|GblChainloadPkg/Library/GblPayloadLib/GblPayloadLib.inf
   }

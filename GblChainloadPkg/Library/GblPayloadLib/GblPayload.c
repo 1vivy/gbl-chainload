@@ -46,7 +46,7 @@ GblPayload_LoadCachedAbl (IN EFI_HANDLE ImageHandle,
   CONST UINT8 *PayloadBytes = (CONST UINT8 *)Bytes + Off;
   UINTN PayloadSize = Size - Off;
 
-  CONST UINT8 *CachedPe = NULL; UINTN CachedSize = 0;
+  CONST UINT8 *CachedPe = NULL; size_t CachedSize = 0;
   enum gbl_payload_status PS =
       gbl_payload_find_cached_abl(PayloadBytes, PayloadSize,
                                   &CachedPe, &CachedSize);

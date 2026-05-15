@@ -30,7 +30,7 @@
   @param[out] OutBytes   Allocated buffer containing partition data.
   @param[out] OutSize    Number of valid bytes in *OutBytes.
 
-  @retval EFI_SUCCESS         Data read into *OutBytes/*OutSize.
+  @retval EFI_SUCCESS         Data read into *OutBytes / *OutSize.
   @retval EFI_NOT_FOUND       No single EFISP handle located.
   @retval EFI_OUT_OF_RESOURCES AllocatePool failed.
   @retval other               BlockIO ReadBlocks error.

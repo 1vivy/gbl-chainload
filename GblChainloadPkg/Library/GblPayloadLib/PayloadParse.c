@@ -1,8 +1,14 @@
 /* GblChainloadPkg/Library/GblPayloadLib/PayloadParse.c — pure-logic
    parser. The EDK2 IO wrapper (LocateOverlay.c, EfispBlockIo.c) calls
    into this with a ready-to-validate byte buffer. */
-#include <string.h>
 #include "Internal/PayloadParse.h"
+#ifdef GBL_HOST_BUILD
+# include <string.h>
+#else
+# include <Library/BaseMemoryLib.h>
+  /* Map C99 memcmp to EDK2 CompareMem (same semantics for equality test). */
+# define memcmp(a,b,n) CompareMem((a),(b),(n))
+#endif
 #include "Internal/Crc32.h"
 #include "../../../tools/shared/gblp1.h"
 

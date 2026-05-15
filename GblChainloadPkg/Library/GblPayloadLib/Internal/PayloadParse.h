@@ -6,10 +6,17 @@
 # include <stddef.h>
 #else
 # include <Uefi.h>
-  typedef UINT8  uint8_t;
-  typedef UINT16 uint16_t;
-  typedef UINT32 uint32_t;
-  typedef UINTN  size_t;
+# ifndef GBL_COMPAT_TYPES_DEFINED
+#  define GBL_COMPAT_TYPES_DEFINED
+   typedef UINT8  uint8_t;
+   typedef UINT16 uint16_t;
+   typedef UINT32 uint32_t;
+   typedef INT32  int32_t;
+# endif
+# ifndef _SIZE_T
+#  define _SIZE_T
+   typedef __SIZE_TYPE__ size_t;
+# endif
 #endif
 
 enum gbl_payload_status {
