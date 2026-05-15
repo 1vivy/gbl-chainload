@@ -35,33 +35,23 @@ Rationale: mode-3 was never implemented and should not consume roadmap or user-f
 
 ## OTA / cache-ABL delivery model
 
-Decision: prefer custom-recovery ZIP deliverables over an autonomous device-side OTA-slot patcher.
-
-User flow:
-
-1. User flashes the OTA from custom recovery.
-2. User flashes the gbl-chainload ZIP, which installs the EFI to EFISP, backs up the inactive-slot OTA ABL that the OTA ZIP just wrote, and writes `/sdcard/backup_abl.img` to that inactive slot so the device can keep loading GBL apps.
-3. User flashes the recovery-graft ZIP.
-4. User keeps a known-good fallback ABL at `/sdcard/backup_abl.img`.
+Decision: keep this PR limited to host-built cache-ABL build/runtime support and safety gates. ZIP/recovery delivery and on-device ABL/profile insertion are deferred to a separate PR.
 
 Implementation direction:
 
 - Cache ABL into gbl-chainload as a static patch/payload.
 - Teach the dynamic patch engine to deliberately skip the cached ABL payload.
 - Add `scripts/build.sh --cache-abl <path>` to produce cache-ABL builds.
-- Keep the non-HLOS ABL write inside the user-run gbl-chainload recovery ZIP, targeted at the inactive ABL slot after an OTA flash; the agent must not run the equivalent flash command autonomously.
 
-Rationale: this keeps non-HLOS writes out of the agent workflow and makes the user's recovery environment the explicit installation surface.
+Rationale: the static cache-ABL path is validated enough for build/runtime review. On-device cache/profile insertion still needs research into methods that can be tested before any non-HLOS write.
 
-Fallback ABL requirement: `/sdcard/backup_abl.img` must be a whole, known-good, GBL-capable ABL image. The installer rejects obviously truncated files, but it cannot prove semantic GBL capability beyond user provenance and read-back verification.
-
-Safety gate: every cached ABL preparation path must verify that the final prepared ABL payload no longer contains the UTF-16 `efisp` loader label. If the label remains after patching, the flow must abort before packaging or installing the EFI, because LinuxLoader's EFISP GBL probe can otherwise recurse through gbl-chainload.
+Safety gate: every cached ABL preparation path must verify that the final prepared ABL payload no longer contains the UTF-16 `efisp` loader label. If the label remains after patching, the flow must abort before producing the EFI, because LinuxLoader's EFISP GBL probe can otherwise recurse through gbl-chainload.
 
 BootFlow ordering: load/register the nested patched ABL image before installing protocol hooks, then install hooks immediately before `StartImage`. This keeps nested-ABL `LoadImage` failures from dirtying global protocol tables before gbl-chainload falls into its recovery surface. A future hook rollback/uninstall path is still desirable for hook-install failures or unexpected `StartImage` returns.
 
 ## Mode-2 delivery model
 
-Decision: mode-2 should be a separate ZIP layered on top of cache-ABL work.
+Decision: mode-2 profile insertion should be handled in the same later on-device insertion PR as OTA cache-ABL delivery, not in this PR.
 
 Conventions to validate during implementation:
 
