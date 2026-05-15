@@ -1,0 +1,23 @@
+## @file CachedAblLib.inf
+#  Optional build-time cached, pre-patched ABL PE payload.
+##
+
+[Defines]
+  INF_VERSION                    = 0x00010006
+  BASE_NAME                      = CachedAblLib
+  FILE_GUID                      = 9f3e0dd8-8321-4efa-9ef0-b705f9b21eaf
+  MODULE_TYPE                    = BASE
+  VERSION_STRING                 = 0.1
+  LIBRARY_CLASS                  = CachedAblLib
+
+[Sources]
+  CachedAblLib.c
+
+[Packages]
+  MdePkg/MdePkg.dec
+  GblChainloadPkg/GblChainloadPkg.dec
+
+[LibraryClasses]
+  BaseMemoryLib
+  DebugLib
+  MemoryAllocationLib

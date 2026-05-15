@@ -6,6 +6,7 @@ dist/
 *.efi.unsigned
 tools/abl-patcher/abl-patcher
 tools/fv-unwrap/fv-unwrap
+GblChainloadPkg/Library/CachedAblLib/CachedAblBlob.generated.h
 tests/*/test_*
 !tests/*/test_*.c
 !tests/*/test_*.h

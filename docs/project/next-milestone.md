@@ -31,6 +31,11 @@ Deliverables:
 - Produce a gbl-chainload ZIP flow for post-OTA custom-recovery installation.
 - Document the user-owned fallback file: `/sdcard/backup_abl.img`.
 
+Status:
+
+- Initial `--cache-abl` build/runtime plumbing is implemented.
+- ZIP packaging and recovery-side `/sdcard/backup_abl.img` verification are still pending.
+
 Acceptance:
 
 - A build with `--cache-abl /path/to/abl.img` produces a gbl-chainload artifact that can use the cached ABL without re-running dynamic patches against that cached payload.

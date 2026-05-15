@@ -2,8 +2,9 @@ CC      ?= cc
 CFLAGS  ?= -O1 -g -Wall -Wextra -Wno-unused-parameter -std=c11
 PROJ    := $(realpath ../..)
 DPL     := $(PROJ)/GblChainloadPkg/Library/DynamicPatchLib
+GBL_MODE ?= 1
 
-CFLAGS += -D__HOST_BUILD__ -DGBL_MODE=1 \
+CFLAGS += -D__HOST_BUILD__ -DGBL_MODE=$(GBL_MODE) \
           -I$(PROJ)/GblChainloadPkg/Include/Library \
           -I$(DPL)/Internal
 
