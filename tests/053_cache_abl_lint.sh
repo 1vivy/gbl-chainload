@@ -22,6 +22,8 @@ require "CachedAblLib DSC mapping" 'CachedAblLib\|GblChainloadPkg/Library/Cached
 require "BootFlow cached path" 'CachedAbl_IsPresent' GblChainloadPkg/Application/GblChainload/BootFlow.c
 require "dynamic patch skip log" 'dynamic patches skipped' GblChainloadPkg/Application/GblChainload/BootFlow.c
 require "mode-param host patcher" 'GBL_MODE \?= 1' tools/abl-patcher/Makefile
+require "cache recursion safety scan" 'EFISP_UTF16LE' scripts/generate-cached-abl-header.py
+require "cache recursion fail closed" 'unsafe cached ABL still contains UTF-16 efisp' scripts/generate-cached-abl-header.py
 
 if [[ ! -x scripts/generate-cached-abl-header.py ]]; then
   echo "FAIL: scripts/generate-cached-abl-header.py must be executable" >&2

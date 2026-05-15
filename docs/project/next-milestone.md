@@ -34,7 +34,7 @@ Deliverables:
 Status:
 
 - Initial `--cache-abl` build/runtime plumbing is implemented.
-- gbl-chainload ZIP packaging with recovery-side `/sdcard/backup_abl.img` verification is implemented.
+- gbl-chainload ZIP packaging is implemented with recovery-side `/sdcard/backup_abl.img` verification, ZIP-carried EFI hash/size verification, EFISP installation, EFISP read-back verification, inactive-slot OTA ABL backup, fallback ABL restore, ABL read-back verification, numbered recovery UI steps, and `/sdcard/gbl-chainload/` artifact logging in one user-run ZIP.
 - recovery-graft host tooling and ZIP packaging are implemented.
 - mode-2 profile ZIP packaging is implemented as a separate layer on top of cache-ABL; it installs an included profile, validates an existing profile, or generates `/sdcard/gbl-chainload_profile.xml` from `/sdcard/stock_vbmeta.img`.
 
@@ -45,7 +45,9 @@ Acceptance:
 - The ZIP instructions use custom recovery: flash OTA, flash gbl-chainload ZIP, then flash recovery-graft ZIP.
 - User fallback naming is stable and documented as `/sdcard/backup_abl.img`.
 - EFISP/artifact capacity assumptions are checked before publishing the flow.
+- Cached ABL preparation fails closed if the prepared second-stage ABL still contains the UTF-16 `efisp` loader label after patching, preventing ABL -> GBL -> cached ABL recursion.
 - No direct flash of non-HLOS partitions is required from the agent workflow.
+- On-device appended-overlay insertion is deferred rather than shipped unvalidated; this milestone's PR should present the host-built cache-ABL ZIP path as the supported flow.
 
 ### 3. Mode-2 profiles
 
@@ -89,7 +91,7 @@ Acceptance:
 
 1. Documentation/code cleanup for mode-3 removal.
 2. Cache-ABL static payload design and `--cache-abl` build flag.
-3. gbl-chainload ZIP flow that uses `/sdcard/backup_abl.img` as the stable fallback convention.
+3. gbl-chainload ZIP flow that uses `/sdcard/backup_abl.img` as the stable fallback convention, installs the cache-ABL EFI, backs up the inactive-slot OTA ABL, and restores the fallback ABL loader in one user-run recovery ZIP.
 4. Recovery graft ZIP, because the preferred OTA path is custom recovery OTA flash followed by gbl-chainload ZIP and recovery-graft ZIP.
 5. Mode-2 ZIP/profile flow layered on top of cache-ABL, using `/sdcard/gbl-chainload_profile.xml` and `/sdcard/stock_vbmeta.img` conventions unless superseded by implementation evidence.
 

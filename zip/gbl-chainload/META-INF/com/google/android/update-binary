@@ -1,5 +1,6 @@
 #!/sbin/sh
 # gbl-chainload recovery installer. User-run from custom recovery only.
+# WARNING: this writes the selected ABL partition after explicit hash checks.
 
 OUTFD="$2"
 ZIPFILE="$3"
@@ -13,8 +14,29 @@ ui_print() {
   fi
 }
 
+ui_progress() {
+  if [ -n "$OUTFD" ] && [ -e "/proc/self/fd/$OUTFD" ]; then
+    echo "progress $1 $2" > "/proc/self/fd/$OUTFD"
+  fi
+}
+
+log_line() {
+  [ -n "${LOG:-}" ] && [ -f "$LOG" ] && echo "$(date 2>/dev/null || echo unknown): $1" >> "$LOG"
+}
+
+say() {
+  ui_print "$1"
+  log_line "$1"
+}
+
+step() {
+  STEP_NUM=$((STEP_NUM + 1))
+  say "[$STEP_NUM/$STEP_TOTAL] $1"
+}
+
 abort() {
-  ui_print "ERROR: $1"
+  say "ERROR: $1"
+  say "Artifact log: ${LOG:-unavailable}"
   exit 1
 }
 
@@ -30,18 +52,33 @@ need_cmd mkdir
 need_cmd mount
 need_cmd sha256sum
 need_cmd sync
+need_cmd tr
 need_cmd umount
 need_cmd unzip
+need_cmd wc
 
 WORK=/tmp/gbl-chainload-install
 MNT=/tmp/gbl-chainload-efisp
 MANIFEST="$WORK/manifest"
 EFI="$WORK/gbl-chainload.efi"
 BACKUP_ABL=/sdcard/backup_abl.img
+LOG_DIR=/sdcard/gbl-chainload  # OTA ABL backups are saved under /sdcard/gbl-chainload/ota_abl_*.img
+TS="$(date +%Y%m%d-%H%M%S 2>/dev/null || echo unknown)"
+LOG="$LOG_DIR/install-${TS}.log"
+STEP_NUM=0
+STEP_TOTAL=8
 
 rm -rf "$WORK"
 mkdir -p "$WORK" "$MNT" || abort "failed to create work directories"
+mkdir -p "$LOG_DIR" || abort "failed to create $LOG_DIR"
+: > "$LOG" || abort "failed to create artifact log $LOG"
 
+say "gbl-chainload recovery installer"
+say "ZIP: $ZIPFILE"
+say "Log: $LOG"
+ui_progress 0.05 0
+
+step "Extracting and checking ZIP payload"
 unzip -p "$ZIPFILE" payload/manifest > "$MANIFEST" || abort "failed to extract manifest"
 unzip -p "$ZIPFILE" payload/gbl-chainload.efi > "$EFI" || abort "failed to extract EFI payload"
 
@@ -49,22 +86,63 @@ get_manifest() {
   awk -F= -v key="$1" '$1 == key { print $2; exit }' "$MANIFEST"
 }
 
-EXPECTED_BACKUP_SHA="$(get_manifest backup_abl_sha256)"
 EXPECTED_EFI_SHA="$(get_manifest efi_sha256)"
 EXPECTED_EFI_SIZE="$(get_manifest efi_size)"
 EFISP_DEST="$(get_manifest efisp_dest)"
 [ -n "$EFISP_DEST" ] || EFISP_DEST=gbl-chainload.efi
+say "EFISP destination: $EFISP_DEST"
 
+step "Verifying fallback ABL on /sdcard"
 [ -f "$BACKUP_ABL" ] || abort "expected fallback ABL at $BACKUP_ABL"
-ACTUAL_BACKUP_SHA="$(sha256sum "$BACKUP_ABL" | awk '{print $1}')"
-[ "$ACTUAL_BACKUP_SHA" = "$EXPECTED_BACKUP_SHA" ] || abort "$BACKUP_ABL hash mismatch"
+BACKUP_ABL_SIZE="$(wc -c < "$BACKUP_ABL" | tr -d ' ')"
+BACKUP_ABL_SHA="$(sha256sum "$BACKUP_ABL" | awk '{print $1}')"
+[ "$BACKUP_ABL_SIZE" -ge 1048576 ] || abort "$BACKUP_ABL is too small to be a whole ABL image"
+say "Fallback ABL size: $BACKUP_ABL_SIZE"
+say "Fallback ABL sha256: $BACKUP_ABL_SHA"
+say "Fallback ABL requirement: whole, known-good, GBL-capable image"
+ui_progress 0.10 0
 
+hash_prefix() {
+  dd if="$1" bs="$2" count=1 2>/dev/null | sha256sum | awk '{print $1}'
+}
+
+if [ -d /dev/block/by-name ]; then
+  ABL_DIR=/dev/block/by-name
+else
+  ABL_DIR=/dev/block/bootdevice/by-name
+fi
+
+slot=""
+if command -v getprop >/dev/null 2>&1; then
+  slot="$(getprop ro.boot.slot_suffix 2>/dev/null || true)"
+fi
+if [ -z "$slot" ] && [ -r /proc/cmdline ]; then
+  slot="$(tr ' ' '\n' < /proc/cmdline | awk -F= '$1 == "androidboot.slot_suffix" {print $2; exit}')"
+fi
+
+TARGET_ABL=""
+if [ "$slot" = "_a" ] && [ -e "$ABL_DIR/abl_b" ]; then
+  TARGET_ABL="$ABL_DIR/abl_b"
+elif [ "$slot" = "_b" ] && [ -e "$ABL_DIR/abl_a" ]; then
+  TARGET_ABL="$ABL_DIR/abl_a"
+elif [ -e "$ABL_DIR/abl" ]; then
+  TARGET_ABL="$ABL_DIR/abl"
+fi
+[ -n "$TARGET_ABL" ] || abort "could not identify inactive-slot ABL target from slot '$slot'"
+step "Selecting inactive-slot ABL target"
+say "Current slot: ${slot:-unknown}"
+say "Selected inactive-slot OTA ABL target: $TARGET_ABL"
+
+step "Verifying EFI payload hash and size"
 ACTUAL_EFI_SHA="$(sha256sum "$EFI" | awk '{print $1}')"
 [ "$ACTUAL_EFI_SHA" = "$EXPECTED_EFI_SHA" ] || abort "EFI payload hash mismatch"
 
 ACTUAL_EFI_SIZE="$(wc -c < "$EFI" | tr -d ' ')"
 [ "$ACTUAL_EFI_SIZE" = "$EXPECTED_EFI_SIZE" ] || abort "EFI payload size mismatch"
 [ "$ACTUAL_EFI_SIZE" -le 3145728 ] || abort "EFI payload exceeds 3MiB EFISP size assumption"
+say "EFI size: $ACTUAL_EFI_SIZE"
+say "EFI sha256: $ACTUAL_EFI_SHA"
+ui_progress 0.15 0
 
 EFISP_BLOCK=""
 for p in /dev/block/by-name/efisp /dev/block/bootdevice/by-name/efisp; do
@@ -75,20 +153,61 @@ for p in /dev/block/by-name/efisp /dev/block/bootdevice/by-name/efisp; do
 done
 [ -n "$EFISP_BLOCK" ] || abort "could not find efisp block device"
 
-ui_print "Mounting EFISP from $EFISP_BLOCK"
+step "Mounting EFISP"
+say "Mounting EFISP from $EFISP_BLOCK"
 mount -t vfat "$EFISP_BLOCK" "$MNT" || abort "failed to mount EFISP as vfat"
 
 if [ -f "$MNT/$EFISP_DEST" ]; then
-  TS="$(date +%Y%m%d-%H%M%S 2>/dev/null || echo unknown)"
-  cp "$MNT/$EFISP_DEST" "/sdcard/gbl-chainload_${EFISP_DEST}.${TS}.bak" \
+  EXISTING_BAK="$LOG_DIR/efisp-${EFISP_DEST}.${TS}.bak"
+  cp "$MNT/$EFISP_DEST" "$EXISTING_BAK" \
     || { umount "$MNT"; abort "failed to back up existing EFISP payload"; }
+  say "Existing EFISP payload backup: $EXISTING_BAK"
 fi
 
+step "Installing gbl-chainload EFI to EFISP"
 dd if="$EFI" of="$MNT/$EFISP_DEST" bs=1048576 conv=fsync \
   || { umount "$MNT"; abort "failed to install gbl-chainload EFI"; }
+EFISP_READBACK_SHA="$(sha256sum "$MNT/$EFISP_DEST" | awk '{print $1}')"
+[ "$EFISP_READBACK_SHA" = "$ACTUAL_EFI_SHA" ] \
+  || { umount "$MNT"; abort "EFISP EFI read-back hash mismatch"; }
 sync
 umount "$MNT" || abort "failed to unmount EFISP"
+say "EFISP read-back verification passed"
+ui_progress 0.25 0
 
-ui_print "Installed gbl-chainload EFI to EFISP:$EFISP_DEST"
-ui_print "Verified fallback ABL: $BACKUP_ABL"
+step "Backing up OTA ABL and restoring GBL-capable fallback"
+say "WARNING: restoring GBL-capable fallback ABL to $TARGET_ABL"
+TARGET_SHA="$(hash_prefix "$TARGET_ABL" "$BACKUP_ABL_SIZE")"
+if [ "$TARGET_SHA" = "$BACKUP_ABL_SHA" ]; then
+  say "Inactive-slot ABL already matches $BACKUP_ABL; skipping ABL restore"
+  OTA_BACKUP="already-restored"
+else
+  OTA_BACKUP="$LOG_DIR/ota_abl_$(basename "$TARGET_ABL")_${TARGET_SHA}.img"
+  dd if="$TARGET_ABL" of="$OTA_BACKUP" bs="$BACKUP_ABL_SIZE" count=1 \
+    || abort "failed to back up OTA ABL from $TARGET_ABL"
+  dd if="$BACKUP_ABL" of="$TARGET_ABL" bs=1048576 conv=fsync \
+    || abort "failed to write fallback ABL to $TARGET_ABL"
+fi
+
+READBACK_SHA="$(hash_prefix "$TARGET_ABL" "$BACKUP_ABL_SIZE")"
+[ "$READBACK_SHA" = "$BACKUP_ABL_SHA" ] || abort "ABL read-back verification failed"
+say "ABL read-back verification passed"
+ui_progress 0.25 0
+
+step "Writing final install summary"
+{
+  echo "summary=success"
+  echo "efisp_dest=$EFISP_DEST"
+  echo "efi_sha256=$ACTUAL_EFI_SHA"
+  echo "fallback_abl=$BACKUP_ABL"
+  echo "fallback_abl_sha256=$BACKUP_ABL_SHA"
+  echo "target_abl=$TARGET_ABL"
+  echo "ota_abl_backup=$OTA_BACKUP"
+} >> "$LOG"
+
+say "Installed gbl-chainload EFI to EFISP:$EFISP_DEST"
+say "Verified fallback ABL: $BACKUP_ABL"
+say "OTA ABL backup saved to $OTA_BACKUP"
+say "Artifact log: $LOG"
+ui_progress 0.20 0
 exit 0

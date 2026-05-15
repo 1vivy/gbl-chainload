@@ -3,8 +3,9 @@
     Sequence:
       1. ResolveActiveAblName + AblUnwrap_LoadFromPartition
       2. DynamicPatchLib_EnsureInit + DynamicPatch_Apply (abort on mandatory miss)
-      3. ProtocolHook_InstallAll (universal baseline + mode-N overlay; fail-closed)
-      4. LoadImage + StartImage  (does not return on success)
+      3. LoadImage patched ABL PE (before protocol hooks to keep failures clean)
+      4. ProtocolHook_InstallAll (universal baseline + mode-N overlay; fail-closed)
+      5. StartImage  (does not return on success)
 
     On any error (partition read fail / mandatory patch miss / hook install fail
     / LoadImage fail), return non-success — Entry.c falls through to FastbootLib.
@@ -120,17 +121,10 @@ BootFlowChainLoad (VOID)
     }
   }
 
-  /* 3. Install protocol hooks (universal baseline + mode-N overlay).
-        Mode-0 installs the universal observation/preservation hooks but no
-        fakelock overlay. */
-  Status = ProtocolHook_InstallAll (&HookRes);
-  if (EFI_ERROR (Status)) {
-    Print (L"BootFlow: FATAL — hook install failed (%r), aborting\n", Status);
-    FreePool (Pe);
-    return Status;
-  }
-
-  /* 4. LoadImage + StartImage. */
+  /* 3. Load the patched ABL image before installing protocol hooks.  LoadImage
+        parses/registers the child image but does not execute it; doing this
+        first keeps LoadImage failures from returning to our fastboot recovery
+        surface with global protocol vtables already hooked. */
 
   /* Proper transition: release the logfs partition handle so the next EFI in
      the chain (the patched ABL or further-chained payloads) can mount it
@@ -146,6 +140,20 @@ BootFlowChainLoad (VOID)
     return Status;
   }
 
+  /* 4. Install protocol hooks (universal baseline + mode-N overlay).
+        Mode-0 installs the universal observation/preservation hooks but no
+        fakelock overlay. */
+  Status = ProtocolHook_InstallAll (&HookRes);
+  if (EFI_ERROR (Status)) {
+    Print (L"BootFlow: FATAL — hook install failed (%r), aborting\n", Status);
+    if (ImageHandle != NULL) {
+      gBS->UnloadImage (ImageHandle);
+    }
+    FreePool (Pe);
+    return Status;
+  }
+
+  /* 5. StartImage. */
   GBL_INFO ("BootFlow: handing off to patched ABL\n");
 
   Status = gBS->StartImage (ImageHandle, NULL, NULL);
