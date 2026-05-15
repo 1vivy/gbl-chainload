@@ -1,21 +1,8 @@
 /* GblChainloadPkg/Library/GblPayloadLib/Sha256.c
-   Host: libcrypto. EDK2: vendored public-domain SHA-256. */
+   Vendored public-domain SHA-256 (Brad Conte / B-Con/crypto-algorithms).
+   Single implementation for EDK2, host, and Android cross builds — uses
+   only the portable types from Internal/Sha256.h's shim. */
 #include "Internal/Sha256.h"
-
-#ifdef GBL_HOST_BUILD
-# include <openssl/sha.h>
-void gbl_sha256(const uint8_t *buf, size_t len, uint8_t out[32]) {
-    SHA256_CTX c;
-    SHA256_Init(&c);
-    SHA256_Update(&c, buf, len);
-    SHA256_Final(out, &c);
-}
-#else
-/* Vendored public-domain SHA-256 (Brad Conte / B-Con/crypto-algorithms,
-   public domain; ~100 LOC). Avoids pulling BaseCryptLib + OpensslLib
-   into the GblChainload binary just for one hash function. */
-
-#include <Library/BaseMemoryLib.h>
 
 #define ROTR(x,n) (((x) >> (n)) | ((x) << (32 - (n))))
 #define CH(x,y,z) (((x) & (y)) ^ (~(x) & (z)))
@@ -25,7 +12,7 @@ void gbl_sha256(const uint8_t *buf, size_t len, uint8_t out[32]) {
 #define SIG0(x) (ROTR(x,7) ^ ROTR(x,18) ^ ((x) >> 3))
 #define SIG1(x) (ROTR(x,17) ^ ROTR(x,19) ^ ((x) >> 10))
 
-static const UINT32 k[64] = {
+static const uint32_t k[64] = {
   0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
   0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
   0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
@@ -37,18 +24,18 @@ static const UINT32 k[64] = {
 };
 
 typedef struct {
-  UINT8  data[64];
-  UINT32 datalen;
-  UINT64 bitlen;
-  UINT32 state[8];
+  uint8_t  data[64];
+  uint32_t datalen;
+  uint64_t bitlen;
+  uint32_t state[8];
 } sha256_ctx_t;
 
-static void sha256_transform(sha256_ctx_t *ctx, const UINT8 *data) {
-  UINT32 a,b,c,d,e,f,g,h,t1,t2,m[64];
-  UINTN i, j;
+static void sha256_transform(sha256_ctx_t *ctx, const uint8_t *data) {
+  uint32_t a,b,c,d,e,f,g,h,t1,t2,m[64];
+  size_t i, j;
   for (i = 0, j = 0; i < 16; ++i, j += 4)
-    m[i] = ((UINT32)data[j] << 24) | ((UINT32)data[j+1] << 16) |
-           ((UINT32)data[j+2] << 8)  | (UINT32)data[j+3];
+    m[i] = ((uint32_t)data[j] << 24) | ((uint32_t)data[j+1] << 16) |
+           ((uint32_t)data[j+2] << 8)  | (uint32_t)data[j+3];
   for (; i < 64; ++i)
     m[i] = SIG1(m[i-2]) + m[i-7] + SIG0(m[i-15]) + m[i-16];
   a=ctx->state[0]; b=ctx->state[1]; c=ctx->state[2]; d=ctx->state[3];
@@ -70,8 +57,8 @@ static void sha256_init(sha256_ctx_t *ctx) {
   ctx->state[6]=0x1f83d9ab; ctx->state[7]=0x5be0cd19;
 }
 
-static void sha256_update(sha256_ctx_t *ctx, const UINT8 *data, UINTN len) {
-  for (UINTN i = 0; i < len; ++i) {
+static void sha256_update(sha256_ctx_t *ctx, const uint8_t *data, size_t len) {
+  for (size_t i = 0; i < len; ++i) {
     ctx->data[ctx->datalen++] = data[i];
     if (ctx->datalen == 64) {
       sha256_transform(ctx, ctx->data);
@@ -81,8 +68,8 @@ static void sha256_update(sha256_ctx_t *ctx, const UINT8 *data, UINTN len) {
   }
 }
 
-static void sha256_final(sha256_ctx_t *ctx, UINT8 hash[32]) {
-  UINT32 i = ctx->datalen;
+static void sha256_final(sha256_ctx_t *ctx, uint8_t hash[32]) {
+  uint32_t i = ctx->datalen;
   if (ctx->datalen < 56) {
     ctx->data[i++] = 0x80;
     while (i < 56) ctx->data[i++] = 0;
@@ -90,27 +77,27 @@ static void sha256_final(sha256_ctx_t *ctx, UINT8 hash[32]) {
     ctx->data[i++] = 0x80;
     while (i < 64) ctx->data[i++] = 0;
     sha256_transform(ctx, ctx->data);
-    SetMem(ctx->data, 56, 0);
+    for (uint32_t z = 0; z < 56; z++) ctx->data[z] = 0;
   }
-  ctx->bitlen += (UINT64)ctx->datalen * 8;
-  ctx->data[63] = (UINT8)ctx->bitlen;
-  ctx->data[62] = (UINT8)(ctx->bitlen >> 8);
-  ctx->data[61] = (UINT8)(ctx->bitlen >> 16);
-  ctx->data[60] = (UINT8)(ctx->bitlen >> 24);
-  ctx->data[59] = (UINT8)(ctx->bitlen >> 32);
-  ctx->data[58] = (UINT8)(ctx->bitlen >> 40);
-  ctx->data[57] = (UINT8)(ctx->bitlen >> 48);
-  ctx->data[56] = (UINT8)(ctx->bitlen >> 56);
+  ctx->bitlen += (uint64_t)ctx->datalen * 8;
+  ctx->data[63] = (uint8_t)ctx->bitlen;
+  ctx->data[62] = (uint8_t)(ctx->bitlen >> 8);
+  ctx->data[61] = (uint8_t)(ctx->bitlen >> 16);
+  ctx->data[60] = (uint8_t)(ctx->bitlen >> 24);
+  ctx->data[59] = (uint8_t)(ctx->bitlen >> 32);
+  ctx->data[58] = (uint8_t)(ctx->bitlen >> 40);
+  ctx->data[57] = (uint8_t)(ctx->bitlen >> 48);
+  ctx->data[56] = (uint8_t)(ctx->bitlen >> 56);
   sha256_transform(ctx, ctx->data);
   for (i = 0; i < 4; ++i) {
-    hash[i]    = (UINT8)(ctx->state[0] >> (24 - i * 8));
-    hash[i+4]  = (UINT8)(ctx->state[1] >> (24 - i * 8));
-    hash[i+8]  = (UINT8)(ctx->state[2] >> (24 - i * 8));
-    hash[i+12] = (UINT8)(ctx->state[3] >> (24 - i * 8));
-    hash[i+16] = (UINT8)(ctx->state[4] >> (24 - i * 8));
-    hash[i+20] = (UINT8)(ctx->state[5] >> (24 - i * 8));
-    hash[i+24] = (UINT8)(ctx->state[6] >> (24 - i * 8));
-    hash[i+28] = (UINT8)(ctx->state[7] >> (24 - i * 8));
+    hash[i]    = (uint8_t)(ctx->state[0] >> (24 - i * 8));
+    hash[i+4]  = (uint8_t)(ctx->state[1] >> (24 - i * 8));
+    hash[i+8]  = (uint8_t)(ctx->state[2] >> (24 - i * 8));
+    hash[i+12] = (uint8_t)(ctx->state[3] >> (24 - i * 8));
+    hash[i+16] = (uint8_t)(ctx->state[4] >> (24 - i * 8));
+    hash[i+20] = (uint8_t)(ctx->state[5] >> (24 - i * 8));
+    hash[i+24] = (uint8_t)(ctx->state[6] >> (24 - i * 8));
+    hash[i+28] = (uint8_t)(ctx->state[7] >> (24 - i * 8));
   }
 }
 
@@ -120,4 +107,3 @@ void gbl_sha256(const uint8_t *buf, size_t len, uint8_t out[32]) {
   sha256_update(&ctx, buf, len);
   sha256_final(&ctx, out);
 }
-#endif

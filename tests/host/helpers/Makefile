@@ -19,8 +19,8 @@ test_crc32: test_crc32.c ../../../GblChainloadPkg/Library/GblPayloadLib/Crc32.c 
 
 test_sha256: test_sha256.c ../../../GblChainloadPkg/Library/GblPayloadLib/Sha256.c \
              ../../../GblChainloadPkg/Library/GblPayloadLib/Internal/Sha256.h
-	$(CC) $(CFLAGS) -Wno-deprecated-declarations -DGBL_HOST_BUILD=1 -o $@ test_sha256.c \
-	      ../../../GblChainloadPkg/Library/GblPayloadLib/Sha256.c -lcrypto
+	$(CC) $(CFLAGS) -DGBL_HOST_BUILD=1 -o $@ test_sha256.c \
+	      ../../../GblChainloadPkg/Library/GblPayloadLib/Sha256.c
 
 test_pe_sanity: test_pe_sanity.c ../../../GblChainloadPkg/Library/GblPayloadLib/PeSanity.c \
                 ../../../GblChainloadPkg/Library/GblPayloadLib/Internal/PeSanity.h
@@ -36,9 +36,9 @@ PARSER_SRCS = \
   ../../../GblChainloadPkg/Library/GblPayloadLib/PeSanity.c
 
 parser_harness: parser_harness.c $(PARSER_SRCS)
-	$(CC) $(CFLAGS) -Wno-deprecated-declarations -DGBL_HOST_BUILD=1 \
+	$(CC) $(CFLAGS) -DGBL_HOST_BUILD=1 \
 	      -I../../../tools/shared \
-	      -o $@ parser_harness.c $(PARSER_SRCS) -lcrypto
+	      -o $@ parser_harness.c $(PARSER_SRCS)
 
 BINS += poison_byte
 
