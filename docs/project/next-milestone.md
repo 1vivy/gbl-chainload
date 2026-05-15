@@ -35,7 +35,7 @@ Status:
 
 - Initial `--cache-abl` build/runtime plumbing is implemented.
 - gbl-chainload ZIP packaging with recovery-side `/sdcard/backup_abl.img` verification is implemented.
-- recovery-graft ZIP packaging is still pending.
+- recovery-graft host tooling and ZIP packaging are implemented.
 
 Acceptance:
 
