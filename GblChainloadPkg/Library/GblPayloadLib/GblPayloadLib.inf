@@ -17,6 +17,7 @@
   Sha256.c
   PeSanity.c
   LocateOverlay.c
+  EfispBlockIo.c
 
 [Packages]
   MdePkg/MdePkg.dec
