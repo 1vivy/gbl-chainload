@@ -36,6 +36,7 @@ Status:
 - Initial `--cache-abl` build/runtime plumbing is implemented.
 - gbl-chainload ZIP packaging with recovery-side `/sdcard/backup_abl.img` verification is implemented.
 - recovery-graft host tooling and ZIP packaging are implemented.
+- mode-2 profile ZIP packaging is implemented as a separate layer on top of cache-ABL; it installs an included profile, validates an existing profile, or generates `/sdcard/gbl-chainload_profile.xml` from `/sdcard/stock_vbmeta.img`.
 
 Acceptance:
 

@@ -23,6 +23,8 @@ echo "== 054_gbl_zip_lint =="
 bash tests/054_gbl_zip_lint.sh
 echo "== 055_recovery_graft_lint =="
 bash tests/055_recovery_graft_lint.sh
+echo "== 056_mode2_profile_lint =="
+bash tests/056_mode2_profile_lint.sh
 
 # Carried-forward signature lint, if present.
 if [[ -f tests/030_signature_lint.sh ]]; then

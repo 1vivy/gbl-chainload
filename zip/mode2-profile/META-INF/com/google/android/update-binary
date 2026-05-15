@@ -1,0 +1,103 @@
+#!/sbin/sh
+# mode-2 profile installer/generator. User-run from custom recovery only.
+
+OUTFD="$2"
+ZIPFILE="$3"
+ui_print() {
+  if [ -n "$OUTFD" ] && [ -e "/proc/self/fd/$OUTFD" ]; then
+    echo "ui_print $1" > "/proc/self/fd/$OUTFD"
+    echo "ui_print" > "/proc/self/fd/$OUTFD"
+  else
+    echo "$1"
+  fi
+}
+abort() { ui_print "ERROR: $1"; exit 1; }
+need_cmd() { command -v "$1" >/dev/null 2>&1 || abort "missing required recovery command: $1"; }
+
+need_cmd awk
+need_cmd cat
+need_cmd cp
+need_cmd dd
+need_cmd grep
+need_cmd mkdir
+need_cmd sha256sum
+need_cmd tr
+need_cmd unzip
+need_cmd wc
+
+PROFILE=/sdcard/gbl-chainload_profile.xml
+STOCK_VBMETA=/sdcard/stock_vbmeta.img
+BACKUP_ABL=/sdcard/backup_abl.img
+WORK=/tmp/mode2-profile-install
+MANIFEST="$WORK/manifest"
+INCLUDED_PROFILE="$WORK/gbl-chainload_profile.xml"
+
+rm -rf "$WORK"
+mkdir -p "$WORK" || abort "failed to create work directory"
+unzip -p "$ZIPFILE" payload/manifest > "$MANIFEST" || abort "failed to extract manifest"
+
+get_manifest() { awk -F= -v key="$1" '$1 == key { print $2; exit }' "$MANIFEST"; }
+profile_included="$(get_manifest profile_included)"
+
+[ -f "$BACKUP_ABL" ] || abort "cache-ABL mode-2 flow requires $BACKUP_ABL"
+
+if [ "$profile_included" = "1" ]; then
+  unzip -p "$ZIPFILE" payload/gbl-chainload_profile.xml > "$INCLUDED_PROFILE" \
+    || abort "failed to extract included mode-2 profile"
+  grep -q '<gbl-chainload-profile' "$INCLUDED_PROFILE" \
+    || abort "included profile missing gbl-chainload-profile root"
+  grep -q 'mode="2"' "$INCLUDED_PROFILE" \
+    || abort "included profile is not a mode-2 profile"
+
+  if [ -f "$STOCK_VBMETA" ]; then
+    actual="$(sha256sum "$STOCK_VBMETA" | awk '{print $1}')"
+    grep -q "$actual" "$INCLUDED_PROFILE" \
+      || abort "included profile does not match $STOCK_VBMETA"
+  fi
+
+  if [ -f "$PROFILE" ]; then
+    existing="$(sha256sum "$PROFILE" | awk '{print $1}')"
+    incoming="$(sha256sum "$INCLUDED_PROFILE" | awk '{print $1}')"
+    [ "$existing" = "$incoming" ] || abort "existing profile differs from included profile; remove or update $PROFILE"
+    ui_print "Existing mode-2 profile already matches included profile"
+    exit 0
+  fi
+
+  cp "$INCLUDED_PROFILE" "$PROFILE" || abort "failed to install included profile to $PROFILE"
+  ui_print "Installed included mode-2 profile to $PROFILE"
+  exit 0
+fi
+
+if [ -f "$PROFILE" ]; then
+  ui_print "Found existing mode-2 profile: $PROFILE"
+  if [ -f "$STOCK_VBMETA" ]; then
+    actual="$(sha256sum "$STOCK_VBMETA" | awk '{print $1}')"
+    if grep -q "$actual" "$PROFILE"; then
+      ui_print "Existing profile matches $STOCK_VBMETA"
+    else
+      abort "existing profile does not match $STOCK_VBMETA; regenerate or remove it"
+    fi
+  fi
+  exit 0
+fi
+
+[ -f "$STOCK_VBMETA" ] || abort "missing $PROFILE and $STOCK_VBMETA"
+magic="$(dd if="$STOCK_VBMETA" bs=4 count=1 2>/dev/null)"
+[ "$magic" = "AVB0" ] || abort "$STOCK_VBMETA does not start with AVB0"
+sha="$(sha256sum "$STOCK_VBMETA" | awk '{print $1}')"
+size="$(wc -c < "$STOCK_VBMETA" | tr -d ' ')"
+mkdir -p /sdcard || abort "failed to access /sdcard"
+cat > "$PROFILE" <<EOF
+<?xml version="1.0" encoding="utf-8"?>
+<gbl-chainload-profile version="1" mode="2">
+  <device>unknown</device>
+  <security-patch>unknown</security-patch>
+  <stock-vbmeta>
+    <sha256>$sha</sha256>
+    <size>$size</size>
+  </stock-vbmeta>
+  <generated-by>mode2-profile recovery ZIP</generated-by>
+</gbl-chainload-profile>
+EOF
+ui_print "Generated $PROFILE from $STOCK_VBMETA"
+exit 0
