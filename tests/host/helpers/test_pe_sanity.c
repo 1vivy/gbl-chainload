@@ -59,6 +59,18 @@ int main(void) {
     if (s != GBL_PE_BAD_SUBSYS) { fprintf(stderr, "FAIL: subsys\n"); return 1; }
     make_sane_pe[0xDC] = 10;
 
+    /* Wraparound: lfanew near UINT32_MAX must be rejected, not bypass bounds. */
+    /* Reset to sane PE first */
+    build_sane_pe();
+    /* e_lfanew = 0xFFFFFFF0 — would wrap if checked with uint32_t arithmetic */
+    make_sane_pe[0x3c] = 0xF0; make_sane_pe[0x3d] = 0xFF;
+    make_sane_pe[0x3e] = 0xFF; make_sane_pe[0x3f] = 0xFF;
+    s = gbl_pe_sanity(make_sane_pe, sizeof(make_sane_pe));
+    if (s != GBL_PE_BAD_LFANEW) {
+        fprintf(stderr, "FAIL: lfanew wraparound not rejected: %d\n", s);
+        return 1;
+    }
+
     printf("PASS: pe_sanity\n");
     return 0;
 }

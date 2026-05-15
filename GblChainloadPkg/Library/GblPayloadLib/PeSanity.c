@@ -29,13 +29,13 @@ enum gbl_pe_status gbl_pe_sanity(const uint8_t *pe, size_t size) {
     if (size < 0x200) return GBL_PE_TOO_SMALL;
     if (pe[0] != 'M' || pe[1] != 'Z') return GBL_PE_BAD_DOS;
     uint32_t lfanew = le32(pe + DOS_E_LFANEW);
-    if (lfanew + 0x18 + COFF_OPT_HDR_SIZE > size) return GBL_PE_BAD_LFANEW;
+    if ((size_t)lfanew + 0x18 + COFF_OPT_HDR_SIZE > size) return GBL_PE_BAD_LFANEW;
     if (le32(pe + lfanew) != PE_MAGIC_BYTES) return GBL_PE_BAD_PE_MAGIC;
     const uint8_t *coff = pe + lfanew + 4;
     if (le16(coff + COFF_MACHINE_OFF) != MACHINE_AARCH64)
         return GBL_PE_BAD_MACHINE;
     uint16_t opt_size = le16(coff + 0x10);
-    if (lfanew + 4 + 0x14 + opt_size > size) return GBL_PE_BAD_LFANEW;
+    if ((size_t)lfanew + 4 + 0x14 + (size_t)opt_size > size) return GBL_PE_BAD_LFANEW;
     const uint8_t *opt = coff + 0x14;
     if (le16(opt + OPT_MAGIC_OFF) != OPT_MAGIC_PE32P) return GBL_PE_BAD_OPT_MAGIC;
     if (le16(opt + OPT_SUBSYSTEM_OFF) != SUBSYSTEM_EFI_APP)
