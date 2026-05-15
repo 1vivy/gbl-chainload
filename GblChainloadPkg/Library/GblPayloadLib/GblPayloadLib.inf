@@ -1,0 +1,34 @@
+## @file
+#  GblPayloadLib.inf — locate, parse, and validate the GBLP1
+#  overlay (config-table override OR raw EFISP BlockIO read).
+##
+
+[Defines]
+  INF_VERSION                    = 0x00010005
+  BASE_NAME                      = GblPayloadLib
+  FILE_GUID                      = 2f9d0f19-6623-4770-9761-8926011e1126
+  MODULE_TYPE                    = UEFI_APPLICATION
+  VERSION_STRING                 = 1.0
+  LIBRARY_CLASS                  = GblPayloadLib
+
+[Sources]
+  PayloadParse.c
+  Crc32.c
+  Sha256.c
+  PeSanity.c
+  LocateOverlay.c
+
+[Packages]
+  MdePkg/MdePkg.dec
+  MdeModulePkg/MdeModulePkg.dec
+  CryptoPkg/CryptoPkg.dec
+  GblChainloadPkg/GblChainloadPkg.dec
+
+[LibraryClasses]
+  BaseLib
+  BaseMemoryLib
+  MemoryAllocationLib
+  UefiBootServicesTableLib
+  DebugLib
+  BaseCryptLib
+  GblLog
