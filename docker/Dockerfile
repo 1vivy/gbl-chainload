@@ -48,6 +48,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         file \
     && rm -rf /var/lib/apt/lists/*
 
+# --- Android NDK r27 for cross-compiling recovery tools ---
+ARG NDK_VER=r27c
+RUN curl -fsSL -o /tmp/ndk.zip \
+        "https://dl.google.com/android/repository/android-ndk-${NDK_VER}-linux.zip" \
+ && unzip -q /tmp/ndk.zip -d /opt \
+ && mv /opt/android-ndk-${NDK_VER} /opt/android-ndk \
+ && rm /tmp/ndk.zip
+ENV ANDROID_NDK=/opt/android-ndk
+
 # Default to a writable workdir; run --user maps host UID at runtime so
 # bind-mounted outputs are owned by the host user.
 WORKDIR /work
