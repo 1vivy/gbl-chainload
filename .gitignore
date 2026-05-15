@@ -5,11 +5,24 @@ dist/
 *.obj
 *.efi.unsigned
 tools/abl-patcher/abl-patcher
+tools/abl-patcher/abl-patcher-android
 tools/fv-unwrap/fv-unwrap
+tools/fv-unwrap/fv-unwrap-android
+tools/gbl-pack/gbl-pack
+tools/gbl-pack/gbl-pack-android
+tools/gbl-commit/gbl-commit
+tools/gbl-commit/gbl-commit-android
 tests/*/test_*
 !tests/*/test_*.c
 !tests/*/test_*.h
 !tests/*/test_*.sh
+
+# Host test helper binaries — sources tracked, compiled binaries not
+tests/host/helpers/*
+!tests/host/helpers/*.c
+!tests/host/helpers/*.h
+!tests/host/helpers/Makefile
+tests/host/.last/
 
 # Session/tooling state
 .claude/
