@@ -7,7 +7,7 @@
 #ifndef GBL_PATCH_SIGNATURES_H_
 #define GBL_PATCH_SIGNATURES_H_
 
-#ifdef __HOST_BUILD__
+#if defined(__HOST_BUILD__) || defined(GBL_HOST_BUILD)
 # include <stdint.h>
   /* EDK2 annotation macros needed so the arrays below compile on the host. */
 # ifndef STATIC
