@@ -15,8 +15,10 @@ int main(int argc, char **argv) {
     if (!f) { perror("fopen"); return 2; }
     fseek(f, 0, SEEK_END);
     size_t n = ftell(f);
+    if (n == (size_t)-1) { fclose(f); return 2; }
     fseek(f, 0, SEEK_SET);
     uint8_t *buf = malloc(n);
+    if (!buf) { fclose(f); return 2; }
     if (fread(buf, 1, n, f) != n) { free(buf); fclose(f); return 2; }
     fclose(f);
 
