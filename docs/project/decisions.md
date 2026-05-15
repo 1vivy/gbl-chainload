@@ -40,17 +40,32 @@ Decision: prefer custom-recovery ZIP deliverables over an autonomous device-side
 User flow:
 
 1. User flashes the OTA from custom recovery.
-2. User flashes the gbl-chainload ZIP.
+2. User flashes the gbl-chainload installer ZIP (orchestrates patch + EFISP write).
 3. User flashes the recovery-graft ZIP.
 4. User keeps a known-good fallback ABL at `/sdcard/backup_abl.img`.
 
-Implementation direction:
+Implementation:
 
-- Cache ABL into gbl-chainload as a static patch/payload.
-- Teach the dynamic patch engine to deliberately skip the cached ABL payload.
-- Add `scripts/build.sh --cache-abl <path>` to produce cache-ABL builds.
+- Cache ABL is NOT a build-time static embed. It is an on-device-generated GBLP1 container appended to `gbl-chainload.efi` on the EFISP raw partition, written via `dd` inside the installer ZIP.
+- Runtime locator: `GblPayloadLib` checks for a configuration-table entry installed by the `fastboot oem boot-efi` handler (test path), then falls back to a raw BlockIO read of the `L"efisp"` partition (production path). Single parser, both sources.
+- `BootFlow.c` tries the cached payload first (Tier 1), falls through to dynamic patching (Tier 2), falls through to `EnterFastboot` (Tier 3) via `Entry.c`.
+- The `--cache-abl <path>` build flag in `scripts/build.sh` is deprecated. The EFI no longer accepts a build-time payload; the GBLP1 container is produced on-device by `tools/gbl-pack` during ZIP installation.
+- `DynamicPatchLib`'s post-patch efisp byte-scan gate (Tier 2) and the packer-side efisp scan in `tools/gbl-pack` (Tier 1 / cache path) together enforce the efisp-invariant: any patched ABL that still contains UTF-16 LE `efisp` bytes is rejected before it can cause recursion.
 
-Rationale: this keeps non-HLOS writes out of the agent workflow and makes the user's recovery environment the explicit installation surface.
+Rationale: on-device generation means the cached ABL is always built from the OTA's actual `abl_<inactive>` bytes, with no host build step required after an OTA. Non-HLOS writes remain user-driven (TWRP ZIP swipe), keeping the agent workflow safe.
+
+## Cache-ABL container format
+
+Decision: GBLP1 v1 — a versioned TLV container appended to the installed gbl-chainload PE on EFISP.
+
+Format reference: `docs/superpowers/specs/2026-05-15-on-device-payload-insertion-design.md` (GBLP1 v1 byte layout, type codes, runtime validation order, failure-category log lines).
+
+Key properties:
+
+- 8-byte magic (`GBLP1\0\0\0`), 28-byte header with CRC-32, per-entry SHA-256, 8-byte `GBLP1END` footer.
+- Type `0x0001` (`cached_abl`) is required; type `0x0010` (`mode2_profile`) is reserved for a future PR.
+- Container size cap: 16 MiB. Parser validates header, CRC, footer, per-entry SHA, and PE sanity (AArch64, `EFI_APPLICATION`, `.text` bounds) before returning bytes to `BootFlow.c`.
+- Produced by `tools/gbl-pack`; committed to EFISP by `tools/gbl-commit`.
 
 ## Mode-2 delivery model
 

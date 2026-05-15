@@ -25,19 +25,19 @@ Goal: keep gbl-chainload viable across OTAs that change ABL or remove the direct
 
 Deliverables:
 
-- Define how a known-good ABL is cached into gbl-chainload as a static patch/payload.
-- Update the dynamic patch engine so it deliberately skips patching the already-cached ABL payload.
-- Add `scripts/build.sh --cache-abl <path>` to embed the cached ABL path into the build output.
-- Produce a gbl-chainload ZIP flow for post-OTA custom-recovery installation.
-- Document the user-owned fallback file: `/sdcard/backup_abl.img`.
+- **DONE** — Define how a known-good ABL is cached into gbl-chainload. Implemented as an on-device-generated GBLP1 v1 container appended to the gbl-chainload PE on EFISP. Format and runtime contract specified in `docs/superpowers/specs/2026-05-15-on-device-payload-insertion-design.md`; `GblPayloadLib` is the EFI-side reader.
+- **DONE** — Update the dynamic patch engine so it deliberately skips the cached ABL payload. `DynamicPatchLib`'s post-patch efisp byte-scan gate (T2.3) rejects any patched PE that still contains UTF-16 LE `efisp` bytes. The Tier 1 short-circuit in `BootFlow.c` (T2.7) means Tier 2 dynamic patching is never attempted when the cached overlay loads successfully.
+- **SUPERSEDED** — Add `scripts/build.sh --cache-abl <path>`. This flag is removed. The EFI no longer accepts a build-time payload; on-device generation via `tools/gbl-pack` inside the installer ZIP replaces this build path entirely.
+- **IN PROGRESS** — Produce a gbl-chainload ZIP flow for post-OTA custom-recovery installation. `zip/gbl-chainload/` skeleton and `scripts/build-recovery-zip.sh` are defined; cross-compilation of recovery tools (aarch64-Android NDK targets for `fv-unwrap`, `abl-patcher`, `gbl-pack`, `gbl-commit`) is Phase 3 of this PR; final ZIP assembly is Phase 4.
+- **PARTIAL** — Document the user-owned fallback file: `/sdcard/backup_abl.img`. Covered in the spec and in `zip/gbl-chainload/README.txt` (bundled with the installer ZIP at Phase 4).
 
 Acceptance:
 
-- A build with `--cache-abl /path/to/abl.img` produces a gbl-chainload artifact that can use the cached ABL without re-running dynamic patches against that cached payload.
-- Builds without `--cache-abl` keep current behavior.
-- The ZIP instructions use custom recovery: flash OTA, flash gbl-chainload ZIP, then flash recovery-graft ZIP.
+- The installed gbl-chainload artifact (base EFI + appended GBLP1 overlay) uses the cached ABL via Tier 1 without running dynamic patches against the cached payload. Tier 2 dynamic patching remains available as fallback for the no-overlay case.
+- Builds without an appended overlay keep current behavior (Tier 2 dynamic patch path).
+- The ZIP instructions use custom recovery: flash OTA, flash gbl-chainload installer ZIP, then flash recovery-graft ZIP.
 - User fallback naming is stable and documented as `/sdcard/backup_abl.img`.
-- EFISP/artifact capacity assumptions are checked before publishing the flow.
+- EFISP/artifact capacity assumptions are checked before publishing the flow (no proactive gate; `dd` errors on overrun; `gbl-commit --verify` + `/sdcard/efisp.bak` backup are the recovery medium).
 - No direct flash of non-HLOS partitions is required from the agent workflow.
 
 ### 3. Mode-2 profiles
