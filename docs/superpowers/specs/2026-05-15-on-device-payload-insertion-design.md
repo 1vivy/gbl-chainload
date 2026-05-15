@@ -375,17 +375,26 @@ BootFlowChainLoad (VOID)
 
   GBL_INFO ("BootFlow: loaded ABL via %a (size=%u)\n", Origin, PeSize);
 
-  // Hook-lifecycle order preserved per feature/hook-lifecycle-safety:
-  //   LoadImage → ProtocolHookLib::InstallAll → StartImage.
+  // Hook-lifecycle order preserved per feature/hook-lifecycle-safety and
+  // logfs_open_across_handoff:
+  //   InstallAll → LogFsClose → LoadImage → StartImage.
+  Status = ProtocolHook_InstallAll (&HookRes);
+  if (EFI_ERROR (Status)) {
+    GBL_INFO ("BootFlow: hook install failed (%r), aborting\n", Status);
+    FreePool (Pe);
+    return Status;
+  }
+
+  /* Close logfs AFTER hooks (hooks may emit log lines), BEFORE LoadImage
+     (load-bearing per logfs_open_across_handoff). */
+  LogFsClose ();
+
   Status = gBS->LoadImage (FALSE, gImageHandle, NULL, Pe, PeSize, &AblImage);
   FreePool (Pe);
   if (EFI_ERROR (Status)) {
     GBL_INFO ("BootFlow: LoadImage failed: %r\n", Status);
     return Status;
   }
-
-  ProtocolHookLib_InstallAll ();
-  LogFsClose ();
 
   Status = gBS->StartImage (AblImage, NULL, NULL);
   GBL_INFO ("BootFlow: StartImage returned %r — falling through\n", Status);

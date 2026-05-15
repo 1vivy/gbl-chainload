@@ -13,13 +13,6 @@
 
 EFI_GUID gGblStagedBufferGuid = GBL_STAGED_BUFFER_GUID;
 
-typedef struct {
-    UINT32                Magic;
-    UINT32                Version;
-    EFI_PHYSICAL_ADDRESS  Base;
-    UINTN                 Size;
-} GBL_STAGED_BUFFER_TABLE;
-
 EFI_STATUS ReadEfispRawBytes(VOID **OutBytes, UINTN *OutSize); /* in EfispBlockIo.c — lands in T2.5 */
 
 EFI_STATUS

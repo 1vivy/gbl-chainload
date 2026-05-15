@@ -66,8 +66,15 @@ cat /tmp/gbl/base/gbl-chainload.efi /tmp/gbl/payload.bin > /tmp/gbl/installed.ef
 
 ui_print "[4/7] backup current EFISP -> /sdcard/efisp.bak"
 EFISP_SIZE=$(blockdev --getsize64 /dev/block/by-name/efisp)
-dd if=/dev/block/by-name/efisp of=/sdcard/efisp.bak bs=1M \
-  count=$((EFISP_SIZE / 1048576)) 2>/dev/null
+# Back up the exact byte count using 4096-byte blocks (block devices are
+# always 512-byte-sector aligned; 4096 is safe and fast).
+dd if=/dev/block/by-name/efisp of=/sdcard/efisp.bak bs=4096 \
+  count=$((EFISP_SIZE / 4096)) 2>/dev/null
+# Handle any sub-4096 tail (rare — EFISP is typically MiB-aligned — but be exact).
+EFISP_TAIL=$((EFISP_SIZE % 4096))
+[ "$EFISP_TAIL" -gt 0 ] && dd if=/dev/block/by-name/efisp of=/sdcard/efisp.bak \
+  bs=1 skip=$((EFISP_SIZE - EFISP_TAIL)) seek=$((EFISP_SIZE - EFISP_TAIL)) \
+  count="$EFISP_TAIL" conv=notrunc 2>/dev/null
 sync
 
 ui_print "[5/7] dd installed.efi -> EFISP (with SHA verify + backup)"

@@ -23,4 +23,15 @@
     { 0xbb230682, 0x6c4c, 0x40c9, \
       { 0x9b, 0x8c, 0x73, 0xb5, 0x41, 0xce, 0x9b, 0xa4 } }
 
+/* Shared struct used by the producer (FastbootCmds.c) and the consumer
+   (LocateOverlay.c).  Both include <Uefi.h> before this header, so
+   EFI_PHYSICAL_ADDRESS and UINTN are available.  This header is only
+   ever included from EDK2 translation units — no host-build guard needed. */
+typedef struct {
+  UINT32                Magic;    /* must equal GBL_STAGED_BUFFER_MAGIC   */
+  UINT32                Version;  /* must equal GBL_STAGED_BUFFER_VERSION */
+  EFI_PHYSICAL_ADDRESS  Base;     /* physical address of the staged buffer */
+  UINTN                 Size;     /* size of the staged buffer in bytes    */
+} GBL_STAGED_BUFFER_TABLE;
+
 #endif /* GBL_STAGED_BUFFER_H_ */

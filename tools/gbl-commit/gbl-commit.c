@@ -24,6 +24,14 @@ static int read_file(const char *p, uint8_t **out, size_t *out_size) {
         if (cur > 0) n = (size_t)cur;
         lseek(fd, 0, SEEK_SET);
     }
+    /* Guard: if size is still 0 after the lseek fallback (some kernels don't
+       report block-device size via lseek either), refuse to proceed — a
+       zero-length buffer would silently corrupt the destination on restore. */
+    if (n == 0) {
+        fprintf(stderr, "gbl-commit: cannot determine size of %s\n", p);
+        close(fd);
+        return -1;
+    }
     uint8_t *b = malloc(n);
     if (!b) { close(fd); return -1; }
     ssize_t r = 0; size_t got = 0;
