@@ -18,6 +18,7 @@
   PeSanity.c
   LocateOverlay.c
   EfispBlockIo.c
+  GblPayload.c
 
 [Packages]
   MdePkg/MdePkg.dec
