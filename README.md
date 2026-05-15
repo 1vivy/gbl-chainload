@@ -73,7 +73,12 @@ The bundled edk2 FastbootLib is trimmed for RAM-loaded gbl-chainload testing and
 
 Useful getvars:
 
-- `gbl-chainload_*`
+- `gbl-chainload_mode` — `mode-0`, `mode-1`, etc.
+- `gbl-chainload_date`
+- `gbl-chainload_auto`
+- `gbl-chainload_debug`
+- `gbl-chainload_verbose`
+- `unlocked`
 - `oem-unlock-allowed`
 - `vbmeta:capabilities`
 - `vbmeta:slot`
@@ -83,7 +88,7 @@ Useful getvars:
 
 Useful commands:
 
-- `fastboot stage <file>` — stage a image.
+- `fastboot stage <file>` — stage an image for `boot`, `oem boot-efi`, or other staged-data commands.
 - `fastboot oem escape` — leave gbl-chainload FastbootLib and continue into patched ABL.
 - `fastboot oem boot-efi` — boot the currently staged EFI image with `LoadImage()` / `StartImage()`.
 - `fastboot oem oem-unlock-toggle` — enable the FRP OEM-unlock-allowed bit; second use is a no-op.
@@ -97,7 +102,7 @@ Fastboot screen additions:
 - `Enable OEM unlock` menu action.
 - `Escape` menu action.
 
-There is also a Boot ESP menu option, that would be useful for directly booting Operating Systems from USB. (Untested)
+There is also an untested `Boot ESP` menu option intended for directly booting operating systems from USB.
 
 ## Mode-0 reserve preservation test plan
 
