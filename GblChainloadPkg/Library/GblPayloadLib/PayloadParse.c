@@ -39,3 +39,64 @@ gbl_payload_validate_header(const uint8_t *b, size_t n) {
         return GBL_PAYLOAD_FOOTER_MISMATCH;
     return GBL_PAYLOAD_OK;
 }
+
+#include "Internal/Sha256.h"
+#include "Internal/PeSanity.h"
+
+enum gbl_payload_status
+gbl_payload_find_cached_abl(const uint8_t *b, size_t n,
+                            const uint8_t **out_pe, size_t *out_size) {
+    enum gbl_payload_status s = gbl_payload_validate_header(b, n);
+    if (s != GBL_PAYLOAD_OK) return s;
+
+    uint32_t total = le32(b + 16);
+    uint32_t ec = le32(b + 20);
+    const uint8_t *entries = b + GBLP1_HEADER_SIZE;
+    size_t payload_region_start = GBLP1_HEADER_SIZE + (size_t)ec * GBLP1_ENTRY_SIZE;
+    payload_region_start = (payload_region_start + GBLP1_PAYLOAD_ALIGN - 1)
+                           & ~((size_t)GBLP1_PAYLOAD_ALIGN - 1);
+
+    int found_cached_abl = 0;
+    const uint8_t *cached_pe = NULL;
+    size_t cached_size = 0;
+
+    for (uint32_t i = 0; i < ec; i++) {
+        const uint8_t *e = entries + (size_t)i * GBLP1_ENTRY_SIZE;
+        uint16_t type     = le16(e + 0);
+        uint16_t flags    = le16(e + 2);
+        uint32_t off      = le32(e + 4);
+        uint32_t sz       = le32(e + 8);
+        uint32_t reserved = le32(e + 12);
+        const uint8_t *recorded_sha = e + 16;
+
+        if (type == 0)      return GBL_PAYLOAD_ENTRY_BAD_TYPE;
+        if (flags != 0)     return GBL_PAYLOAD_ENTRY_BAD_FLAGS;
+        if (reserved != 0)  return GBL_PAYLOAD_ENTRY_BAD_RESERVED;
+        if (off < payload_region_start ||
+            (off & (GBLP1_PAYLOAD_ALIGN - 1)) != 0)
+            return GBL_PAYLOAD_ENTRY_BAD_OFFSET;
+        if ((size_t)off + sz + GBLP1_FOOTER_SIZE > (size_t)total)
+            return GBL_PAYLOAD_ENTRY_BAD_SIZE;
+
+        uint8_t got[32];
+        gbl_sha256(b + off, sz, got);
+        if (memcmp(got, recorded_sha, 32) != 0)
+            return GBL_PAYLOAD_ENTRY_SHA_MISMATCH;
+
+        if (type == GBLP1_TYPE_CACHED_ABL) {
+            if (found_cached_abl) return GBL_PAYLOAD_ENTRY_BAD_TYPE; /* duplicate */
+            found_cached_abl = 1;
+            cached_pe   = b + off;
+            cached_size = sz;
+        }
+        /* Other types: parser MUST ignore per spec. */
+    }
+
+    if (!found_cached_abl) return GBL_PAYLOAD_NO_CACHED_ABL;
+    if (gbl_pe_sanity(cached_pe, cached_size) != GBL_PE_OK)
+        return GBL_PAYLOAD_PE_INSANE;
+
+    *out_pe   = cached_pe;
+    *out_size = cached_size;
+    return GBL_PAYLOAD_OK;
+}
