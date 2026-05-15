@@ -27,5 +27,18 @@ test_pe_sanity: test_pe_sanity.c ../../../GblChainloadPkg/Library/GblPayloadLib/
 	$(CC) $(CFLAGS) -DGBL_HOST_BUILD=1 -o $@ test_pe_sanity.c \
 	      ../../../GblChainloadPkg/Library/GblPayloadLib/PeSanity.c
 
+BINS += parser_harness
+
+PARSER_SRCS = \
+  ../../../GblChainloadPkg/Library/GblPayloadLib/PayloadParse.c \
+  ../../../GblChainloadPkg/Library/GblPayloadLib/Crc32.c \
+  ../../../GblChainloadPkg/Library/GblPayloadLib/Sha256.c \
+  ../../../GblChainloadPkg/Library/GblPayloadLib/PeSanity.c
+
+parser_harness: parser_harness.c $(PARSER_SRCS)
+	$(CC) $(CFLAGS) -Wno-deprecated-declarations -DGBL_HOST_BUILD=1 \
+	      -I../../../tools/shared \
+	      -o $@ parser_harness.c $(PARSER_SRCS) -lcrypto
+
 clean:
 	rm -f $(BINS)
