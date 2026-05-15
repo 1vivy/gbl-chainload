@@ -40,5 +40,10 @@ parser_harness: parser_harness.c $(PARSER_SRCS)
 	      -I../../../tools/shared \
 	      -o $@ parser_harness.c $(PARSER_SRCS) -lcrypto
 
+BINS += poison_byte
+
+poison_byte: poison_byte.c
+	$(CC) $(CFLAGS) -o $@ $<
+
 clean:
 	rm -f $(BINS)
