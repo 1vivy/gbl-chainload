@@ -13,19 +13,6 @@
 
 EFI_STATUS LocateOverlayBytes(OUT VOID **Bytes, OUT UINTN *Size);
 
-/* Find "GBLP1\0\0\0" in the bytes, starting from offset 0. */
-static EFI_STATUS
-ScanForGblp1 (CONST UINT8 *Buf, UINTN Size, OUT UINTN *Off) {
-  for (UINTN I = 0; I + GBLP1_MAGIC_SIZE <= Size; I++) {
-    if (Buf[I] == 'G' &&
-        CompareMem (Buf + I, GBLP1_MAGIC, GBLP1_MAGIC_SIZE) == 0) {
-      *Off = I;
-      return EFI_SUCCESS;
-    }
-  }
-  return EFI_NOT_FOUND;
-}
-
 EFI_STATUS EFIAPI
 GblPayload_LoadCachedAbl (IN EFI_HANDLE ImageHandle,
                           OUT VOID **Pe, OUT UINT32 *PeSize) {
@@ -36,19 +23,9 @@ GblPayload_LoadCachedAbl (IN EFI_HANDLE ImageHandle,
     return Status;
   }
 
-  UINTN Off = 0;
-  Status = ScanForGblp1((UINT8 *)Bytes, Size, &Off);
-  if (EFI_ERROR(Status)) {
-    GBL_INFO("gbl-payload: bad magic (no GBLP1 in source)\n");
-    return EFI_LOAD_ERROR;
-  }
-
-  CONST UINT8 *PayloadBytes = (CONST UINT8 *)Bytes + Off;
-  UINTN PayloadSize = Size - Off;
-
   CONST UINT8 *CachedPe = NULL; size_t CachedSize = 0;
   enum gbl_payload_status PS =
-      gbl_payload_find_cached_abl(PayloadBytes, PayloadSize,
+      gbl_payload_scan_cached_abl((CONST UINT8 *)Bytes, Size,
                                   &CachedPe, &CachedSize);
   if (PS != GBL_PAYLOAD_OK) {
     GBL_INFO("gbl-payload: parse status=%d\n", (int)PS);

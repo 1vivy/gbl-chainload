@@ -53,4 +53,15 @@ enum gbl_payload_status
 gbl_payload_find_cached_abl(const uint8_t *bytes, size_t size,
                             const uint8_t **out_pe, size_t *out_pe_size);
 
+/* Scan bytes[0..size) for a GBLP1 container: at each occurrence of the
+   8-byte magic, attempt gbl_payload_find_cached_abl on the sub-buffer;
+   return the result of the FIRST occurrence that fully validates.  This
+   tolerates stray copies of the magic (e.g. the GBLP1_MAGIC string
+   literal embedded in a preceding PE's .rodata).
+   Returns the last non-OK status if the magic was seen but none validated,
+   or GBL_PAYLOAD_BAD_MAGIC if the magic was never found. */
+enum gbl_payload_status
+gbl_payload_scan_cached_abl(const uint8_t *bytes, size_t size,
+                            const uint8_t **out_pe, size_t *out_pe_size);
+
 #endif

@@ -27,7 +27,8 @@ int main(int argc, char **argv) {
     if (argc != 3) {
         fprintf(stderr,
                 "usage: parser_harness parse-header <file>\n"
-                "       parser_harness find-cached-abl <file>\n");
+                "       parser_harness find-cached-abl <file>\n"
+                "       parser_harness scan-cached-abl <file>\n");
         return 2;
     }
 
@@ -51,10 +52,20 @@ int main(int argc, char **argv) {
         return s == GBL_PAYLOAD_OK ? 0 : 1;
     }
 
+    if (strcmp(argv[1], "scan-cached-abl") == 0) {
+        const uint8_t *pe; size_t pe_size;
+        enum gbl_payload_status s =
+            gbl_payload_scan_cached_abl(buf, n, &pe, &pe_size);
+        printf("status=%d size=%zu\n", s, s == GBL_PAYLOAD_OK ? pe_size : 0);
+        free(buf);
+        return s == GBL_PAYLOAD_OK ? 0 : 1;
+    }
+
     fprintf(stderr,
             "unknown subcommand '%s'\n"
             "usage: parser_harness parse-header <file>\n"
-            "       parser_harness find-cached-abl <file>\n",
+            "       parser_harness find-cached-abl <file>\n"
+            "       parser_harness scan-cached-abl <file>\n",
             argv[1]);
     free(buf);
     return 2;

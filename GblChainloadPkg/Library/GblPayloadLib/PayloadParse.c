@@ -106,3 +106,24 @@ gbl_payload_find_cached_abl(const uint8_t *b, size_t n,
     *out_size = cached_size;
     return GBL_PAYLOAD_OK;
 }
+
+enum gbl_payload_status
+gbl_payload_scan_cached_abl(const uint8_t *bytes, size_t size,
+                            const uint8_t **out_pe, size_t *out_pe_size) {
+    enum gbl_payload_status last = GBL_PAYLOAD_BAD_MAGIC;
+    int found_any = 0;
+
+    for (size_t i = 0; i + GBLP1_MAGIC_SIZE <= size; i++) {
+        if (bytes[i] != (uint8_t)'G') continue;
+        if (memcmp(bytes + i, GBLP1_MAGIC, GBLP1_MAGIC_SIZE) != 0) continue;
+
+        found_any = 1;
+        enum gbl_payload_status s =
+            gbl_payload_find_cached_abl(bytes + i, size - i, out_pe, out_pe_size);
+        if (s == GBL_PAYLOAD_OK) return GBL_PAYLOAD_OK;
+        last = s;
+    }
+
+    (void)found_any;
+    return last;
+}
