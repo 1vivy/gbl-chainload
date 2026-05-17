@@ -710,7 +710,12 @@ cp "$PARENT/dist/mode-1.efi" "$SELF_DIR/base/mode-1.efi"
 
 echo "==> writing bin/MANIFEST"
 PCOMMIT=$(git -C "$PARENT" rev-parse HEAD)
-if git -C "$PARENT" diff --quiet && git -C "$PARENT" diff --cached --quiet; then
+# Dirty = the parent's own tracked sources are modified (tools/EFI built
+# from an uncommitted state). The zip submodule is excluded: update-tools.sh
+# writes into zip/bin and zip/base, so it is dirty by construction here and
+# is not a build input.
+if git -C "$PARENT" diff --quiet -- ':!zip' \
+   && git -C "$PARENT" diff --cached --quiet -- ':!zip'; then
   PDIRTY=0
 else
   PDIRTY=1
