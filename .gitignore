@@ -59,8 +59,3 @@ __pycache__/
 # OS
 .DS_Store
 Thumbs.db
-
-# Recovery ZIP staging (populated by scripts/build-recovery-zip.sh)
-zip/gbl-chainload/bin/
-zip/gbl-chainload/base/
-zip/gbl-chainload/SHA256SUMS

@@ -3005,6 +3005,14 @@ Expected: `cached unavailable` → `loaded ABL via dynamic` → boots.
 
 ## Phase 4 — Recovery installer ZIP
 
+> **DESCOPED (post-validation).** Phase 4's installer ZIP was built and
+> validated on-device (B7), then removed from the on-device-payload-
+> insertion PR: the ZIP is being reworked properly against a portability
+> methodology (`docs/project/zip-methodology.md`) as its own line of
+> work. This PR ships Phases 1–3 — the EFI runtime and the cross-compiled
+> toolchain. The tasks below are retained as the historical record of
+> what the descoped ZIP did.
+
 ### Task 4.1: zip/gbl-chainload/META-INF/com/google/android/update-binary
 
 **Files:**

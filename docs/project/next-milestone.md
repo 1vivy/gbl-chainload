@@ -27,9 +27,10 @@ Deliverables:
 
 - **DONE** — Define how a known-good ABL is cached into gbl-chainload. Implemented as an on-device-generated GBLP1 v1 container appended to the gbl-chainload PE on EFISP. Format and runtime contract specified in `docs/superpowers/specs/2026-05-15-on-device-payload-insertion-design.md`; `GblPayloadLib` is the EFI-side reader.
 - **DONE** — Update the dynamic patch engine so it deliberately skips the cached ABL payload. `DynamicPatchLib`'s post-patch efisp byte-scan gate (T2.3) rejects any patched PE that still contains UTF-16 LE `efisp` bytes. The Tier 1 short-circuit in `BootFlow.c` (T2.7) means Tier 2 dynamic patching is never attempted when the cached overlay loads successfully.
-- **SUPERSEDED** — Add `scripts/build.sh --cache-abl <path>`. This flag is removed. The EFI no longer accepts a build-time payload; on-device generation via `tools/gbl-pack` inside the installer ZIP replaces this build path entirely.
-- **IN PROGRESS** — Produce a gbl-chainload ZIP flow for post-OTA custom-recovery installation. `zip/gbl-chainload/` skeleton and `scripts/build-recovery-zip.sh` are defined; cross-compilation of recovery tools (aarch64-Android NDK targets for `fv-unwrap`, `abl-patcher`, `gbl-pack`, `gbl-commit`) is Phase 3 of this PR; final ZIP assembly is Phase 4.
-- **PARTIAL** — Document the user-owned fallback file: `/sdcard/backup_abl.img`. Covered in the spec and in `zip/gbl-chainload/README.txt` (bundled with the installer ZIP at Phase 4).
+- **SUPERSEDED** — Add `scripts/build.sh --cache-abl <path>`. This flag is removed. The EFI no longer accepts a build-time payload; on-device generation via `tools/gbl-pack` at install time replaces this build path entirely.
+- **DONE** — Cross-compile the recovery tools (`fv-unwrap`, `abl-patcher`, `gbl-pack`, `gbl-commit`) as aarch64-Android static binaries (NDK r27 in `docker/Dockerfile`; orchestrated by `scripts/build-recovery-tools.sh`).
+- **FOLLOW-UP** — Assemble the post-OTA custom-recovery installer ZIP that orchestrates the tools. Descoped from the on-device-payload-insertion PR to its own line of work (the ZIP-methodology effort); see `docs/project/zip-methodology.md`.
+- **FOLLOW-UP** — Document the user-owned fallback file `/sdcard/backup_abl.img`; it belongs with the installer ZIP and lands with it.
 
 Acceptance:
 

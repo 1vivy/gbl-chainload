@@ -1,8 +1,10 @@
 # Recovery install — build and validation runbook
 
 Build and validation runbook for the on-device GBLP1 payload insertion
-feature. Covers everything from a clean checkout to a full on-device
-installer ZIP run.
+feature. Covers everything from a clean checkout to on-device validation
+of the cached-ABL boot path. The recovery installer ZIP that orchestrates
+this flow unattended is a separate follow-up; see
+`docs/project/zip-methodology.md`.
 
 Spec: `docs/superpowers/specs/2026-05-15-on-device-payload-insertion-design.md`
 
@@ -59,20 +61,10 @@ without libc.so. The script handles the WSL/Docker-Desktop credential
 quirk internally (`DOCKER_CONFIG` export) — a plain invocation is
 sufficient.
 
-### A4 — Installer ZIP
-
-```bash
-bash scripts/build-recovery-zip.sh
-```
-
-Prerequisite: `dist/mode-1.efi` (A1) and `dist/recovery/` (A3) must
-exist. The script checks and errors early if either is absent.
-
-Output: `dist/gbl-chainload-installer.zip`
-
-Success: script prints `==> dist/gbl-chainload-installer.zip` followed by
-`ls -l` and `unzip -l` output, exits 0. The ZIP bundles the base EFI, all
-four recovery tools, `update-binary`, `README.txt`, and a `SHA256SUMS`.
+The cross-compiled tools (A3) are everything the recovery installer ZIP
+will bundle; assembling that ZIP is a follow-up (see
+`docs/project/zip-methodology.md`). Until it lands, the Layer-3 steps
+below drive the install by hand.
 
 ---
 
@@ -245,12 +237,9 @@ on non-HLOS partition writes).
   sync
   adb reboot
   ```
-  Restores the pre-write EFISP exactly. `gbl-commit --verify` in B6/B7
-  backs up automatically before writing, so `/sdcard/efisp.bak` exists by
-  the time any write completes.
-- **`/sdcard/backup_abl.img`** must be present before B7. This is a
-  previously-saved working ABL binary. The installer ZIP pre-flight check
-  refuses to proceed if this file is absent.
+  Restores the pre-write EFISP exactly. B6 backs up EFISP to
+  `/sdcard/efisp.bak` before writing, so it exists by the time any write
+  completes.
 
 #### B6 — Single EFISP write test
 
@@ -285,57 +274,6 @@ protocol hooks identically to the dynamic path.
 If the log shows `source=efisp-blockio` but then a parse failure (e.g.,
 `header_crc32 mismatch`), the payload was corrupted in transit — restore
 from `/sdcard/efisp.bak` and re-check the `adb push` step.
-
-#### B7 — Full installer ZIP (last)
-
-**Why last:** by this point every underlying mechanism is individually
-proven — the parser (Layer 1, B1), both overlay-source readers (B2/B5,
-B6), the patch/pack pipeline (Layer 1 + B6), and `gbl-commit` (test 066 +
-B6). A ZIP failure at this stage is isolated to the `update-binary`
-orchestration script and can be diagnosed without device risk. You can
-inspect what the ZIP wrote to each partition (sha256 the EFISP region,
-check `abl_<inactive>`) before rebooting.
-
-Prerequisites:
-- `/sdcard/backup_abl.img` present — a previously-saved working ABL that
-  loads gbl-chainload from EFISP.
-- Device is in TWRP, post-OTA (new OTA ABL is on `abl_<inactive>`).
-- `dist/gbl-chainload-installer.zip` built (A4).
-
-```bash
-adb push dist/gbl-chainload-installer.zip /sdcard/
-# In TWRP: Install -> gbl-chainload-installer.zip -> swipe.
-# At the abort prompt, vol-DOWN within 5s to abort. Anything else continues.
-```
-
-The ZIP executes 7 steps: read `abl_<inactive>` → `fv-unwrap` →
-`abl-patcher` → `gbl-pack` → concat with base EFI → backup current EFISP
-to `/sdcard/efisp.bak` → `gbl-commit --src … --dst /dev/block/by-name/efisp
---backup /sdcard/efisp.bak --verify` → restore `/sdcard/backup_abl.img` to
-`abl_<inactive>`. TWRP prints each step number as it runs.
-
-Before rebooting, optionally spot-check on-device:
-
-```bash
-# SHA of what was written vs what the ZIP contains:
-sha256sum /dev/block/by-name/efisp | head -c $(($(stat -c%s dist/gbl-chainload-installer.zip)))
-# or simply inspect the first 2 bytes (must be MZ):
-dd if=/dev/block/by-name/efisp bs=1 count=2 2>/dev/null | xxd
-```
-
-Reboot. Expected:
-
-```
-gbl-payload: source=efisp-blockio base=0x... size=...
-BootFlow: loaded ABL via cached (size=N)
-```
-
-Android boots, Keymaster `SET_ROT` succeeds, AVB green.
-
-On failure: the ZIP's pre-flight check verifies `/sdcard/backup_abl.img`
-and EFISP MZ magic before any write. `gbl-commit --verify` restores
-`/sdcard/efisp.bak` automatically on SHA mismatch. If the ZIP aborts, the
-device is in the same state it was before the swipe.
 
 ---
 

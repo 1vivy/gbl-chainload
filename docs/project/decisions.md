@@ -54,6 +54,8 @@ Implementation:
 
 Rationale: on-device generation means the cached ABL is always built from the OTA's actual `abl_<inactive>` bytes, with no host build step required after an OTA. Non-HLOS writes remain user-driven (TWRP ZIP swipe), keeping the agent workflow safe.
 
+Status: the EFI runtime (`GblPayloadLib`, `BootFlow.c`) and the cross-compiled toolchain (`tools/gbl-pack`, `tools/gbl-commit`, the `fv-unwrap`/`abl-patcher` aarch64 targets) ship in the on-device-payload-insertion PR. The installer ZIP that orchestrates steps 1–3 of the user flow above is descoped to a follow-up — the ZIP-methodology line of work; see `docs/project/zip-methodology.md`. Until it lands, the flow is driven manually per `docs/project/recovery-install-validation.md`.
+
 ## Cache-ABL container format
 
 Decision: GBLP1 v1 — a versioned TLV container appended to the installed gbl-chainload PE on EFISP.

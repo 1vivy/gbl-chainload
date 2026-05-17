@@ -576,6 +576,13 @@ docker run --rm -v "$PWD:/work" -w /work gbl-chainload-build:latest bash -c '
 
 ## Recovery ZIP — `zip/gbl-chainload/`
 
+> **DESCOPED (post-validation).** The installer ZIP described in this
+> section was built and validated on-device, then removed from the
+> on-device-payload-insertion PR. It is being reworked against a
+> portability methodology (`docs/project/zip-methodology.md`) as its own
+> line of work. The PR ships the EFI runtime and the cross-compiled
+> toolchain; this section is retained as the historical design record.
+
 ```
 zip/gbl-chainload/
 ├── META-INF/com/google/android/
