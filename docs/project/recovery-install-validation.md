@@ -41,10 +41,11 @@ bash tests/runall.sh
 
 Output: test results to stdout; EDK2 build smoke included.
 
-Success: final line is `ALL TESTS PASS`. Tests 060–068 cover the packer
+Success: final line is `ALL TESTS PASS`. Tests 060–070 cover the packer
 roundtrip, parser fuzz, efisp-scan gate, PE sanity, end-to-end fixtures,
 patch-signature parity, `gbl-commit` atomic-write, BlockIO reader smoke,
-and config-table override simulation.
+config-table override simulation, full-buffer scan, and crypto
+conformance (SHA-256 / CRC-32 known-answer vectors).
 
 ### A3 — Cross-compiled recovery tools (Docker + Android NDK r27)
 
@@ -76,7 +77,7 @@ below drive the install by hand.
 bash tests/runall.sh
 ```
 
-Gate: all tests green before any device step. Tests 060–068 exercise the
+Gate: all tests green before any device step. Tests 060–070 exercise the
 parser, packer, and every pure-logic path at byte-for-byte parity with the
 on-device parser. The EDK2 build smoke is included.
 

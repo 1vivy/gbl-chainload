@@ -32,8 +32,7 @@ BINS += parser_harness
 PARSER_SRCS = \
   ../../../GblChainloadPkg/Library/GblPayloadLib/PayloadParse.c \
   ../../../GblChainloadPkg/Library/GblPayloadLib/Crc32.c \
-  ../../../GblChainloadPkg/Library/GblPayloadLib/Sha256.c \
-  ../../../GblChainloadPkg/Library/GblPayloadLib/PeSanity.c
+  ../../../GblChainloadPkg/Library/GblPayloadLib/Sha256.c
 
 parser_harness: parser_harness.c $(PARSER_SRCS)
 	$(CC) $(CFLAGS) -DGBL_HOST_BUILD=1 \

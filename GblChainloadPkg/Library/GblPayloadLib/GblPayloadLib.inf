@@ -15,10 +15,12 @@
   PayloadParse.c
   Crc32.c
   Sha256.c
-  PeSanity.c
   LocateOverlay.c
   EfispBlockIo.c
   GblPayload.c
+  # PeSanity.c is intentionally not built into the EFI shim: gBS->LoadImage
+  # is the runtime authority for PE validity. PeSanity.c is a host pre-flight
+  # source consumed only by tools/gbl-pack.
 
 [Packages]
   MdePkg/MdePkg.dec

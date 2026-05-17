@@ -9,18 +9,16 @@
  *          → decompressed blob (nested FV or raw PE)
  *            → PE32 section or bare MZ/PE
  *
- *  Host-side plain C, links liblzma.
+ *  Plain C; links liblzma (-llzma) for both the host build and the
+ *  aarch64-Android cross build. See docker/Dockerfile for the
+ *  cross-compiled static liblzma the Android target links against.
  */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
-#ifdef FVUNWRAP_VENDORED_LZMA
-# include "lzmasdk/lzma_compat.h"
-#else
-# include <lzma.h>
-#endif
+#include <lzma.h>
 
 /* =========================================================================
  * Result type: a heap-allocated PE blob
@@ -77,10 +75,7 @@ static const uint8_t kLzmaGuid[16] = {
   0x9D,0x6E, 0xDC,0x7B,0xD7,0x94,0x03,0xCF
 };
 
-/* Decompress LZMA_ALONE stream.  Returns heap buffer or NULL.
-   When FVUNWRAP_VENDORED_LZMA is defined, lzma_compat.h (included above)
-   provides this function using the Igor Pavlov SDK instead of liblzma. */
-#ifndef FVUNWRAP_VENDORED_LZMA
+/* Decompress LZMA_ALONE stream.  Returns heap buffer or NULL. */
 static uint8_t *lzma_alone_decompress (const uint8_t *in, size_t inSz,
                                        size_t *outSz)
 {
@@ -108,7 +103,6 @@ static uint8_t *lzma_alone_decompress (const uint8_t *in, size_t inSz,
   }
   return out;
 }
-#endif /* !FVUNWRAP_VENDORED_LZMA */
 
 /* =========================================================================
  * FV / FFS / Section walker  (returns heap PeBlob)

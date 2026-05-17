@@ -9,17 +9,17 @@ clean:
 	rm -f fv-unwrap fv-unwrap-android *.o
 
 # --- Android cross-compile target (NDK r27) ---
-# Uses vendored Igor Pavlov LZMA SDK (public domain) instead of liblzma,
-# which is not available in the NDK sysroot.
+# Links the static liblzma cross-compiled by docker/Dockerfile into
+# $(LIBLZMA_ANDROID) — same -llzma path as the host build, no vendored
+# LZMA source. The Dockerfile exports LIBLZMA_ANDROID; the default below
+# is the in-image install prefix for out-of-container invocations.
 NDK     ?= $(ANDROID_NDK)
 NDK_CC   = $(NDK)/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android31-clang
-NDK_CFLAGS = -static -O2 -Wall -Wextra -std=c11 -DFVUNWRAP_VENDORED_LZMA \
-             -Wno-unused-parameter
-
-LZMASDK = lzmasdk
+NDK_CFLAGS = -static -O2 -Wall -Wextra -std=c11
+LIBLZMA_ANDROID ?= /opt/liblzma-android
 
 android: fv-unwrap-android
 
-fv-unwrap-android: fv-unwrap.c $(LZMASDK)/LzmaDec.c $(LZMASDK)/lzma_compat.h \
-                   $(LZMASDK)/LzmaDec.h $(LZMASDK)/7zTypes.h
-	$(NDK_CC) $(NDK_CFLAGS) -I$(LZMASDK) -o $@ fv-unwrap.c $(LZMASDK)/LzmaDec.c
+fv-unwrap-android: fv-unwrap.c $(LIBLZMA_ANDROID)/lib/liblzma.a
+	$(NDK_CC) $(NDK_CFLAGS) -I$(LIBLZMA_ANDROID)/include -o $@ \
+	    fv-unwrap.c $(LIBLZMA_ANDROID)/lib/liblzma.a

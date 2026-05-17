@@ -57,6 +57,37 @@ RUN curl -fsSL -o /tmp/ndk.zip \
  && rm /tmp/ndk.zip
 ENV ANDROID_NDK=/opt/android-ndk
 
+# --- Static liblzma for aarch64-Android (cross-compiled xz-utils) ---
+# fv-unwrap needs LZMA decode in its aarch64 static binary; the NDK
+# sysroot has no liblzma. Cross-compile xz-utils once here so the
+# Android build links a real -llzma (same as the host build) instead
+# of vendoring the LZMA SDK source. 5.6.3 is post-CVE-2024-3094 (that
+# backdoor lived in 5.6.0/5.6.1 release tarballs; the decoder was never
+# affected). API level 31 matches aarch64-linux-android31-clang.
+ARG XZ_VER=5.6.3
+RUN set -eux; \
+    TOOLBIN=/opt/android-ndk/toolchains/llvm/prebuilt/linux-x86_64/bin; \
+    API=31; \
+    curl -fsSL -o /tmp/xz.tar.gz \
+      "https://github.com/tukaani-project/xz/releases/download/v${XZ_VER}/xz-${XZ_VER}.tar.gz"; \
+    mkdir -p /tmp/xz && tar -xf /tmp/xz.tar.gz -C /tmp/xz --strip-components=1; \
+    cd /tmp/xz; \
+    ./configure \
+      --host=aarch64-linux-android \
+      --prefix=/opt/liblzma-android \
+      --enable-static --disable-shared \
+      --disable-xz --disable-xzdec --disable-lzmadec --disable-lzmainfo \
+      --disable-lzma-links --disable-scripts --disable-doc \
+      --disable-nls --disable-threads \
+      CC="${TOOLBIN}/aarch64-linux-android${API}-clang" \
+      AR="${TOOLBIN}/llvm-ar" \
+      RANLIB="${TOOLBIN}/llvm-ranlib" \
+      STRIP="${TOOLBIN}/llvm-strip" \
+      CFLAGS="-O2 -fPIC"; \
+    make -j"$(nproc)" && make install; \
+    rm -rf /tmp/xz /tmp/xz.tar.gz
+ENV LIBLZMA_ANDROID=/opt/liblzma-android
+
 # Default to a writable workdir; run --user maps host UID at runtime so
 # bind-mounted outputs are owned by the host user.
 WORKDIR /work

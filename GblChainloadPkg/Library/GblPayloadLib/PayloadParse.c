@@ -47,7 +47,6 @@ gbl_payload_validate_header(const uint8_t *b, size_t n) {
 }
 
 #include "Internal/Sha256.h"
-#include "Internal/PeSanity.h"
 
 enum gbl_payload_status
 gbl_payload_find_cached_abl(const uint8_t *b, size_t n,
@@ -99,9 +98,12 @@ gbl_payload_find_cached_abl(const uint8_t *b, size_t n,
     }
 
     if (!found_cached_abl) return GBL_PAYLOAD_NO_CACHED_ABL;
-    if (gbl_pe_sanity(cached_pe, cached_size) != GBL_PE_OK)
-        return GBL_PAYLOAD_PE_INSANE;
 
+    /* No PE structural check here. gBS->LoadImage is the runtime
+       authority and rejects a malformed image on its own; a redundant
+       parser-side check only duplicates that. PE sanity instead runs as
+       a host pre-flight in tools/gbl-pack (pack.c), so a bad image is
+       caught at pack time rather than on the device at boot. */
     *out_pe   = cached_pe;
     *out_size = cached_size;
     return GBL_PAYLOAD_OK;

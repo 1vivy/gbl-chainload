@@ -1,7 +1,23 @@
 /* GblChainloadPkg/Library/GblPayloadLib/Sha256.c
-   Vendored public-domain SHA-256 (Brad Conte / B-Con/crypto-algorithms).
-   Single implementation for EDK2, host, and Android cross builds — uses
-   only the portable types from Internal/Sha256.h's shim. */
+   SHA-256 (FIPS 180-4). Vendored public-domain implementation derived
+   from B-Con/crypto-algorithms (https://github.com/B-Con/crypto-algorithms,
+   sha256.c — released into the public domain by Brad Conte).
+
+   Why vendored rather than BaseCryptLib or a platform crypto library:
+   this one source is compiled into THREE targets — the EDK2 shim, the
+   host `gbl-pack` packer, and the aarch64-Android `gbl-pack`. The GBLP1
+   container's per-entry digests are written by the packer and verified
+   by the shim; compiling the SAME source on both sides makes producer/
+   consumer agreement structural rather than coincidental. BaseCryptLib
+   would drag the EDK2 OpenSSL port into a minimal bootloader shim AND
+   still leave the host packer on a separate implementation to keep in
+   step. This mirrors what Android's own verified boot does — libavb
+   vendors avb_sha256 so host `avbtool` and the bootloader hash alike.
+
+   Correctness is pinned in CI by FIPS 180-4 known-answer vectors:
+   tests/host/helpers/test_sha256.c, run via tests/host/070_crypto_conformance.sh.
+
+   Uses only the portable types from Internal/Sha256.h's shim. */
 #include "Internal/Sha256.h"
 
 #define ROTR(x,n) (((x) >> (n)) | ((x) << (32 - (n))))

@@ -1,7 +1,12 @@
 /* GblChainloadPkg/Library/GblPayloadLib/PeSanity.c
    Minimal AArch64 EFI_APPLICATION PE sanity. We do NOT load or relocate;
    we only validate the few fields LoadImage will reject if wrong, plus
-   defensive checks the spec calls out. */
+   defensive checks the spec calls out.
+
+   This is a host pre-flight: it is compiled into tools/gbl-pack so a
+   malformed cached-ABL image is rejected at pack time. It is NOT built
+   into the EFI shim (see GblPayloadLib.inf) — at boot, gBS->LoadImage
+   is the authority on PE validity. */
 #include "Internal/PeSanity.h"
 
 #define DOS_E_LFANEW         0x3C
