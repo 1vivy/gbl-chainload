@@ -33,6 +33,7 @@ Three points where this plan tightens loose wording in the spec — all clarific
 | `META-INF/com/google/android/updater-script` | One-line dummy marker (recovery `stat`s it). |
 | `core/ui.sh` | `ui_print` — canonical recovery on-screen output. |
 | `core/env.sh` | `BOOTMODE`/`DIR` detection; SELinux elevation. |
+| `core/ota.sh` | OTA-state detection (`OTA_POSTINSTALL` from `/postinstall`). |
 | `core/busybox.sh` | Make bundled `bin/` tools executable and first on `PATH`. |
 | `core/partition.sh` | `BYNAME` resolution, `byname()`, A/B slot (`SLOT`/`INACTIVE`). |
 | `core/safety.sh` | `restore_env`/`cleanup`/`abort`, the `EXIT` trap, `commit_verified()`. |
@@ -153,12 +154,13 @@ git -C zip commit -m "core: ui_print via /proc/self/fd path-write"
 
 ---
 
-### Task 3: `core/env.sh`
+### Task 3: `core/env.sh` and `core/ota.sh`
 
 **Files:**
 - Create: `zip/core/env.sh`
+- Create: `zip/core/ota.sh`
 
-- [ ] **Step 1: Write the file**
+- [ ] **Step 1: Write `core/env.sh`**
 
 ```sh
 # shellcheck shell=sh
@@ -185,16 +187,34 @@ shcon=$(cat /proc/self/attr/current 2>/dev/null)
 echo "u:r:su:s0" > /proc/self/attr/current 2>/dev/null
 ```
 
-- [ ] **Step 2: Lint it**
+- [ ] **Step 2: Write `core/ota.sh`**
 
-Run: `shellcheck -s sh zip/core/env.sh`
+```sh
+# shellcheck shell=sh
+# core/ota.sh — OTA-state detection.
+# Sourced by update-binary. See zip-methodology.md A4.
+# Pattern adapted from AnyKernel3 (osm0sis, MIT-style license).
+#
+# /postinstall is the mount point AOSP update_engine uses during the
+# post-install phase of an A/B OTA; /postinstall/tmp present means a
+# system OTA has been applied to the inactive slot and is in its
+# post-install window. This is a signal only — modes decide how to act
+# on it. It does NOT detect an OTA .zip flashed by hand in recovery.
+
+OTA_POSTINSTALL=false
+[ -d /postinstall/tmp ] && OTA_POSTINSTALL=true
+```
+
+- [ ] **Step 3: Lint both files**
+
+Run: `shellcheck -s sh zip/core/env.sh zip/core/ota.sh`
 Expected: no output, exit 0.
 
-- [ ] **Step 3: Commit (submodule)**
+- [ ] **Step 4: Commit (submodule)**
 
 ```bash
-git -C zip add core/env.sh
-git -C zip commit -m "core: BOOTMODE/DIR detection + SELinux elevation"
+git -C zip add core/env.sh core/ota.sh
+git -C zip commit -m "core: environment + OTA-state detection"
 ```
 
 ---
@@ -386,7 +406,7 @@ unzip -o "$ZIPFILE" -d "$WORKDIR" >/dev/null 2>&1 || abort "unzip failed"
 
 # --- source the core; canonical ui_print/abort/cleanup land here, and
 #     core/safety.sh installs the EXIT trap ---
-for f in env ui busybox partition safety; do
+for f in env ota ui busybox partition safety; do
   [ -f "$WORKDIR/core/$f.sh" ] || abort "core/$f.sh missing from ZIP"
   . "$WORKDIR/core/$f.sh"
 done
@@ -492,6 +512,12 @@ mode_main() {
     ui_print "  slot       : active=$SLOT inactive=$INACTIVE"
   else
     ui_print "  slot       : not an A/B device"
+  fi
+
+  if $OTA_POSTINSTALL; then
+    ui_print "  ota state  : update_engine postinstall ACTIVE"
+  else
+    ui_print "  ota state  : no postinstall window"
   fi
 
   if [ -n "$BYNAME" ]; then
@@ -913,7 +939,7 @@ ZIP=dist/gbl-chainload-diag.zip
 
 for e in META-INF/com/google/android/update-binary \
          META-INF/com/google/android/updater-script \
-         core/ui.sh core/env.sh core/busybox.sh core/partition.sh core/safety.sh \
+         core/ui.sh core/env.sh core/ota.sh core/busybox.sh core/partition.sh core/safety.sh \
          modes/SELECTED modes/diag.conf modes/diag.sh SHA256SUMS; do
   unzip -l "$ZIP" | grep -q "[ /]$e\$" \
     || { echo "FAIL: $ZIP missing $e"; exit 1; }
@@ -1149,6 +1175,7 @@ with zero device risk.
 - Repo & submodule at `zip/` → Task 1.
 - Mode-agnostic `update-binary` + mode-as-config (`SELECTED`, `.conf`/`.sh`) → Task 7, 8, 9.
 - `core/*.sh` partial AK3 fork with attribution → Tasks 2–6 (headers), Task 12 (README).
+- OTA-state detection (`core/ota.sh` → `OTA_POSTINSTALL`) → Task 3; reported by `diag` → Task 8.
 - Vendored `bin/`/`base/` + `update-tools.sh` + `MANIFEST` → Tasks 10, 11.
 - Skew guard → Task 15 (`build-recovery-zip.sh`), tested in Task 14.
 - `build-recovery-zip.sh --mode` with prune → Task 15.

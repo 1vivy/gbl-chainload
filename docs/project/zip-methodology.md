@@ -182,6 +182,25 @@ to date has been from recovery. Treat the booted-system path as
 implemented-but-unverified until a real Magisk/KSU-module install is
 tested.
 
+**OTA-state detection.** A system A/B OTA applied by `update_engine`
+mounts `/postinstall` while it runs its post-install phase. Detect it:
+
+```sh
+OTA_POSTINSTALL=false
+[ -d /postinstall/tmp ] && OTA_POSTINSTALL=true
+```
+
+`/postinstall/tmp` present ⇒ a system OTA was applied to the *inactive*
+slot and is in its post-install window — the signal a ZIP uses to know
+the inactive slot's firmware was just updated. Two caveats: it catches
+the `update_engine` path, **not** an OTA `.zip` a user flashed by hand
+in custom recovery (that does not mount `/postinstall`); and it is a
+signal only — what a mode does with it (e.g. choosing `abl_$INACTIVE`
+as the read source) is that ZIP's decision. The pattern is adapted from
+[AnyKernel3](https://github.com/osm0sis/AnyKernel3) commit `ddbb40e`,
+where it gates Virtual-A/B snapshot resizing — a step gbl-chainload
+does not need (it writes raw `efisp`/`abl`, no snapshots).
+
 ## A5. Partition & slot helpers
 
 **Resolve a partition to a block device** via its by-name symlink:

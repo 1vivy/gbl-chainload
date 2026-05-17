@@ -66,6 +66,7 @@ zip/                                  (= zip-gbl-chainload repo root)
   core/
     env.sh                            BOOTMODE detect, SELinux elevation,
                                       OUTFD / zip / workdir vars
+    ota.sh                            OTA-state detection (OTA_POSTINSTALL)
     ui.sh                             ui_print — AK3 /proc/self/fd path-write
     busybox.sh                        per-arch busybox probe + relocate
     partition.sh                      by-name path + active/inactive slot
@@ -99,8 +100,8 @@ Its flow:
 1. Parse the recovery contract — `$1` API level, `$2` OUTFD, `$3` zip path
    (methodology doc A1).
 2. Unzip itself to a private workdir; `cd` there.
-3. Source `core/*.sh` — `env.sh`, `ui.sh`, `busybox.sh`, `partition.sh`,
-   `safety.sh`.
+3. Source `core/*.sh` — `env.sh`, `ota.sh`, `ui.sh`, `busybox.sh`,
+   `partition.sh`, `safety.sh`.
 4. Install the `safety.sh` abort trap.
 5. Read `modes/SELECTED` — a one-line file naming the active mode, written at
    ZIP-assembly time. **One ZIP carries exactly one mode**; there is no
