@@ -1,3 +1,6 @@
 [submodule "edk2"]
 	path = edk2
 	url = https://github.com/1vivy/edk2-gbl-chainload.git
+[submodule "zip"]
+	path = zip
+	url = https://github.com/1vivy/zip-gbl-chainload.git
