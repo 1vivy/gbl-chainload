@@ -28,6 +28,14 @@ MAN="$SUB/bin/MANIFEST"
 ( cd "$SUB" && grep -E '^[0-9a-f]{64}  ' bin/MANIFEST | sha256sum -c --status ) \
   || { echo "error: vendored binaries are stale vs $MAN - run $SUB/update-tools.sh" >&2; exit 1; }
 
+# disk -> MANIFEST: every file in bin/ and base/ must be tracked by the
+# MANIFEST. The check above only covers MANIFEST -> disk; this catches an
+# unmanifested, unverified binary dropped into bin/ without update-tools.sh.
+have=$( cd "$SUB" && find bin base -type f ! -name MANIFEST | sort )
+want=$( grep -E '^[0-9a-f]{64}  ' "$MAN" | sed -E 's/^[0-9a-f]{64}  //' | sort )
+[ "$have" = "$want" ] \
+  || { echo "error: $SUB/bin or $SUB/base has files not in $MAN - run $SUB/update-tools.sh" >&2; exit 1; }
+
 PDIRTY=$(sed -n 's/^# parent-dirty: //p' "$MAN")
 [ "$PDIRTY" = 0 ] \
   || { echo "error: $MAN marks a dirty-tree build - re-run update-tools.sh on a clean tree" >&2; exit 1; }
@@ -58,7 +66,9 @@ MODE_TOOLS=""; MODE_EFI=""
 # shellcheck disable=SC1090
 . "$SUB/modes/$MODE.conf"
 
-# prune bin/: keep MANIFEST, busybox-arm64, and tools listed in MODE_TOOLS
+# prune bin/: keep MANIFEST (shipped for on-device provenance) and
+# busybox-arm64 (core infrastructure, always bundled - not a per-mode
+# tool); keep tools the mode declares in MODE_TOOLS, drop the rest.
 for t in "$STAGE"/bin/*; do
   b=$(basename "$t")
   [ "$b" = MANIFEST ] && continue

@@ -192,7 +192,8 @@ build failure rather than a silent stale-ZIP.
 3. Write `modes/SELECTED` with the chosen mode. Prune the other modes'
    `.conf`/`.sh`, and prune any `bin/`/`base/` artifact the chosen mode does
    not declare in its `.conf` (e.g. `graft` ships no base EFI) — each ZIP
-   stays minimal.
+   stays minimal. `bin/busybox-arm64` (core infrastructure) and `bin/MANIFEST`
+   (on-device provenance) are always retained, not per-mode declarations.
 4. `sha256sum` every staged file into `SHA256SUMS`.
 5. `zip -qr dist/gbl-chainload-<mode>.zip .`.
 
