@@ -82,8 +82,8 @@ zip/                                  (= zip-gbl-chainload repo root)
     fv-unwrap  abl-patcher  gbl-pack  gbl-commit  busybox-arm64
     MANIFEST                          provenance: parent commit + per-binary
                                       SHA-256
-  base/                               vendored base EFIs (committed)
-    mode-1.efi  mode-2.efi
+  base/                               vendored base EFI (committed)
+    mode-1.efi
   update-tools.sh                     refreshes bin/ + base/ + MANIFEST from a
                                       gbl-chainload parent checkout
   README.md
@@ -147,8 +147,9 @@ forked file's header and in the repo README.
 `bin/` holds the aarch64-Android static tool binaries — `fv-unwrap`,
 `abl-patcher`, `gbl-pack`, `gbl-commit`, and a static `busybox-arm64` —
 committed into the `zip-gbl-chainload` repo (the AnyKernel3 model: a
-self-contained installer repo). `base/` holds the base EFIs (`mode-1.efi`,
-`mode-2.efi`), also committed.
+self-contained installer repo). `base/` holds the base EFI (`mode-1.efi`),
+also committed. (`mode-2.efi` is added when the mode-2 profile sub-project
+lands `--mode 2` support in `scripts/build.sh`; it is not buildable yet.)
 
 The `bin/` set is purpose-built static tools only. General-purpose binaries
 such as `magiskboot` and `avbtool` were considered and rejected:
@@ -165,8 +166,8 @@ These artifacts are built from gbl-chainload, so the repo carries a refresh
 tool and a drift guard:
 
 - `update-tools.sh` runs from inside a gbl-chainload parent checkout. It
-  builds the recovery tools (`scripts/build-recovery-tools.sh`) and base EFIs
-  (`scripts/build.sh`), copies them into `bin/` and `base/`, and writes
+  builds the recovery tools (`scripts/build-recovery-tools.sh`) and the base
+  EFI (`scripts/build.sh`), copies them into `bin/` and `base/`, and writes
   `bin/MANIFEST`: the parent `git rev-parse HEAD`, a dirty-tree flag, and the
   SHA-256 of every vendored artifact. The operator then commits the submodule
   and bumps its pointer in the parent.

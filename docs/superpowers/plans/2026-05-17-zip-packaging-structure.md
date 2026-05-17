@@ -44,7 +44,7 @@ Three points where this plan tightens loose wording in the spec — all clarific
 | `bin/{fv-unwrap,abl-patcher,gbl-pack,gbl-commit}` | Vendored aarch64 project tools. |
 | `bin/busybox-arm64` | Vendored static busybox (bootstrap-acquired, not rebuilt). |
 | `bin/MANIFEST` | Provenance: parent commit + per-artifact SHA-256. |
-| `base/{mode-1.efi,mode-2.efi}` | Vendored base EFIs. |
+| `base/mode-1.efi` | Vendored base EFI (mode-2.efi added later — not buildable yet). |
 | `update-tools.sh` | Refresh `bin/`+`base/`+`MANIFEST` from a parent checkout. |
 | `README.md` | Usage + AnyKernel3 attribution. |
 | `.gitignore` | `modes/SELECTED` (build-generated, never committed). |
@@ -672,7 +672,7 @@ git -C zip commit -m "modes: install/graft/profile abort-stubs + .gitignore SELE
 
 ```bash
 #!/usr/bin/env bash
-# update-tools.sh — refresh the vendored tool binaries and base EFIs
+# update-tools.sh — refresh the vendored tool binaries and the base EFI
 # from a gbl-chainload parent checkout, and (re)write bin/MANIFEST.
 #
 # Run from inside the submodule checkout. The parent gbl-chainload repo
@@ -695,9 +695,8 @@ fi
 
 echo "==> building recovery tools from $PARENT"
 bash "$PARENT/scripts/build-recovery-tools.sh"
-echo "==> building base EFIs"
+echo "==> building the base EFI"
 bash "$PARENT/scripts/build.sh" --mode 1
-bash "$PARENT/scripts/build.sh" --mode 2
 
 echo "==> copying artifacts into bin/ and base/"
 mkdir -p "$SELF_DIR/bin" "$SELF_DIR/base"
@@ -705,7 +704,6 @@ for t in fv-unwrap abl-patcher gbl-pack gbl-commit; do
   cp "$PARENT/dist/recovery/$t" "$SELF_DIR/bin/$t"
 done
 cp "$PARENT/dist/mode-1.efi" "$SELF_DIR/base/mode-1.efi"
-cp "$PARENT/dist/mode-2.efi" "$SELF_DIR/base/mode-2.efi"
 
 [ -f "$SELF_DIR/bin/busybox-arm64" ] \
   || { echo "error: bin/busybox-arm64 missing - vendor it once at bootstrap" >&2; exit 1; }
@@ -724,7 +722,7 @@ fi
   echo "# parent-dirty: $PDIRTY"
   ( cd "$SELF_DIR" && sha256sum \
       bin/fv-unwrap bin/abl-patcher bin/gbl-pack bin/gbl-commit \
-      bin/busybox-arm64 base/mode-1.efi base/mode-2.efi )
+      bin/busybox-arm64 base/mode-1.efi )
 } > "$SELF_DIR/bin/MANIFEST"
 
 echo "==> done. Review, commit the submodule, and bump its pointer in the parent."
@@ -750,7 +748,7 @@ git -C zip commit -m "tools: update-tools.sh - refresh vendored bins + MANIFEST"
 **Files:**
 - Create: `zip/bin/busybox-arm64`
 - Create: `zip/bin/{fv-unwrap,abl-patcher,gbl-pack,gbl-commit}`
-- Create: `zip/base/{mode-1.efi,mode-2.efi}`
+- Create: `zip/base/mode-1.efi`
 - Create: `zip/bin/MANIFEST`
 
 > **Environment note:** this task runs `scripts/build-recovery-tools.sh` (Docker + Android NDK r27) and `scripts/build.sh` (EDK2). Both must be runnable in the execution environment. If Docker is unavailable, stop and surface this to the user.
@@ -776,7 +774,7 @@ cd /home/vivy/gbl-chainload/zip
 cd /home/vivy/gbl-chainload
 ```
 
-Expected: ends with `==> done. Review, commit the submodule, ...`. `zip/bin/` now holds the four project tools, `zip/base/` holds both EFIs, `zip/bin/MANIFEST` exists.
+Expected: ends with `==> done. Review, commit the submodule, ...`. `zip/bin/` now holds the four project tools, `zip/base/` holds `mode-1.efi`, `zip/bin/MANIFEST` exists.
 
 - [ ] **Step 3: Verify the vendored set**
 
@@ -786,13 +784,13 @@ head -3 zip/bin/MANIFEST
 ( cd zip && sha256sum -c <(grep -E '^[0-9a-f]{64}  ' bin/MANIFEST) )
 ```
 
-Expected: five files in `bin/` (four tools + busybox-arm64 + MANIFEST), two `.efi` in `base/`; the `MANIFEST` header shows `# parent-commit:` and `# parent-dirty: 0`; `sha256sum -c` prints `OK` for every line.
+Expected: five files in `bin/` (four tools + busybox-arm64 + MANIFEST), one `.efi` in `base/` (`mode-1.efi`); the `MANIFEST` header shows `# parent-commit:` and `# parent-dirty: 0`; `sha256sum -c` prints `OK` for every line.
 
 - [ ] **Step 4: Commit the vendored artifacts (submodule)**
 
 ```bash
 git -C zip add bin base
-git -C zip commit -m "bin: vendor recovery tools, busybox-arm64, base EFIs + MANIFEST"
+git -C zip commit -m "bin: vendor recovery tools, busybox-arm64, base EFI + MANIFEST"
 ```
 
 ---
@@ -832,7 +830,7 @@ scripts/build-recovery-zip.sh --mode diag    # -> dist/gbl-chainload-diag.zip
 
 ## Refreshing vendored tools
 
-`bin/` (recovery tools, busybox) and `base/` (base EFIs) are committed.
+`bin/` (recovery tools, busybox) and `base/` (the base EFI) are committed.
 After a gbl-chainload change that affects the tools or EFIs:
 
 ```
