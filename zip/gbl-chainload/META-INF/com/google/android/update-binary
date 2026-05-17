@@ -1,6 +1,8 @@
 #!/sbin/sh
 OUTFD=$2; ZIP=$3
-ui_print() { echo -e "ui_print $1\nui_print" >&"$OUTFD"; }
+# Unquoted $OUTFD: busybox ash rejects a quoted fd after >& ("illegal file
+# descriptor name"). Plain echo (no -e): busybox echo -e support is unreliable.
+ui_print() { echo "ui_print $1" >&$OUTFD; echo "ui_print " >&$OUTFD; }
 abort()    { ui_print "ABORT: $1"; cleanup; exit 1; }
 cleanup()  { mountpoint -q /mnt/efisp 2>/dev/null && umount /mnt/efisp; }
 trap cleanup EXIT
