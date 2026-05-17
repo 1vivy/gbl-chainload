@@ -28,6 +28,9 @@
 
 #include "../../../Include/Library/ScanLib.h"
 
+/* Shared patch bytes (kEfispUtf16Pattern, etc.) — canonical source. */
+#include "../../../../tools/shared/patch_signatures.h"
+
 /* ---- patch10: libavb function-entry anchor string ----------------------
    Verbatim AOSP source text from
    edk2/QcomModulePkg/Library/avb/libavb/avb_slot_verify.c:1466 (the error
@@ -71,4 +74,4 @@ STATIC CONST CHAR8 kPatch6EraseStr[]          = "Erase is not allowed in Lock St
 STATIC CONST CHAR8 kPatch6SlotChangeStr[]     = "Slot Change is not allowed in Lock State\n";
 STATIC CONST CHAR8 kPatch6SnapshotCancelStr[] = "Snapshot Cancel is not allowed in Lock State";
 
-#endif
+#endif /* DPL_MODE_1_SIGNATURES_H_ */

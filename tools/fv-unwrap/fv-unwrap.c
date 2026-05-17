@@ -9,7 +9,9 @@
  *          → decompressed blob (nested FV or raw PE)
  *            → PE32 section or bare MZ/PE
  *
- *  Host-side plain C, links liblzma.
+ *  Plain C; links liblzma (-llzma) for both the host build and the
+ *  aarch64-Android cross build. See docker/Dockerfile for the
+ *  cross-compiled static liblzma the Android target links against.
  */
 
 #include <stdio.h>

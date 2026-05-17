@@ -23,7 +23,9 @@ test_encode: test_encode.c \
 	    -I$(PROJ)/GblChainloadPkg/Library/DynamicPatchLib/Internal $^ -o $@
 
 test_engine: test_engine.c \
-             $(PROJ)/GblChainloadPkg/Library/DynamicPatchLib/Internal/PatchEngine.c
+             $(PROJ)/GblChainloadPkg/Library/DynamicPatchLib/Internal/PatchEngine.c \
+             $(PROJ)/GblChainloadPkg/Library/DynamicPatchLib/Internal/ScanLib.c \
+             $(PROJ)/GblChainloadPkg/Library/DynamicPatchLib/Internal/PeSections.c
 	$(CC) $(CFLAGS) -D__HOST_BUILD__ \
 	    -I$(PROJ)/GblChainloadPkg/Library/DynamicPatchLib/Internal \
 	    -I$(PROJ)/GblChainloadPkg/Include/Library $^ -o $@

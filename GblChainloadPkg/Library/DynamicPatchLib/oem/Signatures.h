@@ -10,6 +10,9 @@
 
 #include "../Internal/ScanLib.h"   /* UINT8/UINT32/UINTN incl. host shim. */
 
+/* Shared patch bytes (kEfispUtf16Pattern, etc.) — canonical source. */
+#include "../../../../tools/shared/patch_signatures.h"
+
 /* ---------------------------------------------------------------------------
  * Patch 7 — orange-screen / unlock-warning / 5-second boot-delay gate.
  *

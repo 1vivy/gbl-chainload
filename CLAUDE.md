@@ -35,15 +35,23 @@ The PreToolUse hook will block these patterns regardless of mode, but the
 rule is documented here so the model doesn't waste turns trying to work
 around it.
 
-## Workflow: PRs only
+## Workflow: branch then PR
 
-Every change in this repo lands via a feature branch + PR against `main`.
+Work happens on feature branches; landing on `main` is via PR.
 
-- No direct commits to `main`.
-- No pushes to `main`.
-- Iterative work stays a commit series on the same feature branch — the
-  PR grows new commits as feedback comes in.
-- Hot-fix-style "tiny" / "obvious" changes are not an exception.
+- Never commit to or push `main` directly.
+- Feature branches are otherwise unrestricted: commit early, commit often,
+  iterate freely. The PR grows new commits as feedback comes in.
+- Hot-fix-style "tiny" / "obvious" changes are not an exception to the
+  branch-and-PR rule.
 
-This applies regardless of mode. Auto mode does not opt out of either of
-these rules.
+This applies regardless of mode. Auto mode does not opt out.
+
+## File locations
+
+Tooling defaults are fine — when a skill, plugin, or external tool has an
+opinion about where it writes files (e.g., the `superpowers:brainstorming`
+skill writing specs to `docs/superpowers/specs/`), use that default
+location. Don't relocate files purely to fit the `docs/project/` "single
+source of truth" norm; that norm describes durable hand-curated project
+planning and RE distillations, not tool-managed artifacts.

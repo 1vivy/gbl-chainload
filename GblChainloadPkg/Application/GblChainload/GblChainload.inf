@@ -61,6 +61,7 @@
   AblUnwrapLib
   DynamicPatchLib
   ProtocolHookLib
+  GblPayloadLib
 
 [LibraryClasses.AARCH64]
   AesLib
