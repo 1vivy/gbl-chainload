@@ -149,6 +149,17 @@ committed into the `zip-gbl-chainload` repo (the AnyKernel3 model: a
 self-contained installer repo). `base/` holds the base EFIs (`mode-1.efi`,
 `mode-2.efi`), also committed.
 
+The `bin/` set is purpose-built static tools only. General-purpose binaries
+such as `magiskboot` and `avbtool` were considered and rejected:
+gbl-chainload's modes never unpack or repack a boot image or ramdisk;
+`magiskboot` has no AVB-2.0 vbmeta-descriptor or graft operation (its only
+AVB awareness is footer detection while unpacking a boot image); and
+`avbtool` is Python (no interpreter ships in recovery) and re-signs rather
+than grafts — which `docs/project/vbmeta-graft-vs-construct.md` shows is
+impossible without the OEM key. The set grows only as a mode needs it: SP4
+is expected to add a purpose-built static `vbmeta-graft` tool to the
+recovery toolchain, vendored the same way.
+
 These artifacts are built from gbl-chainload, so the repo carries a refresh
 tool and a drift guard:
 
@@ -252,6 +263,9 @@ auto-restore on mismatch) is the mode body's responsibility via `gbl-commit`
   the vbmeta analysis).
 - Publishing tool binaries as GitHub release artifacts — the vendored model
   was chosen instead.
+- A CI release job that publishes the assembled `gbl-chainload-<mode>.zip`
+  artifacts — deferred until end-user install instructions are formulated,
+  then added as the final step of this line of work.
 
 ## Open questions
 
