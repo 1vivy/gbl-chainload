@@ -13,6 +13,7 @@ mkdir -p dist/recovery
 docker run --rm -v "$PWD:/work" -w /work gbl-chainload-build:latest bash -c '
   set -e
   for t in fv-unwrap abl-patcher gbl-pack gbl-commit; do
+    make -C tools/$t clean
     make -C tools/$t android
     install -Dm755 tools/$t/$t-android dist/recovery/$t
   done
