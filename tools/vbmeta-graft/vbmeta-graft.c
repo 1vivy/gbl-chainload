@@ -11,11 +11,15 @@
  * AvbBigEndian.h (internal) defines all EDK2 type shims when __HOST_BUILD__
  * is set. Include it before AvbParseLib.h so the public header's UINT8/
  * UINT32/UINT64/EFI_STATUS etc. resolve. The Makefile sets -I$(AVB)/Internal.
+ *
+ * _POSIX_C_SOURCE: expose fileno() and fstat() under -std=c11.
  */
+#define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <sys/stat.h>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-function"
@@ -28,9 +32,20 @@ static uint8_t *slurp(const char *path, size_t *len_out)
 {
   FILE *f = fopen(path, "rb");
   if (!f) { fprintf(stderr, "vbmeta-graft: %s: cannot open\n", path); return NULL; }
-  fseek(f, 0, SEEK_END);
+  struct stat st;
+  if (fstat(fileno(f), &st) != 0 || !S_ISREG(st.st_mode)) {
+    fprintf(stderr, "vbmeta-graft: %s: not a regular file\n", path);
+    fclose(f); return NULL;
+  }
+  if (fseek(f, 0, SEEK_END) != 0) {
+    fprintf(stderr, "vbmeta-graft: %s: fseek error\n", path);
+    fclose(f); return NULL;
+  }
   long n = ftell(f);
-  fseek(f, 0, SEEK_SET);
+  if (fseek(f, 0, SEEK_SET) != 0) {
+    fprintf(stderr, "vbmeta-graft: %s: fseek error\n", path);
+    fclose(f); return NULL;
+  }
   if (n <= 0) { fprintf(stderr, "vbmeta-graft: %s: empty\n", path); fclose(f); return NULL; }
   uint8_t *buf = malloc((size_t)n);
   if (!buf) { fclose(f); return NULL; }
@@ -51,6 +66,10 @@ static int locate_vbmeta(const uint8_t *buf, size_t len,
 {
   GBL_AVB_FOOTER footer;
   if (AvbParse_Footer(buf, (UINT64)len, &footer) == EFI_SUCCESS) {
+    if (footer.VbmetaOffset > len ||
+        footer.VbmetaSize  > len - footer.VbmetaOffset) {
+      return -1;
+    }
     *vb_out     = buf + footer.VbmetaOffset;
     *vb_len_out = footer.VbmetaSize;
     return 0;
@@ -196,6 +215,11 @@ static int cmd_check(const char *cand_path, const char *main_path,
   }
   uint64_t caux_len;
   const uint8_t *caux = aux_block(cvb, &ch, &caux_len);
+  if (ch.PublicKeyOffset > caux_len ||
+      ch.PublicKeySize  > caux_len - ch.PublicKeyOffset) {
+    fprintf(stderr, "vbmeta-graft: check: candidate public key out of bounds\n");
+    free(cand); free(mainb); return 1;
+  }
   const uint8_t *cand_pk = caux + ch.PublicKeyOffset;
   uint32_t cand_pk_len = (uint32_t)ch.PublicKeySize;
   printf("rollback-index: %llu\n", (unsigned long long)ch.RollbackIndex);
@@ -268,7 +292,11 @@ static int cmd_graft(const char *stock_path, const char *custom_path,
 
   uint8_t *ft = img + footer_at;                      /* 64-byte AvbFooter      */
   memcpy(ft, GBL_AVB_FOOTER_MAGIC, 4);
-  put_u32_be(ft +  4, 1);                             /* footer major version  */
+  put_u32_be(ft +  4, 1);                             /* footer major version  \
+                                                         1.0 = AVB footer spec  \
+                                                         version this tool       \
+                                                         targets (not copied     \
+                                                         from stock footer)      */
   put_u32_be(ft +  8, 0);                             /* footer minor version  */
   put_u64_be(ft + 12, content);                       /* OriginalImageSize     */
   put_u64_be(ft + 20, vb_off);                        /* VbmetaOffset          */
