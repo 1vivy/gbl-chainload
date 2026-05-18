@@ -141,10 +141,13 @@ def _parse_props(blob: bytes, avbtool) -> dict:
 def _compute_vbh(blob: bytes, avbtool) -> bytes:
     """vbh = sha256 of the meaningful vbmeta bytes (header + auth + aux blocks).
 
-    This matches what avbtool calculate_vbmeta_digest hashes for the top-level
-    vbmeta image.  We compute it inline rather than spawning the subprocess so
-    that chain-partition images (boot.img, dtbo.img, …) do not need to be
-    present alongside the vbmeta fixture.
+    This intentionally hashes only the root vbmeta (header + auth + aux);
+    `avbtool calculate_vbmeta_digest` additionally hashes chain-partition vbmeta
+    blobs and produces a different value on images with chain descriptors; the
+    device ABL's SET_VBH receives only the root digest.  We compute it inline
+    rather than spawning the subprocess so that chain-partition images
+    (boot.img, dtbo.img, …) do not need to be present alongside the vbmeta
+    fixture.
     """
     header = avbtool.AvbVBMetaHeader(blob[:256])
     size = (header.SIZE
