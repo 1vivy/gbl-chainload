@@ -83,15 +83,20 @@ Three subcommands:
   chain). Used by `diag`'s vbmeta walk.
 - `vbmeta-graft check <candidate-partition-img> <device-main-vbmeta> <part>` —
   exit 0 iff the candidate has a valid `AvbFooter` + embedded vbmeta **and**
-  is *suitable* to graft for `<part>`: signed by the key the device main
-  vbmeta's chain descriptor for `<part>` names, with a rollback index that
-  descriptor will accept. This is a per-candidate validity gate — it catches
-  a wrong or older-OTA `/sdcard/stock_<part>.img`, or a candidate slot whose
-  vbmeta footer is missing/invalid.
+  is *suitable* to graft for `<part>`: its embedded vbmeta's public key
+  matches, byte-for-byte, the key the device main vbmeta's chain descriptor
+  for `<part>` names. This per-candidate validity gate catches a wrong-image
+  or wrong-key `/sdcard/stock_<part>.img` and a candidate slot whose vbmeta
+  footer is missing/invalid. (Rollback-index / OTA-version gating is **not**
+  enforced — see Open questions.)
 - `vbmeta-graft graft --stock <stock-partition-img> --custom <custom-img>
-  --out <grafted-img>` — read the stock partition's `AvbFooter`, extract the
-  OEM-signed vbmeta blob, determine the custom image's content size, and
-  assemble the grafted image (the layout above).
+  --part-size <bytes> --out <grafted-img>` — read the stock partition's
+  `AvbFooter`, extract the OEM-signed vbmeta blob, determine the custom
+  image's content size, and assemble the grafted image (the layout above)
+  as exactly `--part-size` bytes, the `AvbFooter` in the final 64.
+  `graft.sh` passes `blockdev --getsize64` of the target partition as
+  `--part-size` — a partition-sized output is what makes the `gbl-commit`
+  verify meaningful.
 
 ### Inputs
 
@@ -158,10 +163,13 @@ partitions. SP3 left a marker comment in `modes/diag.sh` for exactly this.
 
 ## Pre-flight gates
 
-Before any write, all validated — `abort` on any failure leaves the device
-untouched: A/B slot resolves; at least one `/sdcard/gbl_<part>.img`; each
-named `<part>` is a footer'd vbmeta-covered partition; `vbmeta_S` readable;
-for each `<part>`, a stock-vbmeta candidate passes `vbmeta-graft check`.
+Validation precedes every write — `abort` on any failure leaves the device
+untouched. Up-front: A/B slot resolves; at least one `/sdcard/gbl_<part>.img`.
+Then, per partition and before *that* partition's write: the named `<part>`
+is a footer'd vbmeta-covered partition, `vbmeta_S` is readable, and a
+stock-vbmeta candidate passes `vbmeta-graft check`. A multi-file run is
+sequential per partition — an earlier partition is written and verified
+before a later one is validated (see "Error handling").
 
 ## Error handling
 
@@ -180,7 +188,9 @@ backed up at `/sdcard/<part>_S.bak`.
 
 - A `vbmeta-graft` tool test: `list` enumerates descriptors on the committed
   `tests/images/*-abl.img` fixtures and on `images/grafted-recovery.img`;
-  `check` accepts a matching stock candidate and rejects a mismatched one;
+  `check` runs against a real partition without crashing and reports a
+  verdict (a definitive accept-vs-reject distinction needs a fixture signed
+  with the device's key, so it is covered by on-device validation);
   `graft` produces an image whose `AvbFooter` records the expected
   `round_up(content, 4096)` offset and whose embedded vbmeta is the stock
   blob byte-for-byte.
@@ -196,9 +206,11 @@ Android boot survives mode-1.
 
 ## Open questions
 
-- `vbmeta-graft check`'s rollback/version comparison is the mechanism that
-  rejects an old-OTA stock candidate; the exact rollback-index handling is
-  an implementation detail for the plan.
+- `vbmeta-graft check` gates on the public-key match only; rollback-index /
+  OTA-version comparison is **deferred** (not implemented). A correctly
+  signed but old-OTA `/sdcard/stock_<part>.img` therefore passes `check` —
+  the user's slot pick (the priority-1 candidate) is the practical
+  mechanism for grafting the newest stock. A rollback gate is a follow-up.
 - Whether `recovery` on infiniti is chain-descriptor'd (own embedded vbmeta,
   graftable) or hash-described in the main vbmeta is verified during
   implementation via `vbmeta-graft list`; only footer'd partitions are
