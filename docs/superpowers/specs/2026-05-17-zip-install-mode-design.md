@@ -85,17 +85,23 @@ same slot's `abl` partition.
 scenario the device is still on the old slot; the OTA's new ABL sits on
 the inactive slot, which becomes active after the next reboot.
 
-### Restore-source resolution (uniform — every scenario, every mode)
+### Restore-source resolution
 
-1. Candidate **X = the active-slot ABL** — it is currently running
-   gbl-chainload, so it is the natural known-vulnerable source.
-   `fv-unwrap` X, then exploit-check the extracted PE.
-2. X vulnerable → X is usable. X not vulnerable → fall back to
-   `/sdcard/backup_abl.img`.
-3. The **final** restore source (X or `/sdcard/backup_abl.img`) is
-   exploit-checked. **If no vulnerable restore source can be found, the
-   install `abort`s** — in recovery and `BOOTMODE` alike. The install
-   never writes a non-vulnerable ABL onto an `abl` partition.
+Candidate **X = the active-slot ABL** — it is currently running
+gbl-chainload, so it is the natural known-vulnerable source. The
+precedence differs by environment:
+
+- **Recovery:** `fv-unwrap` X and exploit-check it. If X is vulnerable, P3
+  defaults to X and lets the user pick `/sdcard/backup_abl.img` instead;
+  if X is not vulnerable, the source is `/sdcard/backup_abl.img`.
+- **BOOTMODE:** no prompt — use `/sdcard/backup_abl.img` if it is present,
+  otherwise the active-slot ABL X. A pre-placed backup is treated as a
+  deliberate operator choice.
+
+In every case the **final** restore source is exploit-checked: **if no
+vulnerable restore source can be found, the install `abort`s** — recovery
+and `BOOTMODE` alike. The install never writes a non-vulnerable ABL onto
+an `abl` partition.
 
 ### Recovery flow (`BOOTMODE=false`)
 
@@ -145,8 +151,9 @@ A booted-Android (Magisk/KernelSU module) install has no recovery screen,
 so it runs silently with no prompts. It assumes a post-OTA install:
 
 - Target slot = inactive. Cache `abl_<inactive>` → EFISP.
-- Restore source by the uniform resolution above (`/sdcard/backup_abl.img`
-  if present, else the active-slot ABL); restore target = `abl_<inactive>`.
+- Restore source: `/sdcard/backup_abl.img` if present, else the
+  active-slot ABL (see Restore-source resolution); restore target =
+  `abl_<inactive>`.
 - Exploit-check the restore source; **abort if not vulnerable**.
 - If the restore source was the active-slot ABL and `/sdcard/backup_abl.img`
   is absent, auto-save it there (the P4 intent, applied silently).

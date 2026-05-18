@@ -363,7 +363,7 @@ ui_print "===================="
 #     consent (A4) ---
 if ! $BOOTMODE; then
   ui_print "Vol-DOWN within 5s to ABORT; anything else continues."
-  KEY=$(timeout 5 getevent -lqc 5 2>/dev/null \
+  KEY=$(timeout 5 getevent -lqc 200 2>/dev/null \
           | grep -m1 -oE 'KEY_(VOLUMEUP|VOLUMEDOWN)' || true)
   [ "$KEY" = KEY_VOLUMEDOWN ] && abort "user aborted"
 fi
