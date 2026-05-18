@@ -44,6 +44,23 @@ int main(int argc, char **argv) {
         printf("\n");
         return 0;
     }
-    fprintf(stderr, "usage: mode2_harness profile-parse <file>\n");
+    if (argc >= 4 && strcmp(argv[1], "rewrite-spss") == 0) {
+        size_t pn, bn;
+        unsigned char *pb = slurp(argv[2], &pn);
+        unsigned char *bb = slurp(argv[3], &bn);
+        struct gbl_mode2_profile prof;
+        if (gbl_mode2_profile_parse(pb, pn, &prof) != GBL_M2P_OK) {
+            printf("rewrote=0\n"); return 0;
+        }
+        int r = gbl_m2_rewrite_spss(bb, (uint32_t)bn, &prof);
+        printf("rewrote=%d\n", r);
+        for (size_t i = 0; i < bn; i++) printf("%02x", bb[i]);
+        printf("\n");
+        return 0;
+    }
+    fprintf(stderr,
+            "usage: mode2_harness profile-parse <file>\n"
+            "       mode2_harness rewrite <cmd-hex> <profile-file> <buf-file>\n"
+            "       mode2_harness rewrite-spss <profile-file> <buf-file>\n");
     return 2;
 }
