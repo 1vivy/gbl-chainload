@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "Internal/Mode2Profile.h"
+#include "Mode2Rewrite.h"
 
 static unsigned char *slurp(const char *path, size_t *n) {
     FILE *f = fopen(path, "rb");
@@ -26,6 +27,21 @@ int main(int argc, char **argv) {
         struct gbl_mode2_profile p;
         enum gbl_m2p_status s = gbl_mode2_profile_parse(b, n, &p);
         printf("status=%d\n", (int)s);
+        return 0;
+    }
+    if (argc >= 5 && strcmp(argv[1], "rewrite") == 0) {
+        uint32_t cmd = (uint32_t)strtoul(argv[2], NULL, 16);
+        size_t pn, bn;
+        unsigned char *pb = slurp(argv[3], &pn);
+        unsigned char *bb = slurp(argv[4], &bn);
+        struct gbl_mode2_profile prof;
+        if (gbl_mode2_profile_parse(pb, pn, &prof) != GBL_M2P_OK) {
+            printf("rewrote=0\n"); return 0;
+        }
+        int r = gbl_m2_rewrite_km(cmd, bb, (uint32_t)bn, &prof);
+        printf("rewrote=%d\n", r);
+        for (size_t i = 0; i < bn; i++) printf("%02x", bb[i]);
+        printf("\n");
         return 0;
     }
     fprintf(stderr, "usage: mode2_harness profile-parse <file>\n");
