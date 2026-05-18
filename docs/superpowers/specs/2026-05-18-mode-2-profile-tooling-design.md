@@ -63,7 +63,10 @@ Host tool. The device-side aarch64 build is a later follow-up. One CLI
   - Parse the OS-version / security-patch property descriptors and encode them
     to the bootloader domain (`os_version = (Major<<14)|(Minor<<7)|SubMinor`;
     `spl = (Day<<11)|((Year-2000)<<4)|Month`).
-  - Compute `vbh` via `avbtool calculate_vbmeta_digest` (sha256).
+  - Compute `vbh = sha256(header + authentication block + auxiliary block)` of
+    the root vbmeta image, inline (chain-partition images are not required;
+    this value differs from `avbtool calculate_vbmeta_digest` on images that
+    carry chain descriptors).
   - Write the XML with `is_unlocked=0`, `color=0`.
 - **`compile <profile.xml> -o <mode2_profile.bin>`** — the XML→binary compiler.
   Reads the XML and packs the 120-byte `gbl_mode2_profile` struct defined in
@@ -102,7 +105,7 @@ a provenance comment:
   <system-spl>0x9A4</system-spl>
   <rot-digest>44149b5d…c7</rot-digest>       <!-- 64 hex = SHA256(pubkey‖0x00) -->
   <pubkey-digest>8d897f62…bb</pubkey-digest> <!-- 64 hex = SHA256(pubkey) -->
-  <vbh>…</vbh>                                <!-- 64 hex = avbtool vbmeta digest -->
+  <vbh>…</vbh>                                <!-- 64 hex = sha256(root vbmeta header+auth+aux) -->
 </gbl-chainload-mode2-profile>
 ```
 

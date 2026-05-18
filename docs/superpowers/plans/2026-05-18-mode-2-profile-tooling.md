@@ -69,9 +69,7 @@ import hashlib
 import os
 import re
 import struct
-import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 # ---- gbl_mode2_profile binary layout (tools/shared/gbl_mode2_profile.h) ----
@@ -140,21 +138,22 @@ def _parse_props(blob: bytes, avbtool) -> dict:
     return props
 
 
-def _compute_vbh(avbtool_path: Path, vbmeta_path: Path) -> bytes:
-    """vbh = avbtool calculate_vbmeta_digest (sha256) over the stock vbmeta."""
-    with tempfile.NamedTemporaryFile(suffix=".digest") as tmp:
-        cmd = [sys.executable, str(avbtool_path), "calculate_vbmeta_digest",
-               "--image", str(vbmeta_path), "--hash_algorithm", "sha256",
-               "--output", tmp.name]
-        res = subprocess.run(cmd, capture_output=True, text=True)
-        if res.returncode != 0:
-            raise SystemExit(
-                f"error: avbtool calculate_vbmeta_digest failed:\n{res.stderr}")
-        digest = Path(tmp.name).read_bytes()
-    if len(digest) != 32:
+def _compute_vbh(blob: bytes, avbtool) -> bytes:
+    """vbh = sha256 of the meaningful vbmeta bytes (header + auth + aux blocks).
+
+    This matches what avbtool calculate_vbmeta_digest hashes for the top-level
+    vbmeta image.  We compute it inline rather than spawning the subprocess so
+    that chain-partition images (boot.img, dtbo.img, …) do not need to be
+    present alongside the vbmeta fixture.
+    """
+    header = avbtool.AvbVBMetaHeader(blob[:256])
+    size = (header.SIZE
+            + header.authentication_data_block_size
+            + header.auxiliary_data_block_size)
+    if size > len(blob):
         raise SystemExit(
-            f"error: vbmeta digest is {len(digest)} bytes, expected 32")
-    return digest
+            f"error: vbmeta blob declares {size} bytes but file is only {len(blob)}")
+    return hashlib.sha256(blob[:size]).digest()
 
 
 # ===================== encoders =====================
@@ -191,7 +190,7 @@ def cmd_derive(args) -> int:
     if not vbmeta_path.is_file():
         raise SystemExit(f"error: vbmeta image not found: {vbmeta_path}")
 
-    avbtool, avbtool_path = _import_avbtool()
+    avbtool, _avbtool_path = _import_avbtool()
     blob = vbmeta_path.read_bytes()
 
     pubkey = _read_pubkey_blob(blob, avbtool, vbmeta_path)
@@ -199,7 +198,7 @@ def cmd_derive(args) -> int:
 
     rot_digest = hashlib.sha256(pubkey + b"\x00").digest()
     pubkey_digest = hashlib.sha256(pubkey).digest()
-    vbh = _compute_vbh(avbtool_path, vbmeta_path)
+    vbh = _compute_vbh(blob, avbtool)
 
     os_ver_str = props.get("com.android.build.boot.os_version")
     spl_str = props.get("com.android.build.boot.security_patch")
