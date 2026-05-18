@@ -1,0 +1,67 @@
+{
+  "planPath": "docs/superpowers/plans/2026-05-18-mode-2-efi-runtime.md",
+  "tasks": [
+    {
+      "id": 10,
+      "subject": "Task 1: mode2_profile binary format + parser",
+      "status": "completed",
+      "description": "**Goal:** Define the mode2_profile binary struct and a host-testable parser.\n\n**Files:** Create tools/shared/gbl_mode2_profile.h, GblChainloadPkg/Library/GblPayloadLib/Internal/Mode2Profile.h, GblChainloadPkg/Library/GblPayloadLib/Mode2Profile.c, tests/host/helpers/mode2_harness.c, tests/host/076_mode2_profile_parse.sh; Modify tests/host/helpers/Makefile.\n\n**Verify:** bash tests/host/076_mode2_profile_parse.sh -> PASS: 076 mode2 profile parse\n\nFull code in plan doc Task 1.\n\n```json:metadata\n{\"files\": [\"tools/shared/gbl_mode2_profile.h\", \"GblChainloadPkg/Library/GblPayloadLib/Internal/Mode2Profile.h\", \"GblChainloadPkg/Library/GblPayloadLib/Mode2Profile.c\", \"tests/host/helpers/mode2_harness.c\", \"tests/host/helpers/Makefile\", \"tests/host/076_mode2_profile_parse.sh\"], \"verifyCommand\": \"bash tests/host/076_mode2_profile_parse.sh\", \"acceptanceCriteria\": [\"gbl_mode2_profile is 120 bytes via _Static_assert\", \"gbl_mode2_profile_parse rejects bad size/magic/version/reserved/is_unlocked/color and accepts well-formed\", \"tests/host/076 passes\"]}\n```"
+    },
+    {
+      "id": 11,
+      "subject": "Task 2: GBLP1 parser — locate the 0x0010 entry",
+      "status": "completed",
+      "blockedBy": [10],
+      "description": "**Goal:** Extend the GBLP1 parser to return the mode2_profile (type 0x0010) entry, reusing the entry-walk integrity checks.\n\n**Files:** Modify GblChainloadPkg/Library/GblPayloadLib/Internal/PayloadParse.h, GblChainloadPkg/Library/GblPayloadLib/PayloadParse.c, tests/host/helpers/parser_harness.c; Create tests/host/077_gblp1_find_mode2_profile.sh.\n\n**Verify:** bash tests/host/077_gblp1_find_mode2_profile.sh -> PASS: 077 gblp1 find mode2_profile\n\nFull code in plan doc Task 2.\n\n```json:metadata\n{\"files\": [\"GblChainloadPkg/Library/GblPayloadLib/Internal/PayloadParse.h\", \"GblChainloadPkg/Library/GblPayloadLib/PayloadParse.c\", \"tests/host/helpers/parser_harness.c\", \"tests/host/077_gblp1_find_mode2_profile.sh\"], \"verifyCommand\": \"bash tests/host/077_gblp1_find_mode2_profile.sh\", \"acceptanceCriteria\": [\"gbl_payload_find_mode2_profile returns OK/NO_MODE2_PROFILE/integrity-errors correctly\", \"gbl_payload_find_cached_abl unchanged (061/063 still pass)\", \"tests/host/077 passes\"]}\n```"
+    },
+    {
+      "id": 12,
+      "subject": "Task 3: GblPayloadLib reader — GblPayload_LoadMode2Profile",
+      "status": "completed",
+      "blockedBy": [10, 11],
+      "description": "**Goal:** Expose a public EDK2 API that locates the GBLP1 overlay, finds the 0x0010 entry, parses it, returns a validated struct gbl_mode2_profile.\n\n**Files:** Modify GblChainloadPkg/Include/Library/GblPayloadLib.h, GblChainloadPkg/Library/GblPayloadLib/GblPayload.c, GblChainloadPkg/Library/GblPayloadLib/GblPayloadLib.inf.\n\n**Verify:** ./scripts/build.sh --mode 1 -> ==> Built dist/mode-1.efi\n\nFull code in plan doc Task 3.\n\n```json:metadata\n{\"files\": [\"GblChainloadPkg/Include/Library/GblPayloadLib.h\", \"GblChainloadPkg/Library/GblPayloadLib/GblPayload.c\", \"GblChainloadPkg/Library/GblPayloadLib/GblPayloadLib.inf\"], \"verifyCommand\": \"./scripts/build.sh --mode 1\", \"acceptanceCriteria\": [\"GblPayload_LoadMode2Profile returns SUCCESS/NOT_FOUND/LOAD_ERROR correctly\", \"dist/mode-1.efi still builds\"]}\n```"
+    },
+    {
+      "id": 13,
+      "subject": "Task 4: --mode 2 build wiring",
+      "status": "completed",
+      "description": "**Goal:** Make scripts/build.sh --mode 2 a valid build producing dist/mode-2.efi; update mode taxonomy docs + lint.\n\n**Files:** Modify scripts/build.sh, GblChainloadPkg/GblChainloadPkg.dsc, README.md, tests/045_mode_taxonomy_lint.sh.\n\n**Verify:** ./scripts/build.sh --mode 2 -> ==> Built dist/mode-2.efi\n\nFull detail in plan doc Task 4.\n\n```json:metadata\n{\"files\": [\"scripts/build.sh\", \"GblChainloadPkg/GblChainloadPkg.dsc\", \"README.md\", \"tests/045_mode_taxonomy_lint.sh\"], \"verifyCommand\": \"./scripts/build.sh --mode 2\", \"acceptanceCriteria\": [\"build.sh --mode 2 produces dist/mode-2.efi\", \"build.sh --mode 3 still rejects\", \"tests/045_mode_taxonomy_lint.sh passes\"]}\n```"
+    },
+    {
+      "id": 14,
+      "subject": "Task 5: Mode-2 rewrite logic (pure, host-testable)",
+      "status": "completed",
+      "blockedBy": [10],
+      "description": "**Goal:** Implement the pure-logic KM/SPSS buffer rewrites in a host-testable source file.\n\n**Files:** Create GblChainloadPkg/Library/ProtocolHookLib/Mode2Rewrite.h, GblChainloadPkg/Library/ProtocolHookLib/Mode2Rewrite.c, tests/host/078_mode2_rewrite.sh; Modify tests/host/helpers/mode2_harness.c, tests/host/helpers/Makefile.\n\n**Verify:** bash tests/host/078_mode2_rewrite.sh -> PASS: 078 mode2 rewrite\n\nFull code in plan doc Task 5.\n\n```json:metadata\n{\"files\": [\"GblChainloadPkg/Library/ProtocolHookLib/Mode2Rewrite.h\", \"GblChainloadPkg/Library/ProtocolHookLib/Mode2Rewrite.c\", \"tests/host/helpers/mode2_harness.c\", \"tests/host/helpers/Makefile\", \"tests/host/078_mode2_rewrite.sh\"], \"verifyCommand\": \"bash tests/host/078_mode2_rewrite.sh\", \"acceptanceCriteria\": [\"gbl_m2_rewrite_km rewrites only the 4 target cmd-ids at matching wire size, bounds-safe\", \"0x208 rewrite sets IsUnlocked/PublicKey/Color/SystemVersion/SPL from profile\", \"tests/host/078 passes\"]}\n```"
+    },
+    {
+      "id": 15,
+      "subject": "Task 6: Mode2Overlay — EDK2 glue",
+      "status": "completed",
+      "blockedBy": [12, 14],
+      "description": "**Goal:** Add the GBL_MODE==2 overlay module: a process-global validated-profile holder + policy entrypoints.\n\n**Files:** Create GblChainloadPkg/Library/ProtocolHookLib/Mode2Overlay.h, GblChainloadPkg/Library/ProtocolHookLib/Mode2Overlay.c; Modify GblChainloadPkg/Library/ProtocolHookLib/ProtocolHookLib.inf.\n\n**Verify:** ./scripts/build.sh --mode 2 -> ==> Built dist/mode-2.efi\n\nFull code in plan doc Task 6.\n\n```json:metadata\n{\"files\": [\"GblChainloadPkg/Library/ProtocolHookLib/Mode2Overlay.h\", \"GblChainloadPkg/Library/ProtocolHookLib/Mode2Overlay.c\", \"GblChainloadPkg/Library/ProtocolHookLib/ProtocolHookLib.inf\"], \"verifyCommand\": \"./scripts/build.sh --mode 2\", \"acceptanceCriteria\": [\"Mode2Overlay body fully gated GBL_MODE==2\", \"Mode2_SetProfile stores copy + Mode2_HasProfile flips true; no-op before set\", \"dist/mode-2.efi builds\"]}\n```"
+    },
+    {
+      "id": 16,
+      "subject": "Task 7: Wire rewrite into QseecomHook + SpssHook",
+      "status": "completed",
+      "blockedBy": [15],
+      "description": "**Goal:** Call the mode-2 rewrite policy from the live hooks under #if (GBL_MODE == 2).\n\n**Files:** Modify GblChainloadPkg/Library/ProtocolHookLib/QseecomHook.c, GblChainloadPkg/Library/ProtocolHookLib/SpssHook.c.\n\n**Verify:** ./scripts/build.sh --mode 2 && ./scripts/build.sh --mode 1 -> both print ==> Built ...\n\nFull detail in plan doc Task 7.\n\n```json:metadata\n{\"files\": [\"GblChainloadPkg/Library/ProtocolHookLib/QseecomHook.c\", \"GblChainloadPkg/Library/ProtocolHookLib/SpssHook.c\"], \"verifyCommand\": \"./scripts/build.sh --mode 2 && ./scripts/build.sh --mode 1\", \"acceptanceCriteria\": [\"HookedSendCmd calls Mode2Policy_RewriteKmSend once on first-entry before forward\", \"HookedShareKeyMintInfo calls Mode2Policy_RewriteSpss before forward\", \"modes 0/1 still build\"]}\n```"
+    },
+    {
+      "id": 17,
+      "subject": "Task 8: BootFlow profile load + InstallAll required hooks",
+      "status": "completed",
+      "blockedBy": [12, 13, 15, 18],
+      "description": "**Goal:** In a mode-2 build, load the profile before chain-load and hand it to Mode2Overlay; make Qseecom+SPSS required; record warning state on missing/invalid profile.\n\n**Files:** Modify GblChainloadPkg/Application/GblChainload/BootFlow.c, GblChainloadPkg/Library/ProtocolHookLib/InstallAll.c.\n\n**Verify:** ./scripts/build.sh --mode 2 -> ==> Built dist/mode-2.efi\n\nFull code in plan doc Task 8.\n\n```json:metadata\n{\"files\": [\"GblChainloadPkg/Application/GblChainload/BootFlow.c\", \"GblChainloadPkg/Library/ProtocolHookLib/InstallAll.c\"], \"verifyCommand\": \"./scripts/build.sh --mode 2\", \"acceptanceCriteria\": [\"BootFlow loads profile, Mode2_SetProfile on success, warning on failure, honest boot\", \"InstallAll mode-2 makes Qseecom+SPSS FATAL\", \"mode-0/1 InstallAll unchanged\"]}\n```"
+    },
+    {
+      "id": 18,
+      "subject": "Task 9: FastbootLib mode-2 profile warning line",
+      "status": "completed",
+      "blockedBy": [13],
+      "description": "**Goal:** Add a red mode-2-profile warning line to gbl-chainload's fastboot screen, modeled on AVB WARNING.\n\n**Files:** Modify edk2/QcomModulePkg/Library/FastbootLib/FastbootCmds.c, edk2/QcomModulePkg/Library/BootLib/FastbootMenu.c.\n\n**Verify:** ./scripts/build.sh --mode 2 -> ==> Built dist/mode-2.efi\n\nFull detail in plan doc Task 9.\n\n```json:metadata\n{\"files\": [\"edk2/QcomModulePkg/Library/FastbootLib/FastbootCmds.c\", \"edk2/QcomModulePkg/Library/BootLib/FastbootMenu.c\"], \"verifyCommand\": \"./scripts/build.sh --mode 2\", \"acceptanceCriteria\": [\"GblFastbootSetMode2Warning/GetMode2Warning store+retrieve correctly\", \"FastbootMenu renders MODE-2 line red when non-empty\", \"dist/mode-2.efi builds\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-05-18"
+}

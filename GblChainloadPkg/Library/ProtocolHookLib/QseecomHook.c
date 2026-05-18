@@ -25,6 +25,7 @@
 #include <Protocol/EFIQseecom.h>
 #include "HookCommon.h"
 #include "Mode1Overlay.h"
+#include "Mode2Overlay.h"
 #include "UniversalBaseline.h"
 
 STATIC QCOM_QSEECOM_SEND_CMD_APP gOriginalSendCmd  = NULL;
@@ -496,6 +497,16 @@ HookedSendCmd (
       HookLeave (&gQseecomSendGuard);
       return FakeStatus;
     }
+  }
+#endif
+
+#if (GBL_MODE == 2)
+  /* Mode-2 policy: rewrite KM SET_ROT/SET_VERSION/SET_BOOT_STATE/SET_VBH
+     send buffers in place from the loaded profile before forwarding to
+     TZ. Applies on the first-entry path only; reentrant calls below
+     forward the (already-rewritten) buffer untouched. */
+  if (First && SendBuf != NULL) {
+    Mode2Policy_RewriteKmSend (CmdId, SendBuf, SendLen);
   }
 #endif
 

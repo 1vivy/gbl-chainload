@@ -27,6 +27,11 @@
 #include <Library/ProtocolHookLib.h>
 #include <Library/GblPayloadLib.h>
 
+#if (GBL_MODE == 2)
+#include "../../Library/ProtocolHookLib/Mode2Overlay.h"
+extern VOID GblFastbootSetMode2Warning (IN CONST CHAR8 *Warning);
+#endif
+
 #ifndef GBL_MODE
 # error "GBL_MODE must be defined"
 #endif
@@ -150,6 +155,25 @@ BootFlowChainLoad (VOID)
   }
 
   GBL_INFO ("BootFlow: ABL loaded via %a (size=%u)\n", Origin, PeSize);
+
+#if (GBL_MODE == 2)
+  {
+    struct gbl_mode2_profile Mode2Profile;
+    EFI_STATUS M2Status =
+        GblPayload_LoadMode2Profile (gImageHandle, &Mode2Profile);
+    if (!EFI_ERROR (M2Status)) {
+      Mode2_SetProfile (&Mode2Profile);
+      GBL_INFO ("BootFlow: mode-2 profile loaded — spoof active\n");
+    } else {
+      GBL_INFO ("BootFlow: mode-2 profile unavailable (%r) — honest boot\n",
+                M2Status);
+      GblFastbootSetMode2Warning (
+        (M2Status == EFI_NOT_FOUND)
+          ? "MODE-2 PROFILE MISSING - booting honest, attestation will fail"
+          : "MODE-2 PROFILE INVALID - booting honest, attestation will fail");
+    }
+  }
+#endif
 
   /* Install protocol hooks (universal baseline + mode-N overlay).
      Mode-0 installs the universal observation/preservation hooks but no

@@ -36,7 +36,8 @@ enum gbl_payload_status {
     GBL_PAYLOAD_ENTRY_BAD_OFFSET,
     GBL_PAYLOAD_ENTRY_BAD_SIZE,
     GBL_PAYLOAD_ENTRY_SHA_MISMATCH,
-    GBL_PAYLOAD_NO_CACHED_ABL
+    GBL_PAYLOAD_NO_CACHED_ABL,
+    GBL_PAYLOAD_NO_MODE2_PROFILE
 };
 
 /* Validates only the GBLP1 header + footer layout. Does NOT walk
@@ -53,6 +54,16 @@ gbl_payload_validate_header(const uint8_t *bytes, size_t size);
 enum gbl_payload_status
 gbl_payload_find_cached_abl(const uint8_t *bytes, size_t size,
                             const uint8_t **out_pe, size_t *out_pe_size);
+
+/* Validates header + walks every entry exactly as
+   gbl_payload_find_cached_abl, then locates the unique
+   GBLP1_TYPE_MODE2_PROFILE (0x0010) entry. On GBL_PAYLOAD_OK,
+   *out_profile points into `bytes` and *out_size is its length.
+   Returns GBL_PAYLOAD_NO_MODE2_PROFILE if no 0x0010 entry exists. */
+enum gbl_payload_status
+gbl_payload_find_mode2_profile(const uint8_t *bytes, size_t size,
+                               const uint8_t **out_profile,
+                               size_t *out_size);
 
 /* Scan bytes[0..size) for a GBLP1 container: at each occurrence of the
    8-byte magic, attempt gbl_payload_find_cached_abl on the sub-buffer;

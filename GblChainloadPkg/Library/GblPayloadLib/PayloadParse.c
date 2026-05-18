@@ -48,22 +48,29 @@ gbl_payload_validate_header(const uint8_t *b, size_t n) {
 
 #include "Internal/Sha256.h"
 
-enum gbl_payload_status
-gbl_payload_find_cached_abl(const uint8_t *b, size_t n,
-                            const uint8_t **out_pe, size_t *out_size) {
+/* Walk + integrity-check every entry; return the unique entry whose
+   type == want_type. Returns GBL_PAYLOAD_OK with *out and *out_size set,
+   or an integrity error, or GBL_PAYLOAD_OK with *out == NULL when no
+   entry of want_type exists (caller maps that to its own "missing").
+   Unrecognized types (those that do not equal want_type) are silently
+   skipped — forward-compatibility by design. */
+static enum gbl_payload_status
+gbl_payload_find_entry(const uint8_t *b, size_t n, uint16_t want_type,
+                       const uint8_t **out, size_t *out_size) {
     enum gbl_payload_status s = gbl_payload_validate_header(b, n);
     if (s != GBL_PAYLOAD_OK) return s;
 
     uint32_t total = le32(b + 16);
     uint32_t ec = le32(b + 20);
     const uint8_t *entries = b + GBLP1_HEADER_SIZE;
-    size_t payload_region_start = GBLP1_HEADER_SIZE + (size_t)ec * GBLP1_ENTRY_SIZE;
+    size_t payload_region_start =
+        GBLP1_HEADER_SIZE + (size_t)ec * GBLP1_ENTRY_SIZE;
     payload_region_start = (payload_region_start + GBLP1_PAYLOAD_ALIGN - 1)
                            & ~((size_t)GBLP1_PAYLOAD_ALIGN - 1);
 
-    int found_cached_abl = 0;
-    const uint8_t *cached_pe = NULL;
-    size_t cached_size = 0;
+    int found = 0;
+    const uint8_t *found_pe = NULL;
+    size_t found_size = 0;
 
     for (uint32_t i = 0; i < ec; i++) {
         const uint8_t *e = entries + (size_t)i * GBLP1_ENTRY_SIZE;
@@ -74,9 +81,9 @@ gbl_payload_find_cached_abl(const uint8_t *b, size_t n,
         uint32_t reserved = le32(e + 12);
         const uint8_t *recorded_sha = e + 16;
 
-        if (type == 0)      return GBL_PAYLOAD_ENTRY_BAD_TYPE;
-        if (flags != 0)     return GBL_PAYLOAD_ENTRY_BAD_FLAGS;
-        if (reserved != 0)  return GBL_PAYLOAD_ENTRY_BAD_RESERVED;
+        if (type == 0)     return GBL_PAYLOAD_ENTRY_BAD_TYPE;
+        if (flags != 0)    return GBL_PAYLOAD_ENTRY_BAD_FLAGS;
+        if (reserved != 0) return GBL_PAYLOAD_ENTRY_BAD_RESERVED;
         if (off < payload_region_start ||
             (off & (GBLP1_PAYLOAD_ALIGN - 1)) != 0)
             return GBL_PAYLOAD_ENTRY_BAD_OFFSET;
@@ -88,24 +95,41 @@ gbl_payload_find_cached_abl(const uint8_t *b, size_t n,
         if (memcmp(got, recorded_sha, 32) != 0)
             return GBL_PAYLOAD_ENTRY_SHA_MISMATCH;
 
-        if (type == GBLP1_TYPE_CACHED_ABL) {
-            if (found_cached_abl) return GBL_PAYLOAD_ENTRY_BAD_TYPE; /* duplicate */
-            found_cached_abl = 1;
-            cached_pe   = b + off;
-            cached_size = sz;
+        if (type == want_type) {
+            if (found) return GBL_PAYLOAD_ENTRY_BAD_TYPE; /* duplicate */
+            found = 1;
+            found_pe = b + off;
+            found_size = sz;
         }
-        /* Other types: parser MUST ignore per spec. */
     }
 
-    if (!found_cached_abl) return GBL_PAYLOAD_NO_CACHED_ABL;
+    *out      = found ? found_pe : NULL;
+    *out_size = found_size;
+    return GBL_PAYLOAD_OK;
+}
 
-    /* No PE structural check here. gBS->LoadImage is the runtime
-       authority and rejects a malformed image on its own; a redundant
-       parser-side check only duplicates that. PE sanity instead runs as
-       a host pre-flight in tools/gbl-pack (pack.c), so a bad image is
-       caught at pack time rather than on the device at boot. */
-    *out_pe   = cached_pe;
-    *out_size = cached_size;
+enum gbl_payload_status
+gbl_payload_find_cached_abl(const uint8_t *b, size_t n,
+                            const uint8_t **out_pe, size_t *out_size) {
+    const uint8_t *pe = NULL; size_t sz = 0;
+    enum gbl_payload_status s =
+        gbl_payload_find_entry(b, n, GBLP1_TYPE_CACHED_ABL, &pe, &sz);
+    if (s != GBL_PAYLOAD_OK) return s;
+    if (pe == NULL) return GBL_PAYLOAD_NO_CACHED_ABL;
+    *out_pe = pe; *out_size = sz;
+    return GBL_PAYLOAD_OK;
+}
+
+enum gbl_payload_status
+gbl_payload_find_mode2_profile(const uint8_t *b, size_t n,
+                               const uint8_t **out_profile,
+                               size_t *out_size) {
+    const uint8_t *p = NULL; size_t sz = 0;
+    enum gbl_payload_status s =
+        gbl_payload_find_entry(b, n, GBLP1_TYPE_MODE2_PROFILE, &p, &sz);
+    if (s != GBL_PAYLOAD_OK) return s;
+    if (p == NULL) return GBL_PAYLOAD_NO_MODE2_PROFILE;
+    *out_profile = p; *out_size = sz;
     return GBL_PAYLOAD_OK;
 }
 

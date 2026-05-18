@@ -16,6 +16,10 @@
   InstallAll.c
   UniversalBaseline.c
   Mode1Overlay.c
+  # Mode2Rewrite.c has no GBL_MODE guard; it compiles in all modes but is
+  # unreferenced (and dead-stripped) unless GBL_MODE == 2.
+  Mode2Overlay.c
+  Mode2Rewrite.c
   VerifiedBootHook.c
   QseecomHook.c
   ScmHook.c

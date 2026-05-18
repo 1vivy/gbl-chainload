@@ -93,4 +93,8 @@ if grep -RnE --exclude=045_mode_taxonomy_lint.sh \
   exit 1
 fi
 
+# 11. build.sh accepts --mode 2.
+grep -q '0|1|2)' scripts/build.sh \
+  || { echo "FAIL: build.sh must accept --mode 2"; exit 1; }
+
 echo "ok 045_mode_taxonomy_lint"

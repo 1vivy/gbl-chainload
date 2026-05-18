@@ -13,6 +13,7 @@
 
 [Sources]
   PayloadParse.c
+  Mode2Profile.c
   Crc32.c
   Sha256.c
   LocateOverlay.c
