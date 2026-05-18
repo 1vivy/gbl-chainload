@@ -217,9 +217,10 @@ def _parse_int(s: str, tag: str) -> int:
 
 
 def _parse_digest(s: str, tag: str) -> bytes:
-    if len(s) != 64 or re.fullmatch(r"[0-9a-fA-F]{64}", s) is None:
-        raise SystemExit(
-            f"error: <{tag}> must be exactly 64 hex characters (got {len(s)})")
+    if len(s) != 64:
+        raise SystemExit(f"error: <{tag}> must be exactly 64 hex chars (got {len(s)})")
+    if re.fullmatch(r"[0-9a-fA-F]{64}", s) is None:
+        raise SystemExit(f"error: <{tag}> contains non-hex characters")
     return bytes.fromhex(s)
 
 
@@ -245,6 +246,11 @@ def cmd_compile(args) -> int:
     rot_digest = _parse_digest(_req_text(root, "rot-digest"), "rot-digest")
     pubkey_digest = _parse_digest(_req_text(root, "pubkey-digest"), "pubkey-digest")
     vbh = _parse_digest(_req_text(root, "vbh"), "vbh")
+
+    for name, v in (("is-unlocked", is_unlocked), ("color", color),
+                    ("system-version", system_version), ("system-spl", system_spl)):
+        if v < 0:
+            raise SystemExit(f"error: <{name}> must be non-negative (got {v})")
 
     if is_unlocked > 1:
         raise SystemExit(f"error: is-unlocked must be 0 or 1 (got {is_unlocked})")

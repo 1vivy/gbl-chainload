@@ -36,8 +36,12 @@ sz=$(stat -c%s "$OUT/good.bin")
 
 # Rejection cases — each must exit non-zero and not write output.
 reject() {  # <name> <xml-file>
+  rm -f "$OUT/reject.bin"
   if python3 "$M2P" compile "$2" -o "$OUT/reject.bin" >/dev/null 2>&1; then
     echo "FAIL: compile accepted bad input ($1)"; exit 1
+  fi
+  if [ -f "$OUT/reject.bin" ]; then
+    echo "FAIL: $1 left an output file behind"; exit 1
   fi
 }
 sed 's:<color>0</color>:<color>9</color>:' "$OUT/good.xml" > "$OUT/badcolor.xml"
@@ -50,5 +54,23 @@ sed 's:<vbh>3333:<vbh>33:' "$OUT/good.xml" > "$OUT/badvbh.xml"
 reject "short vbh digest" "$OUT/badvbh.xml"
 printf '<gbl-chainload-mode2-profile version="1"><is-unlocked>' > "$OUT/malformed.xml"
 reject "malformed XML" "$OUT/malformed.xml"
+
+# Boundary case: max valid values (is-unlocked=1, color=3 = GBL_M2P_COLOR_RED).
+cat > "$OUT/good_max.xml" <<'XML'
+<gbl-chainload-mode2-profile version="1">
+  <is-unlocked>1</is-unlocked>
+  <color>3</color>
+  <system-version>0x40000</system-version>
+  <system-spl>0x9A4</system-spl>
+  <rot-digest>1111111111111111111111111111111111111111111111111111111111111111</rot-digest>
+  <pubkey-digest>2222222222222222222222222222222222222222222222222222222222222222</pubkey-digest>
+  <vbh>3333333333333333333333333333333333333333333333333333333333333333</vbh>
+</gbl-chainload-mode2-profile>
+XML
+
+python3 "$M2P" compile "$OUT/good_max.xml" -o "$OUT/good_max.bin" >"$OUT/compile_max.log" 2>&1 \
+  || { echo "FAIL: compile rejected max-valid profile"; cat "$OUT/compile_max.log"; exit 1; }
+"$H" profile-parse "$OUT/good_max.bin" | grep -q 'status=0' \
+  || { echo "FAIL: EDK2 parser rejected max-valid profile (is-unlocked=1 color=3)"; exit 1; }
 
 echo "PASS: 080 mode2 profile compile"
