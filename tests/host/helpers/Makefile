@@ -54,5 +54,14 @@ BINS += locate_overlay_host
 locate_overlay_host: locate_overlay_host.c
 	$(CC) $(CFLAGS) -o $@ $<
 
+MODE2_SRC = ../../../GblChainloadPkg/Library/GblPayloadLib/Mode2Profile.c
+
+BINS += mode2_harness
+
+mode2_harness: mode2_harness.c $(MODE2_SRC)
+	$(CC) $(CFLAGS) -DGBL_HOST_BUILD \
+	  -I../../../GblChainloadPkg/Library/GblPayloadLib \
+	  -o $@ mode2_harness.c $(MODE2_SRC)
+
 clean:
 	rm -f $(BINS)
