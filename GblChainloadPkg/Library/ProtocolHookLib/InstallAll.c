@@ -47,7 +47,7 @@ ProtocolHook_InstallAll (
            Status);
     return Status;
 #else
-    Print (L"ProtocolHookLib: VerifiedBoot install failed (%r) - continuing (mode-0 observation-only)\n",
+    Print (L"ProtocolHookLib: VerifiedBoot install failed (%r) - continuing (observation-only)\n",
            Status);
     Result->VbInstalledSlots = 0;
 #endif
@@ -66,8 +66,8 @@ ProtocolHook_InstallAll (
   Result->ScmInstalledSlots = 1;
   Result->ScmExpectedSlots  = 1;
 
-  /* 3. Qseecom -- required for mode-1 OplusSec suppression; optional
-        observation-only wrapper in mode-0. */
+  /* 3. Qseecom -- required for mode-1 (OplusSec suppression) and mode-2
+        (KM attestation overlay); optional observation-only wrapper in mode-0. */
   Status = InstallQseecomHook ();
   if (EFI_ERROR (Status)) {
 #if (GBL_MODE == 1) || (GBL_MODE == 2)
