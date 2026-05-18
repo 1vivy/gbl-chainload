@@ -16,6 +16,8 @@
   InstallAll.c
   UniversalBaseline.c
   Mode1Overlay.c
+  Mode2Overlay.c
+  Mode2Rewrite.c
   VerifiedBootHook.c
   QseecomHook.c
   ScmHook.c
