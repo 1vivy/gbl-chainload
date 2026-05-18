@@ -12,6 +12,8 @@ tools/gbl-pack/gbl-pack
 tools/gbl-pack/gbl-pack-android
 tools/gbl-commit/gbl-commit
 tools/gbl-commit/gbl-commit-android
+tools/vbmeta-graft/vbmeta-graft
+tools/vbmeta-graft/vbmeta-graft-android
 tests/*/test_*
 !tests/*/test_*.c
 !tests/*/test_*.h
