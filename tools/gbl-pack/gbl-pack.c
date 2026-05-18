@@ -27,24 +27,39 @@ static int slurp(const char *path, uint8_t **out, size_t *out_size)
 
 int main(int argc, char **argv)
 {
-    const char *cached = NULL, *source = NULL, *extracted = NULL, *out = NULL;
+    const char *cached = NULL, *source = NULL, *extracted = NULL,
+               *out = NULL, *profile = NULL;
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--cached-abl") && i + 1 < argc)  cached    = argv[++i];
         else if (!strcmp(argv[i], "--source")    && i + 1 < argc)  source    = argv[++i];
         else if (!strcmp(argv[i], "--extracted") && i + 1 < argc)  extracted = argv[++i];
+        else if (!strcmp(argv[i], "--mode2-profile") && i + 1 < argc) profile = argv[++i];
         else if (!strcmp(argv[i], "--out")       && i + 1 < argc)  out       = argv[++i];
         else { fprintf(stderr, "unknown arg: %s\n", argv[i]); return 2; }
     }
-    if (!cached || !source || !extracted || !out) {
+    if (!out || (!cached && !profile)) {
         fprintf(stderr,
-            "usage: gbl-pack --cached-abl PE --source RAW --extracted PE --out OUT\n");
+            "usage: gbl-pack --out OUT "
+            "[--cached-abl PE --source RAW --extracted PE] "
+            "[--mode2-profile BIN]\n");
+        return 2;
+    }
+    if (cached && (!source || !extracted)) {
+        fprintf(stderr,
+            "gbl-pack: --cached-abl requires --source and --extracted\n");
         return 2;
     }
 
     struct gbl_pack_inputs in = {0};
-    if (slurp(cached,    (uint8_t **)&in.cached_abl, &in.cached_abl_size)) return 1;
-    if (slurp(source,    (uint8_t **)&in.source,      &in.source_size))     return 1;
-    if (slurp(extracted, (uint8_t **)&in.extracted,   &in.extracted_size))  return 1;
+    if (cached) {
+        if (slurp(cached,    (uint8_t **)&in.cached_abl, &in.cached_abl_size)) return 1;
+        if (slurp(source,    (uint8_t **)&in.source,      &in.source_size))     return 1;
+        if (slurp(extracted, (uint8_t **)&in.extracted,   &in.extracted_size))  return 1;
+    }
+    if (profile) {
+        if (slurp(profile, (uint8_t **)&in.mode2_profile, &in.mode2_profile_size))
+            return 1;
+    }
 
     in.packer_version = "gbl-pack 1.0.0";
     char ts[32];

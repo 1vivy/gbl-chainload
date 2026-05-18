@@ -9,6 +9,7 @@ struct gbl_pack_inputs {
     const uint8_t *cached_abl;  size_t cached_abl_size;
     const uint8_t *source;      size_t source_size;
     const uint8_t *extracted;   size_t extracted_size;
+    const uint8_t *mode2_profile; size_t mode2_profile_size;  /* optional */
     const char    *packer_version;   /* ASCII */
     const char    *timestamp_iso8601;/* ASCII */
 };
@@ -19,7 +20,8 @@ enum gbl_pack_status {
     GBL_PACK_ERR_PE_INSANE,
     GBL_PACK_ERR_TOO_LARGE,
     GBL_PACK_ERR_OOM,
-    GBL_PACK_ERR_BAD_INPUT
+    GBL_PACK_ERR_BAD_INPUT,
+    GBL_PACK_ERR_PROFILE_BAD
 };
 
 /* Allocates *out_buf with malloc; caller frees. Returns GBL_PACK_OK on
