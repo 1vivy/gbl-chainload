@@ -59,7 +59,7 @@ MODE2_SRC = ../../../GblChainloadPkg/Library/GblPayloadLib/Mode2Profile.c
 BINS += mode2_harness
 
 mode2_harness: mode2_harness.c $(MODE2_SRC)
-	$(CC) $(CFLAGS) -DGBL_HOST_BUILD \
+	$(CC) $(CFLAGS) -DGBL_HOST_BUILD=1 \
 	  -I../../../GblChainloadPkg/Library/GblPayloadLib \
 	  -o $@ mode2_harness.c $(MODE2_SRC)
 

@@ -46,4 +46,34 @@ PY
 "$H" profile-parse "$OUT/badcolor.bin" | grep -q 'status=0' \
   && { echo "FAIL: bad color accepted"; exit 1; } || true
 
+# bad version (version=2 at offset 4) -> non-zero
+python3 - "$OUT/badversion.bin" "$OUT/good.bin" <<'PY'
+import sys, struct
+b = bytearray(open(sys.argv[2],"rb").read())
+b[4:6] = struct.pack("<H", 2)
+open(sys.argv[1],"wb").write(b)
+PY
+"$H" profile-parse "$OUT/badversion.bin" | grep -q 'status=0' \
+  && { echo "FAIL: bad version accepted"; exit 1; } || true
+
+# non-zero reserved (reserved=1 at offset 6) -> non-zero
+python3 - "$OUT/badreserved.bin" "$OUT/good.bin" <<'PY'
+import sys, struct
+b = bytearray(open(sys.argv[2],"rb").read())
+b[6:8] = struct.pack("<H", 1)
+open(sys.argv[1],"wb").write(b)
+PY
+"$H" profile-parse "$OUT/badreserved.bin" | grep -q 'status=0' \
+  && { echo "FAIL: non-zero reserved accepted"; exit 1; } || true
+
+# is_unlocked out of range (is_unlocked=5 at offset 8) -> non-zero
+python3 - "$OUT/badunlocked.bin" "$OUT/good.bin" <<'PY'
+import sys, struct
+b = bytearray(open(sys.argv[2],"rb").read())
+b[8:12] = struct.pack("<I", 5)
+open(sys.argv[1],"wb").write(b)
+PY
+"$H" profile-parse "$OUT/badunlocked.bin" | grep -q 'status=0' \
+  && { echo "FAIL: bad is_unlocked accepted"; exit 1; } || true
+
 echo "PASS: 076 mode2 profile parse"
