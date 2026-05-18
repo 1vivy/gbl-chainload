@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # scripts/build.sh — wrap docker EDK-II build with mode/flag selection.
 #
-# Usage: scripts/build.sh --mode {0|1} [--auto] [--debug] [--verbose]
+# Usage: scripts/build.sh --mode {0|1|2} [--auto] [--debug] [--verbose]
 #
 # Output: dist/mode-<N>[flags].efi
 set -euo pipefail
@@ -22,10 +22,11 @@ while [[ $# -gt 0 ]]; do
     --verbose) VERBOSE=1;    shift   ;;
     -h|--help)
       cat <<EOF
-Usage: $0 --mode {0|1} [--auto] [--debug] [--verbose]
+Usage: $0 --mode {0|1|2} [--auto] [--debug] [--verbose]
 
 Mode 0: honest unlocked observation + universal preservation baseline; no fakelock overlay.
 Mode 1: fakelocked chainload (default).
+Mode 2: TA-payload spoof at QSEE/SPSS boundaries (custom-ROM mode); ABL stays honest.
 EOF
       exit 0 ;;
     *) echo "unknown flag: $1" >&2; exit 2 ;;
@@ -33,8 +34,8 @@ EOF
 done
 
 case "$MODE" in
-  0|1) ;;
-  *) echo "--mode $MODE not yet supported (valid: 0, 1)" >&2; exit 2 ;;
+  0|1|2) ;;
+  *) echo "--mode $MODE not yet supported (valid: 0, 1, 2)" >&2; exit 2 ;;
 esac
 
 # Artifact name reflects active flags. This same string is also passed to the

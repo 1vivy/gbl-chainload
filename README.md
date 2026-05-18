@@ -14,7 +14,7 @@ Mode-1 supports the "stock recovery + custom system" use case by default. Custom
 
 - **mode-0** — unlocked observation + universal preservation build. Installs protocol hooks for logging and for the narrow preservation baseline: drop TZ soft-fuse advancement and swallow `oplusreserve1` / `opporeserve1` writes. VB lock-state and OplusSec writes pass through so stock ABL can run the real relock procedure.
 - **mode-1** — protocol-hook fakelock. ABL sees locked DeviceInfo and builds KM SET_ROT/SET_BOOT_STATE off that view.
-- **mode-2** *(not yet implemented)* — TA-payload spoof at QSEE/SPSS boundaries; ABL stays honest; per-OTA typed-struct profile.
+- **mode-2** — TA-payload spoof at QSEE/SPSS boundaries (custom-ROM mode); ABL stays honest; per-OTA typed-struct profile injected via `GblPayloadLib`.
 
 ## Build
 
@@ -22,6 +22,7 @@ Mode-1 supports the "stock recovery + custom system" use case by default. Custom
 ./scripts/build.sh --mode 0               # unlocked observation + preservation baseline
 ./scripts/build.sh --mode 1               # fakelock production silent
 ./scripts/build.sh --mode 1 --auto --debug --verbose   # fakelock dev capture
+./scripts/build.sh --mode 2               # TA-payload spoof (custom-ROM mode)
 ```
 
 ## Logging
