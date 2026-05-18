@@ -781,7 +781,7 @@ git commit -m "feat(mode-2): gbl-pack --mode2-profile — embed 0x0010 entry"
 **Acceptance Criteria:**
 - [ ] `bash scripts/make-mode2-test-overlay.sh` (no args) runs build → derive → compile → gbl-pack → concat and produces `dist/mode-2-test.efi`, defaulting the vbmeta to `images/vbmeta-infiniti-IN-16.0.7.201.img`.
 - [ ] The script accepts an optional vbmeta path argument: `bash scripts/make-mode2-test-overlay.sh <vbmeta.img>`.
-- [ ] `dist/mode-2-test.efi` is larger than `dist/mode-2.efi` (the overlay was appended), and `parser_harness find-mode2-profile` accepts the intermediate overlay container with `status=0`.
+- [ ] `dist/mode-2-test.efi` is larger than `dist/mode-2-debug-verbose.efi` (the overlay was appended), and `parser_harness find-mode2-profile` accepts the intermediate overlay container with `status=0`.
 - [ ] The script fails loudly with a clear message if the vbmeta or `avbtool.py` is missing.
 
 **Verify:** `bash scripts/make-mode2-test-overlay.sh` → final line `==> dist/mode-2-test.efi ready (<N> bytes)` and exit 0.
@@ -798,7 +798,7 @@ Create `scripts/make-mode2-test-overlay.sh`:
 #
 # Pipeline: build mode-2 EFI -> derive profile XML from a stock vbmeta ->
 # compile to a 120-byte binary -> gbl-pack into a GBLP1 0x0010 overlay ->
-# concatenate onto dist/mode-2.efi -> dist/mode-2-test.efi
+# concatenate onto dist/mode-2-debug-verbose.efi -> dist/mode-2-test.efi
 #
 # Usage: scripts/make-mode2-test-overlay.sh [vbmeta.img]
 #   vbmeta.img defaults to images/vbmeta-infiniti-IN-16.0.7.201.img
@@ -813,14 +813,19 @@ VBMETA="${1:-images/vbmeta-infiniti-IN-16.0.7.201.img}"
 AVBTOOL="${AVBTOOL:-$HOME/avbtool.py}"
 OUT=dist/mode-2-test-build
 M2P=tools/mode2-profile/mode2-profile.py
+BUILT_EFI=dist/mode-2-debug-verbose.efi
 
 [ -f "$VBMETA" ]  || { echo "error: vbmeta not found: $VBMETA" >&2; exit 1; }
 [ -f "$AVBTOOL" ] || { echo "error: avbtool.py not found at $AVBTOOL (set AVBTOOL=)" >&2; exit 1; }
 
 mkdir -p "$OUT" dist
 
+echo "==> Compiling gbl-pack (fail-fast before slow Docker build)"
+make -s -C tools/gbl-pack
+
 echo "==> Building mode-2 EFI"
 ./scripts/build.sh --mode 2 --debug --verbose
+[ -f "$BUILT_EFI" ] || { echo "error: build did not produce $BUILT_EFI" >&2; exit 1; }
 
 echo "==> Deriving profile from $VBMETA"
 AVBTOOL="$AVBTOOL" python3 "$M2P" derive "$VBMETA" -o "$OUT/profile.xml"
@@ -829,11 +834,10 @@ echo "==> Compiling profile"
 python3 "$M2P" compile "$OUT/profile.xml" -o "$OUT/profile.bin"
 
 echo "==> Packing GBLP1 0x0010 overlay"
-make -s -C tools/gbl-pack
 tools/gbl-pack/gbl-pack --mode2-profile "$OUT/profile.bin" --out "$OUT/overlay.bin"
 
-echo "==> Concatenating overlay onto dist/mode-2.efi"
-cat dist/mode-2.efi "$OUT/overlay.bin" > dist/mode-2-test.efi
+echo "==> Concatenating overlay onto $BUILT_EFI"
+cat "$BUILT_EFI" "$OUT/overlay.bin" > dist/mode-2-test.efi
 
 SZ=$(stat -c%s dist/mode-2-test.efi)
 echo "==> dist/mode-2-test.efi ready ($SZ bytes)"
@@ -861,7 +865,7 @@ Expected: `status=0`.
 Then confirm the concat actually grew the file:
 
 ```bash
-test "$(stat -c%s dist/mode-2-test.efi)" -gt "$(stat -c%s dist/mode-2.efi)" \
+test "$(stat -c%s dist/mode-2-test.efi)" -gt "$(stat -c%s dist/mode-2-debug-verbose.efi)" \
   && echo "concat OK"
 ```
 
