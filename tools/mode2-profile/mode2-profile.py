@@ -18,6 +18,7 @@ import os
 import re
 import struct
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 # ---- gbl_mode2_profile binary layout (tools/shared/gbl_mode2_profile.h) ----
@@ -199,6 +200,69 @@ def cmd_derive(args) -> int:
     return 0
 
 
+# ===================== compile =====================
+
+def _req_text(root, tag: str) -> str:
+    el = root.find(tag)
+    if el is None or el.text is None or el.text.strip() == "":
+        raise SystemExit(f"error: <{tag}> missing or empty in profile XML")
+    return el.text.strip()
+
+
+def _parse_int(s: str, tag: str) -> int:
+    try:
+        return int(s, 0)  # accepts 0x.. and decimal
+    except ValueError:
+        raise SystemExit(f"error: <{tag}> value {s!r} is not an integer")
+
+
+def _parse_digest(s: str, tag: str) -> bytes:
+    if len(s) != 64 or re.fullmatch(r"[0-9a-fA-F]{64}", s) is None:
+        raise SystemExit(
+            f"error: <{tag}> must be exactly 64 hex characters (got {len(s)})")
+    return bytes.fromhex(s)
+
+
+def cmd_compile(args) -> int:
+    xml_path = Path(args.xml)
+    if not xml_path.is_file():
+        raise SystemExit(f"error: profile XML not found: {xml_path}")
+    try:
+        root = ET.fromstring(xml_path.read_text())
+    except ET.ParseError as e:
+        raise SystemExit(f"error: malformed profile XML: {e}")
+
+    if root.tag != "gbl-chainload-mode2-profile":
+        raise SystemExit(f"error: unexpected root element <{root.tag}>")
+    if root.get("version") != "1":
+        raise SystemExit(
+            f"error: profile version {root.get('version')!r}, expected \"1\"")
+
+    is_unlocked = _parse_int(_req_text(root, "is-unlocked"), "is-unlocked")
+    color = _parse_int(_req_text(root, "color"), "color")
+    system_version = _parse_int(_req_text(root, "system-version"), "system-version")
+    system_spl = _parse_int(_req_text(root, "system-spl"), "system-spl")
+    rot_digest = _parse_digest(_req_text(root, "rot-digest"), "rot-digest")
+    pubkey_digest = _parse_digest(_req_text(root, "pubkey-digest"), "pubkey-digest")
+    vbh = _parse_digest(_req_text(root, "vbh"), "vbh")
+
+    if is_unlocked > 1:
+        raise SystemExit(f"error: is-unlocked must be 0 or 1 (got {is_unlocked})")
+    if color > 3:
+        raise SystemExit(f"error: color must be 0..3 (got {color})")
+    for name, v in (("system-version", system_version), ("system-spl", system_spl)):
+        if v > 0xFFFFFFFF:
+            raise SystemExit(f"error: <{name}> exceeds 32 bits")
+
+    blob = struct.pack(M2P_STRUCT, M2P_MAGIC, M2P_VERSION, 0,
+                       is_unlocked, color, system_version, system_spl,
+                       rot_digest, pubkey_digest, vbh)
+    assert len(blob) == M2P_SIZE
+    Path(args.output).write_bytes(blob)
+    print(f"wrote {args.output} ({len(blob)} bytes)")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(prog="mode2-profile",
                                  description="gbl-chainload mode-2 profile tooling")
@@ -208,6 +272,11 @@ def main() -> int:
     d.add_argument("vbmeta", help="stock vbmeta.img")
     d.add_argument("-o", "--output", required=True, help="output profile XML path")
     d.set_defaults(func=cmd_derive)
+
+    c = sub.add_parser("compile", help="compile a profile XML to a 120-byte binary")
+    c.add_argument("xml", help="gbl-chainload_profile.xml")
+    c.add_argument("-o", "--output", required=True, help="output profile.bin path")
+    c.set_defaults(func=cmd_compile)
 
     args = ap.parse_args()
     return args.func(args)
