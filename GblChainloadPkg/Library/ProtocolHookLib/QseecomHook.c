@@ -345,11 +345,24 @@ KmDecodeKnownCmd (
     }
 
     case 0x00000218: {
-      /* FBE_SET_SEED. Sends FBE class-key derivation seed to TZ.
-       * MODE-1: DO NOT mutate. */
-      VERBOSE ("qsee-km | cmd=0x%08x(FBE_SET_SEED) | h=%u | sl=%u | "
-               "st=%r | DO-NOT-MUTATE\n",
-               CmdId, Handle, SendLen, Status);
+      /* FBE_SET_SEED. Sends the FBE class-key derivation seed to TZ; the
+       * seed feeds wrapping of credential-encrypted / metadata storage
+       * keys. MODE-1: DO NOT mutate.
+       *
+       * Promoted from VERBOSE to GBL_INFO: when the bootloader spoofs KM
+       * verified-boot state, previously-wrapped FBE keys can fail to
+       * unwrap (forcing a /data format). Whether 0x218 is implicated is
+       * an open question, so this decode must be visible in prod /
+       * --debug captures, not just --verbose.
+       *
+       * The seed is sensitive secret material (same class as UDS/FRS) —
+       * NEVER log the raw bytes. We emit a 4-byte hex prefix only, which
+       * is enough to confirm seed identity / stability across boots
+       * without disclosing the secret. */
+      HexN (SendBuf + 4, (SendLen >= 4) ? 4 : 0, 4, Hex, sizeof (Hex));
+      GBL_INFO ("qsee-km | cmd=0x%08x(FBE_SET_SEED) | h=%u | sl=%u | "
+                "seedPfx=%a | st=%r | DO-NOT-MUTATE\n",
+                CmdId, Handle, SendLen, Hex, Status);
       break;
     }
 
