@@ -34,6 +34,16 @@ PSZ=$(stat -c%s "$FX")
 cmp -n 200000 "$OUT/custom.img" "$OUT/grafted.img" \
   || { echo "FAIL: custom content not preserved at offset 0"; exit 1; }
 
+# --- graft regression: a footer'd / partition-sized custom image must
+#     take its content size from its own AvbFooter's OriginalImageSize,
+#     NOT its file size. $FX is footer'd and partition-sized; using the
+#     file size as content overflowed the partition ("too large").
+"$VG" graft --stock "$FX" --custom "$FX" --part-size "$PSZ" \
+       --out "$OUT/grafted-footered.img" > "$OUT/graft2.log" 2>&1 \
+  || { echo "FAIL: graft of a footer'd custom image"; cat "$OUT/graft2.log"; exit 1; }
+[ "$(stat -c%s "$OUT/grafted-footered.img")" = "$PSZ" ] \
+  || { echo "FAIL: grafted-footered image not partition-sized"; exit 1; }
+
 # --- check: a partition checked against its own vbmeta is suitable ----
 # (grafted-recovery's embedded vbmeta is self-consistent for 'recovery')
 "$VG" check "$FX" "$FX" recovery > "$OUT/check.log" 2>&1 && rc=0 || rc=$?

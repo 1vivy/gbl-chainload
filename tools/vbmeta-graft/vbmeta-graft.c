@@ -275,7 +275,18 @@ static int cmd_graft(const char *stock_path, const char *custom_path,
     free(stock); free(custom); return 1;
   }
 
-  uint64_t content   = (uint64_t)custl;
+  /* The custom image's content size is its own AvbFooter's
+     OriginalImageSize when it is a footer'd / partition-sized image (a
+     recovery partition dump or a built recovery.img); only a bare,
+     unpadded custom image has content size == file size. Using the file
+     size for a footer'd image would leave no room for the grafted vbmeta. */
+  uint64_t content;
+  GBL_AVB_FOOTER cust_footer;
+  if (AvbParse_Footer(custom, (UINT64)custl, &cust_footer) == EFI_SUCCESS) {
+    content = cust_footer.OriginalImageSize;
+  } else {
+    content = (uint64_t)custl;
+  }
   uint64_t vb_off    = (content + 4095) & ~(uint64_t)4095;   /* round up 4K */
   uint64_t footer_at = part_size - GBL_AVB_FOOTER_SIZE;
   if (vb_off + svb_len > footer_at) {
