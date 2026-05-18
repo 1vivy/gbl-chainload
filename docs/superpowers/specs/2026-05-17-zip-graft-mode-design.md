@@ -34,8 +34,7 @@ re-vendoring; the `diag` vbmeta-walk extension; `tests/host` coverage.
 
 **Out of scope:** partitions with no graftable `AvbFooter` (hashtree
 partitions — `system`, `vendor`, …); a host-side graft script
-(`next-milestone` mentions one — separate work); `BOOTMODE` (graft is
-recovery-only).
+(`next-milestone` mentions one — separate work).
 
 ## The graft, in one paragraph
 
@@ -63,13 +62,13 @@ memory `graft_at_natural_offset_wins`, confirmed booting on infiniti.
 ```sh
 MODE_NAME="graft"
 MODE_DESC="graft stock vbmeta onto a custom partition (mode-1 AVB coexistence)"
-MODE_WRITES="<selected partition>"
+MODE_WRITES="the selected slot of each grafted partition"
 MODE_TOOLS="vbmeta-graft gbl-commit"
 MODE_EFI=""
 ```
 
 `modes/graft.sh` — one mode file, `mode_main` plus isolated helpers
-(`pick_slot`, `resolve_partition`, `select_stock`, `do_graft`,
+(`pick_slot`, `find_custom_images`, `resolve_stock`, `do_graft`,
 `commit_graft`). It defines only these functions — `update-binary` does the
 bootstrap, `core/*.sh` sourcing, and EXIT trap.
 
@@ -81,15 +80,14 @@ Three subcommands:
 
 - `vbmeta-graft list <vbmeta-image>` — parse a vbmeta image; print the
   partitions its descriptors cover, with descriptor type (hash / hashtree /
-  chain) and which are footer'd-graftable. Used by the suitability check and
-  by `diag`'s vbmeta walk.
+  chain). Used by `diag`'s vbmeta walk.
 - `vbmeta-graft check <candidate-partition-img> <device-main-vbmeta> <part>` —
-  exit 0 iff the candidate is a self-consistent stock `<part>` partition
-  **and** is *suitable* to graft: its embedded vbmeta is signed by the key
-  the device main vbmeta's chain descriptor for `<part>` names, and its
-  rollback index satisfies that descriptor's rollback location. Prints a
-  match summary (key match, rollback delta, version) so the mode can rank
-  candidates. This catches a wrong or older-OTA `/sdcard/stock_<part>.img`.
+  exit 0 iff the candidate has a valid `AvbFooter` + embedded vbmeta **and**
+  is *suitable* to graft for `<part>`: signed by the key the device main
+  vbmeta's chain descriptor for `<part>` names, with a rollback index that
+  descriptor will accept. This is a per-candidate validity gate — it catches
+  a wrong or older-OTA `/sdcard/stock_<part>.img`, or a candidate slot whose
+  vbmeta footer is missing/invalid.
 - `vbmeta-graft graft --stock <stock-partition-img> --custom <custom-img>
   --out <grafted-img>` — read the stock partition's `AvbFooter`, extract the
   OEM-signed vbmeta blob, determine the custom image's content size, and
@@ -97,92 +95,84 @@ Three subcommands:
 
 ### Inputs
 
-- **Custom image:** `/sdcard/gbl_<part>.img` — the user's modified
-  partition. The `<part>` in the filename names the target partition
-  (`gbl_recovery.img` → `recovery`).
-- **Stock vbmeta:** the best-matching *suitable* candidate among
-  `/sdcard/stock_<part>.img` (if present), `<part>_a`, and `<part>_b` —
-  selected by `vbmeta-graft check` (see "Suitability"). `/sdcard/stock_<part>.img`
-  lets the user pin a specific stock version or supply stock when no slot
-  holds it.
-- **Slot:** chosen by the one up-front prompt (see the flow). The picked
-  slot `S` is the graft + flash target.
-- **Output:** the grafted image, flashed to `<part>_S`.
+- **Custom image(s):** `/sdcard/gbl_<part>.img` — each is a user's modified
+  partition, and the `<part>` in the filename names the target partition
+  (`gbl_recovery.img` → `recovery`). One run grafts **every** such file
+  present; the common case is one file. No partition menu — the filename is
+  authoritative.
+- **Slot:** in recovery, the one up-front prompt picks the slot `S`; under
+  `BOOTMODE`, `S` is the inactive slot (see below). `S` is the graft + flash
+  target for every grafted partition, **and** the priority-1 stock-vbmeta
+  candidate.
+- **Stock vbmeta:** per partition `<part>`, the first candidate that passes
+  `vbmeta-graft check`, in priority order:
+  1. `<part>_S` — the user's chosen slot. The human's pick leads, because
+     auto-scanning which slot carries the right/newest stock vbmeta is
+     unreliable (a slot's vbmeta can be partially updated post-OTA).
+  2. `/sdcard/stock_<part>.img` — if the user supplied one.
+  3. `<part>_<other slot>`.
+  No candidate passes → `abort`.
+- **Output:** the grafted image for each `<part>`, flashed to `<part>_S`.
 
-### Recovery flow (`BOOTMODE=false`)
+### Slot selection
+
+- **Recovery (`BOOTMODE=false`):** one up-front prompt —
+  > `Please select slot to perform graft and flash on [A/B]? (If OTA was`
+  > `flashed from recovery or you know it's on the inactive, select that one.)`
+
+  Vol-UP = A, Vol-DOWN = B. The picked slot guides candidate selection (its
+  `<part>` is priority-1), so picking the freshly-OTA'd slot grafts onto the
+  newest OTA image; picking the current slot is a fine "re-install / fix my
+  slot" path — user's call.
+- **`BOOTMODE=true` (booted Android):** no prompt — assume an OTA applied
+  by `update_engine`, so `S` = the **inactive** slot. The partitions come
+  from the `/sdcard/gbl_<part>.img` filenames; everything is silent and
+  `ui_print`'d.
+
+### Recovery / BOOTMODE flow
 
 ```
-1. Pre-flight: A/B slot resolves; recovery only (BOOTMODE -> abort);
-   at least one /sdcard/gbl_<part>.img present.
+1. Pre-flight: A/B slot resolves; at least one /sdcard/gbl_<part>.img
+   present; every named <part> is a footer'd, vbmeta-covered partition.
 
-2. Slot prompt (the one up-front prompt):
-     "Please select slot to perform graft and flash on [A/B]?
-      (If OTA was flashed from recovery or you know it's on the
-      inactive, select that one.)"
-   -> slot S.   Vol-UP = A, Vol-DOWN = B.
+2. Slot S:  recovery -> the prompt above;  BOOTMODE -> inactive slot.
 
-3. Partition: taken from the /sdcard/gbl_<part>.img filename.
-   One such file -> <part>. Multiple -> a vol-key cycle pick among the
-   files. <part> must be a footer'd, vbmeta-covered partition
-   (validated via `vbmeta-graft list` on vbmeta_S) -> else abort.
+3. For each /sdcard/gbl_<part>.img:
+     a. Resolve the stock vbmeta: try candidates 1..3 (above) in order,
+        first to pass `vbmeta-graft check` against vbmeta_S wins.
+        None pass -> abort.
+     b. `vbmeta-graft graft` -- chosen stock vbmeta onto the custom image
+        -> grafted image in the workdir.
+     c. commit_verified <grafted> /dev/block/by-name/<part>_S \
+                        /sdcard/<part>_S.bak   (backup + write + verify).
 
-4. Stock-vbmeta selection: gather candidates -- /sdcard/stock_<part>.img
-   (if present), <part>_a, <part>_b. Run `vbmeta-graft check` on each
-   against vbmeta_S. Rank the passing candidates by match quality; pick
-   the best. No suitable candidate -> abort ("no suitable stock vbmeta;
-   provide /sdcard/stock_<part>.img matching this OTA").
-
-5. Graft: `vbmeta-graft graft` -- chosen stock vbmeta onto
-   /sdcard/gbl_<part>.img -> grafted image in the workdir.
-
-6. Flash: commit_verified <grafted> /dev/block/by-name/<part>_S \
-                          /sdcard/<part>_S.bak   (backup + verify).
-
-7. Done -- reboot. Slot S now carries the grafted custom <part>, which
-   survives mode-1 userspace AVB.
+4. Done -- reboot. Slot S now carries the grafted custom partition(s),
+   which survive mode-1 userspace AVB.
 ```
-
-### Suitability check & candidate ranking
-
-A graft fails at boot if the stock vbmeta does not satisfy the device's
-main vbmeta. The main `vbmeta_S` carries, for partition `<part>`, a chain
-descriptor naming the public key `<part>`'s vbmeta must be signed with and a
-rollback-index location. `vbmeta-graft check` verifies a candidate against
-that: the candidate's embedded vbmeta must be signed by the named key and
-carry a rollback index the device will accept. An old-OTA
-`/sdcard/stock_<part>.img` typically fails the rollback test; a wrong-image
-file fails the key/structure test. Among candidates that pass, the mode
-picks the one most consistent with `vbmeta_S` (closest version / rollback).
-The check is a distinct `vbmeta-graft` subcommand so it runs as an explicit
-pre-graft gate.
-
-### BOOTMODE
-
-`graft` is recovery-only. Under `BOOTMODE=true` it `abort`s with a message
-to flash from recovery — the slot prompt and partition pick need a screen,
-and graft is a deliberate, surgical operation.
 
 ### diag vbmeta-walk
 
 The SP3-deferred item: with `vbmeta-graft list` now available, `diag` is
-extended to run `vbmeta-graft list vbmeta_<slot>` and print the covered
+extended to run `vbmeta-graft list` on `vbmeta_<slot>` and print the covered
 partitions. SP3 left a marker comment in `modes/diag.sh` for exactly this.
 
 ## Pre-flight gates
 
 Before any write, all validated — `abort` on any failure leaves the device
-untouched: A/B slot resolves; not `BOOTMODE`; at least one
-`/sdcard/gbl_<part>.img`; the resolved `<part>` is a footer'd
-vbmeta-covered partition; `vbmeta_S` and the candidate partitions are
-readable; a suitable stock-vbmeta candidate exists.
+untouched: A/B slot resolves; at least one `/sdcard/gbl_<part>.img`; each
+named `<part>` is a footer'd vbmeta-covered partition; `vbmeta_S` readable;
+for each `<part>`, a stock-vbmeta candidate passes `vbmeta-graft check`.
 
 ## Error handling
 
 All via `core/safety.sh`: `abort` on any failure (loud `ui_print`,
 cleanup, exit 1); the EXIT trap clears the workdir and restores the SELinux
-context. The single partition write goes through `commit_verified` →
-`gbl-commit` auto-restores its backup on a verify mismatch; the backup is
-`/sdcard/<part>_S.bak`. Every gate and step is `ui_print`'d.
+context. Each partition write goes through `commit_verified` → `gbl-commit`
+auto-restores its backup on a verify mismatch; backups are
+`/sdcard/<part>_S.bak`. Every gate and step is `ui_print`'d. When several
+`gbl_<part>.img` are grafted, a later partition's failure does not roll back
+an earlier partition already written-and-verified — each is independently
+backed up at `/sdcard/<part>_S.bak`.
 
 ## Testing
 
@@ -199,20 +189,16 @@ context. The single partition write goes through `commit_verified` →
   `shellcheck -s sh` the staged `graft.sh`.
 
 The pure-logic `vbmeta-graft` paths are host-testable against fixtures. The
-device prompts and the partition write are Layer-3 on-device validation
+slot prompt and the partition writes are Layer-3 on-device validation
 (user-run), like SP2's `diag` and SP3's `install`: flash
 `gbl-chainload-graft.zip`, confirm the grafted partition boots and normal
 Android boot survives mode-1.
 
 ## Open questions
 
-- The partition cycle-pick (flow step 3) only appears when multiple
-  `/sdcard/gbl_*.img` files are present; the common single-file case has no
-  partition prompt, so the slot prompt is genuinely the only prompt.
-- `vbmeta-graft check`'s ranking among multiple passing candidates is
-  "closest to `vbmeta_S`"; the exact tie-break (identical blobs are common
-  since both slots run the same OTA build) is an implementation detail for
-  the plan.
+- `vbmeta-graft check`'s rollback/version comparison is the mechanism that
+  rejects an old-OTA stock candidate; the exact rollback-index handling is
+  an implementation detail for the plan.
 - Whether `recovery` on infiniti is chain-descriptor'd (own embedded vbmeta,
   graftable) or hash-described in the main vbmeta is verified during
   implementation via `vbmeta-graft list`; only footer'd partitions are
