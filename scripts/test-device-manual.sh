@@ -254,6 +254,17 @@ if [[ "$LOGFS_MOUNTED" == "true" ]]; then
   fi
 fi
 
+if [[ "$DEVICE_CONTEXT" == "recovery" ]]; then
+    # In recovery, also pull the TWRP log if it exists and is non-empty.
+    adb pull /tmp/recovery.log "$LOG_DIR/recovery.log" 2>/dev/null || true
+    if [[ -s "$LOG_DIR/recovery.log" ]]; then
+        tr -d '\r' < "$LOG_DIR/twrp-recovery.log" > "$LOG_DIR/recovery.log.tmp" \
+        && mv "$LOG_DIR/recovery.log.tmp" "$LOG_DIR/recovery.log"
+    else
+        rm -f "$LOG_DIR/recovery.log"
+    fi
+    fi
+
 echo
 echo "======================================================================"
 echo "  captured into $LOG_DIR:"
