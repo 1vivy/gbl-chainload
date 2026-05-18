@@ -70,7 +70,7 @@ ProtocolHook_InstallAll (
         observation-only wrapper in mode-0. */
   Status = InstallQseecomHook ();
   if (EFI_ERROR (Status)) {
-#if (GBL_MODE == 1)
+#if (GBL_MODE == 1) || (GBL_MODE == 2)
     Print (L"ProtocolHookLib: FATAL — Qseecom install failed (%r), aborting chain-load\n",
            Status);
     return Status;
@@ -84,13 +84,19 @@ ProtocolHook_InstallAll (
   }
   Result->QseecomExpectedSlots  = 1;
 
-  /* 4. SPSS -- optional (observation-only).  Failure is logged but does
-        not abort. */
+  /* 4. SPSS -- required for mode-2 (KM/SPSS attestation overlay);
+        optional (observation-only) for all other modes. */
   Status = InstallSpssHook ();
   if (EFI_ERROR (Status)) {
+#if (GBL_MODE == 2)
+    Print (L"ProtocolHookLib: FATAL — SPSS install failed (%r), aborting chain-load (mode-2)\n",
+           Status);
+    return Status;
+#else
     Print (L"ProtocolHookLib: SPSS install failed (%r) - continuing (observation-only)\n",
            Status);
     Result->SpssInstalledSlots = 0;
+#endif
   } else {
     Result->SpssInstalledSlots = 1;
   }
