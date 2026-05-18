@@ -29,4 +29,10 @@ for tag in rot-digest pubkey-digest vbh; do
     || { echo "FAIL: <$tag> is ${#val} hex chars, expected 64"; exit 1; }
 done
 
+# Encoded numeric values must be non-zero hex (catches encoder regressions that emit 0x0).
+grep -Eq '<system-version>0x[0-9a-f]*[1-9a-f][0-9a-f]*<' "$OUT/profile.xml" \
+  || { echo "FAIL: <system-version> is missing or zero"; exit 1; }
+grep -Eq '<system-spl>0x[0-9a-f]*[1-9a-f][0-9a-f]*<' "$OUT/profile.xml" \
+  || { echo "FAIL: <system-spl> is missing or zero"; exit 1; }
+
 echo "PASS: 079 mode2 profile derive"
