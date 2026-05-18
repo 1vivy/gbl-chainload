@@ -4,6 +4,7 @@
 #include "pack.h"
 #include "../shared/gblp1.h"
 #include "../shared/efisp_scan.h"
+#include "../shared/gbl_mode2_profile.h"
 #include "../../GblChainloadPkg/Library/GblPayloadLib/Internal/Sha256.h"
 #include "../../GblChainloadPkg/Library/GblPayloadLib/Internal/Crc32.h"
 #include "../../GblChainloadPkg/Library/GblPayloadLib/Internal/PeSanity.h"
@@ -17,10 +18,6 @@ static void wle32(uint8_t *p, uint32_t v) {
 }
 
 static uint32_t align_up(uint32_t v, uint32_t a) { return (v + a - 1) & ~(a - 1); }
-
-/* gbl_mode2_profile layout sanity (tools/shared/gbl_mode2_profile.h). */
-#define GBL_M2P_MAGIC "GM2P"
-#define GBL_M2P_SIZE  120u
 
 enum gbl_pack_status
 gbl_pack_build(const struct gbl_pack_inputs *in,

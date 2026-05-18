@@ -15,6 +15,7 @@ SRCS_ALL = gbl-pack.c pack.c $(PARSER_SRCS_NODEP) $(GPL)/Sha256.c
 all: gbl-pack
 
 gbl-pack: gbl-pack.c pack.c pack.h ../shared/gblp1.h ../shared/efisp_scan.h \
+          ../shared/gbl_mode2_profile.h \
           $(PARSER_SRCS_NODEP) $(GPL)/Sha256.c $(GPL)/Internal/Sha256.h
 	$(CC) $(CFLAGS) -o $@ gbl-pack.c pack.c $(PARSER_SRCS_NODEP) $(GPL)/Sha256.c
 

@@ -44,4 +44,28 @@ PY
 "$GP" --out "$OUT/bad.bin" >/dev/null 2>&1 \
   && { echo "FAIL: gbl-pack accepted no inputs"; exit 1; } || true
 
+# Combined path: cached_abl + source_meta + mode2_profile (ec=3).
+# The PE fixture may not be present on all build hosts; skip only this
+# sub-case if it is missing — the rest of 081 has already passed above.
+PE=images/pe/infiniti-EU-16.0.5.703.efi
+if [ ! -f "$PE" ]; then
+  echo "SKIP: $PE missing — combined ec=3 sub-case skipped (rest of 081 passed)"
+else
+  make -s -C tools/abl-patcher
+  tools/abl-patcher/abl-patcher --in "$PE" --out "$OUT/patched.efi" \
+    >"$OUT/patcher.log" 2>&1 \
+    || { echo "FAIL: abl-patcher failed for ec=3 sub-case"; cat "$OUT/patcher.log"; exit 1; }
+
+  "$GP" --cached-abl "$OUT/patched.efi" --source "$PE" --extracted "$OUT/patched.efi" \
+    --mode2-profile "$OUT/profile.bin" --out "$OUT/combined.bin" \
+    2>"$OUT/combined-pack.log" \
+    || { echo "FAIL: gbl-pack ec=3 combined path failed"; cat "$OUT/combined-pack.log"; exit 1; }
+
+  "$H" find-cached-abl "$OUT/combined.bin" | grep -q 'status=0' \
+    || { echo "FAIL: find-cached-abl failed on ec=3 combined container"; exit 1; }
+
+  "$H" find-mode2-profile "$OUT/combined.bin" | grep -q 'status=0' \
+    || { echo "FAIL: find-mode2-profile failed on ec=3 combined container"; exit 1; }
+fi
+
 echo "PASS: 081 gbl-pack mode2 profile"
