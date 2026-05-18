@@ -73,8 +73,12 @@ GblPayload_LoadMode2Profile (IN  EFI_HANDLE                ImageHandle,
     if (PS == GBL_PAYLOAD_OK || PS == GBL_PAYLOAD_NO_MODE2_PROFILE) break;
   }
 
-  if (PS == GBL_PAYLOAD_NO_MODE2_PROFILE || PS == GBL_PAYLOAD_BAD_MAGIC) {
-    GBL_INFO("gbl-payload: mode2 — no 0x0010 entry\n");
+  if (PS == GBL_PAYLOAD_BAD_MAGIC) {
+    GBL_INFO("gbl-payload: mode2 — no GBLP1 magic in overlay\n");
+    return EFI_NOT_FOUND;
+  }
+  if (PS == GBL_PAYLOAD_NO_MODE2_PROFILE) {
+    GBL_INFO("gbl-payload: mode2 — no 0x0010 entry in container\n");
     return EFI_NOT_FOUND;
   }
   if (PS != GBL_PAYLOAD_OK) {

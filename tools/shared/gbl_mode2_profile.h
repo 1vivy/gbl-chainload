@@ -4,7 +4,18 @@
 #ifndef GBL_MODE2_PROFILE_H_
 #define GBL_MODE2_PROFILE_H_
 
-#include <stdint.h>
+#ifdef GBL_HOST_BUILD
+# include <stdint.h>
+#else
+# include <Uefi.h>
+# ifndef GBL_COMPAT_TYPES_DEFINED
+#  define GBL_COMPAT_TYPES_DEFINED
+   typedef UINT8  uint8_t;
+   typedef UINT16 uint16_t;
+   typedef UINT32 uint32_t;
+   typedef INT32  int32_t;
+# endif
+#endif
 
 #define GBL_M2P_MAGIC        "GM2P"
 #define GBL_M2P_MAGIC_SIZE   4u
