@@ -11,7 +11,7 @@ mkdir -p "$OUT"
 # Build a GBLP1 container with one 0x0010 (mode2_profile) entry: a
 # 120-byte profile payload. Mirrors the on-disk layout in
 # tools/shared/gblp1.h (header 28, entry 48, payload 16-aligned, footer 8).
-python3 - "$OUT/with_profile.bin" "$OUT/no_profile.bin" <<'PY'
+python3 - "$OUT/with_profile.bin" "$OUT/no_profile.bin" "$OUT/corrupt_profile.bin" <<'PY'
 import struct, sys, zlib, hashlib
 
 def container(entry_type):
@@ -38,14 +38,29 @@ def container(entry_type):
 
 open(sys.argv[1],"wb").write(container(0x0010))  # has mode2_profile
 open(sys.argv[2],"wb").write(container(0x0001))  # cached_abl only
+
+# Corrupt container: valid structure but payload byte flipped so SHA-256 mismatches.
+# pay_off = (28 + 48 + 15) & ~15 = 80; flip one byte inside the 0x0010 payload body.
+good = bytearray(container(0x0010))
+good[80] ^= 0xff  # flip first byte of payload — SHA-256 in entry NOT recomputed
+open(sys.argv[3],"wb").write(bytes(good))
 PY
 
-# container WITH a 0x0010 entry -> status=0
-"$H" find-mode2-profile "$OUT/with_profile.bin" | grep -q 'status=0' \
-  || { echo "FAIL: 0x0010 entry not found"; exit 1; }
+# container WITH a 0x0010 entry -> status=0 and size=120 present
+result=$("$H" find-mode2-profile "$OUT/with_profile.bin")
+echo "$result" | grep -q 'status=0' \
+  || { echo "FAIL: 0x0010 entry not found (got: $result)"; exit 1; }
+echo "$result" | grep -q 'size=120' \
+  || { echo "FAIL: 0x0010 entry size wrong (got: $result)"; exit 1; }
 
-# container WITHOUT one -> non-zero (GBL_PAYLOAD_NO_MODE2_PROFILE)
-"$H" find-mode2-profile "$OUT/no_profile.bin" | grep -q 'status=0' \
-  && { echo "FAIL: missing 0x0010 reported as found"; exit 1; } || true
+# container WITHOUT one -> exactly status=17 (GBL_PAYLOAD_NO_MODE2_PROFILE)
+result=$("$H" find-mode2-profile "$OUT/no_profile.bin" || true)
+echo "$result" | grep -q 'status=17' \
+  || { echo "FAIL: missing 0x0010 should report status=17 (got: $result)"; exit 1; }
+
+# corrupt container -> non-zero (SHA-256 integrity error, GBL_PAYLOAD_ENTRY_SHA_MISMATCH)
+result=$("$H" find-mode2-profile "$OUT/corrupt_profile.bin" || true)
+echo "$result" | grep -q 'status=0' \
+  && { echo "FAIL: corrupt container reported as valid (got: $result)"; exit 1; } || true
 
 echo "PASS: 077 gblp1 find mode2_profile"

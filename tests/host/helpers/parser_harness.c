@@ -1,6 +1,6 @@
 /* tests/host/helpers/parser_harness.c
    Single host harness that exercises GblPayloadLib's pure-logic parser
-   against in-memory bytes. Used by tests 060/061/063/064/067. */
+   against in-memory bytes. Used by tests 060/061/063/064/067/077. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

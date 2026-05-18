@@ -51,7 +51,9 @@ gbl_payload_validate_header(const uint8_t *b, size_t n) {
 /* Walk + integrity-check every entry; return the unique entry whose
    type == want_type. Returns GBL_PAYLOAD_OK with *out and *out_size set,
    or an integrity error, or GBL_PAYLOAD_OK with *out == NULL when no
-   entry of want_type exists (caller maps that to its own "missing"). */
+   entry of want_type exists (caller maps that to its own "missing").
+   Unrecognized types (those that do not equal want_type) are silently
+   skipped — forward-compatibility by design. */
 static enum gbl_payload_status
 gbl_payload_find_entry(const uint8_t *b, size_t n, uint16_t want_type,
                        const uint8_t **out, size_t *out_size) {
