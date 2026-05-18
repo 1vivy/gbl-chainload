@@ -53,6 +53,7 @@ STAGE=$(mktemp -d)
 trap 'rm -rf "$STAGE"' EXIT
 cp -r "$SUB"/. "$STAGE"/
 rm -rf "$STAGE/.git" "$STAGE/.github" "$STAGE/.gitignore" \
+       "$STAGE/.omc" "$STAGE/.claude" \
        "$STAGE/update-tools.sh" "$STAGE/README.md"
 
 echo "$MODE" > "$STAGE/modes/SELECTED"
