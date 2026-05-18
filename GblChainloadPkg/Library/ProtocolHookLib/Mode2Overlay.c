@@ -18,7 +18,7 @@ Mode2_SetProfile (IN CONST struct gbl_mode2_profile *Profile) {
   CopyMem (&gMode2Profile, Profile, sizeof (gMode2Profile));
   gMode2HasProfile = TRUE;
   GBL_INFO ("mode2 | profile set (ver=%u color=%u isUnlocked=%u)\n",
-            Profile->version, Profile->color, Profile->is_unlocked);
+            (UINT32)Profile->version, Profile->color, Profile->is_unlocked);
 }
 
 BOOLEAN EFIAPI
@@ -30,21 +30,21 @@ BOOLEAN EFIAPI
 Mode2Policy_RewriteKmSend (IN UINT32 CmdId, IN OUT UINT8 *SendBuf,
                            IN UINT32 SendLen) {
   if (!gMode2HasProfile) return FALSE;
-  int Rewrote = gbl_m2_rewrite_km (CmdId, SendBuf, SendLen, &gMode2Profile);
-  if (Rewrote) {
+  if (gbl_m2_rewrite_km (CmdId, SendBuf, SendLen, &gMode2Profile)) {
     GBL_INFO ("mode2 | km-rewrite | cmd=0x%08x | len=%u\n", CmdId, SendLen);
+    return TRUE;
   }
-  return Rewrote ? TRUE : FALSE;
+  return FALSE;
 }
 
 BOOLEAN EFIAPI
 Mode2Policy_RewriteSpss (IN OUT VOID *Info, IN UINT32 InfoLen) {
   if (!gMode2HasProfile || Info == NULL) return FALSE;
-  int Rewrote = gbl_m2_rewrite_spss ((UINT8 *)Info, InfoLen, &gMode2Profile);
-  if (Rewrote) {
+  if (gbl_m2_rewrite_spss ((UINT8 *)Info, InfoLen, &gMode2Profile)) {
     GBL_INFO ("mode2 | spss-rewrite | len=%u\n", InfoLen);
+    return TRUE;
   }
-  return Rewrote ? TRUE : FALSE;
+  return FALSE;
 }
 
 #endif /* GBL_MODE == 2 */
