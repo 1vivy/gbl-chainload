@@ -17,7 +17,7 @@
 
 #define GBLP1_TYPE_CACHED_ABL    0x0001u
 #define GBLP1_TYPE_SOURCE_META   0x0002u
-#define GBLP1_TYPE_MODE2_PROFILE 0x0010u  /* reserved for future PR */
+#define GBLP1_TYPE_MODE2_PROFILE 0x0010u  /* mode-2 profile (GM2P) */
 
 #define GBLP1_ENTRY_SIZE     48u
 

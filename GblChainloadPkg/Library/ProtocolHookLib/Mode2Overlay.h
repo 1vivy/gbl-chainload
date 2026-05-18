@@ -10,11 +10,8 @@
 #include "../../../tools/shared/gbl_mode2_profile.h"
 
 /* Store a validated profile. Copies *Profile into module state and
-   makes Mode2_HasProfile() return TRUE. Called once by BootFlow. */
+   sets the internal gMode2HasProfile flag. Called once by BootFlow. */
 VOID EFIAPI Mode2_SetProfile (IN CONST struct gbl_mode2_profile *Profile);
-
-/* TRUE once Mode2_SetProfile has been called with a valid profile. */
-BOOLEAN EFIAPI Mode2_HasProfile (VOID);
 
 /* QseecomSendCmd policy: rewrite a KM send buffer in place from the
    stored profile. No-op (returns FALSE) if no profile is stored or the

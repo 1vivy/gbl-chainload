@@ -22,11 +22,6 @@ Mode2_SetProfile (IN CONST struct gbl_mode2_profile *Profile) {
 }
 
 BOOLEAN EFIAPI
-Mode2_HasProfile (VOID) {
-  return gMode2HasProfile;
-}
-
-BOOLEAN EFIAPI
 Mode2Policy_RewriteKmSend (IN UINT32 CmdId, IN OUT UINT8 *SendBuf,
                            IN UINT32 SendLen) {
   if (!gMode2HasProfile) return FALSE;
