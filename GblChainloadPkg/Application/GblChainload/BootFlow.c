@@ -167,6 +167,15 @@ BootFlowChainLoad (VOID)
     } else {
       GBL_INFO ("BootFlow: mode-2 profile unavailable (%r) — honest boot\n",
                 M2Status);
+      /* Surface the missing/invalid-profile state on the boot console
+         itself. The FastbootLib warning line (set below) only renders if
+         gbl-chainload's own FastbootMenu is reached — a healthy honest
+         boot chainloads ABL and never shows it, so Print() is the only
+         surface the user actually sees, and it shows in every build. */
+      Print (
+        (M2Status == EFI_NOT_FOUND)
+          ? L"GBL: MODE-2 PROFILE MISSING — booting honest, attestation will fail\n"
+          : L"GBL: MODE-2 PROFILE INVALID — booting honest, attestation will fail\n");
       GblFastbootSetMode2Warning (
         (M2Status == EFI_NOT_FOUND)
           ? "MODE-2 PROFILE MISSING - booting honest, attestation will fail"
