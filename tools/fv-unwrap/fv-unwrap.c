@@ -19,6 +19,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <lzma.h>
+#include "../shared/efisp_scan.h"
 
 /* =========================================================================
  * Result type: a heap-allocated PE blob
@@ -272,6 +273,11 @@ int main (int argc, char **argv)
   fwrite (pe.data, 1, pe.size, o);
   fclose (o);
   fprintf (stderr, "wrote 0x%zx (%zu) bytes to %s\n", pe.size, pe.size, argv[2]);
+  /* Report whether the extracted PE retains the UTF-16 'efisp' loader-path
+     marker. A "vulnerable" (GBL-loadable) ABL has it; abl-patcher removes
+     it. Printed on stdout (diagnostics go to stderr) for shell consumers. */
+  printf ("efisp-marker: %s\n",
+          gbl_contains_utf16_efisp (pe.data, pe.size) ? "present" : "absent");
   free (pe.data);
   return 0;
 }
