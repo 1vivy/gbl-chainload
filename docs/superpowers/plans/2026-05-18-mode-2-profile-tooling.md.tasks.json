@@ -1,0 +1,32 @@
+{
+  "planPath": "docs/superpowers/plans/2026-05-18-mode-2-profile-tooling.md",
+  "tasks": [
+    {
+      "id": 25,
+      "subject": "PT Task 1: mode2-profile CLI + derive",
+      "status": "pending",
+      "description": "**Goal:** Create the `mode2-profile` Python CLI with a `derive` subcommand that turns a stock vbmeta.img into a gbl-chainload_profile.xml.\n\n**Files:** Create tools/mode2-profile/mode2-profile.py, tools/mode2-profile/README.md, tests/host/079_mode2_profile_derive.sh.\n\n**Verify:** bash tests/host/079_mode2_profile_derive.sh -> PASS: 079 mode2 profile derive (or SKIP)\n\nFull code in plan doc PT Task 1.\n\n```json:metadata\n{\"files\": [\"tools/mode2-profile/mode2-profile.py\", \"tools/mode2-profile/README.md\", \"tests/host/079_mode2_profile_derive.sh\"], \"verifyCommand\": \"bash tests/host/079_mode2_profile_derive.sh\", \"acceptanceCriteria\": [\"derive writes well-formed profile XML with all 7 fields + provenance comment\", \"derive errors clearly on missing avbtool/vbmeta/props\", \"tests/host/079 passes or SKIPs cleanly\"]}\n```"
+    },
+    {
+      "id": 26,
+      "subject": "PT Task 2: mode2-profile compile",
+      "status": "pending",
+      "blockedBy": [25],
+      "description": "**Goal:** Add the `compile` subcommand that turns a gbl-chainload_profile.xml into the 120-byte gbl_mode2_profile binary.\n\n**Files:** Modify tools/mode2-profile/mode2-profile.py; Create tests/host/080_mode2_profile_compile.sh.\n\n**Verify:** bash tests/host/080_mode2_profile_compile.sh -> PASS: 080 mode2 profile compile\n\nFull code in plan doc PT Task 2.\n\n```json:metadata\n{\"files\": [\"tools/mode2-profile/mode2-profile.py\", \"tests/host/080_mode2_profile_compile.sh\"], \"verifyCommand\": \"bash tests/host/080_mode2_profile_compile.sh\", \"acceptanceCriteria\": [\"compile writes exactly 120-byte packed gbl_mode2_profile\", \"compile rejects malformed XML / bad version / is-unlocked>1 / color>3 / wrong-length digest\", \"compiled binary accepted by mode2_harness profile-parse (status=0)\", \"tests/host/080 passes\"]}\n```"
+    },
+    {
+      "id": 27,
+      "subject": "PT Task 3: gbl-pack --mode2-profile",
+      "status": "pending",
+      "description": "**Goal:** Extend gbl-pack to embed a 120-byte mode2_profile binary as a GBLP1 0x0010 entry, supporting cached-only / profile-only / both containers.\n\n**Files:** Modify tools/gbl-pack/pack.h, tools/gbl-pack/pack.c, tools/gbl-pack/gbl-pack.c; Create tests/host/081_gbl_pack_mode2_profile.sh.\n\n**Verify:** bash tests/host/081_gbl_pack_mode2_profile.sh -> PASS: 081 gbl-pack mode2 profile\n\nFull code in plan doc PT Task 3.\n\n```json:metadata\n{\"files\": [\"tools/gbl-pack/pack.h\", \"tools/gbl-pack/pack.c\", \"tools/gbl-pack/gbl-pack.c\", \"tests/host/081_gbl_pack_mode2_profile.sh\"], \"verifyCommand\": \"bash tests/host/081_gbl_pack_mode2_profile.sh\", \"acceptanceCriteria\": [\"gbl-pack --mode2-profile builds a profile-only 0x0010 container locatable by parser_harness find-mode2-profile\", \"gbl-pack rejects non-120-byte / bad-magic profile\", \"gbl-pack errors on no inputs\", \"cached-ABL path unchanged (060/062 pass)\", \"tests/host/081 passes\"]}\n```"
+    },
+    {
+      "id": 28,
+      "subject": "PT Task 4: make-mode2-test-overlay.sh",
+      "status": "pending",
+      "blockedBy": [25, 26, 27],
+      "description": "**Goal:** A single script that builds the mode-2 EFI, derives + compiles a profile, packs the 0x0010 overlay, and emits dist/mode-2-test.efi.\n\n**Files:** Create scripts/make-mode2-test-overlay.sh.\n\n**Verify:** bash scripts/make-mode2-test-overlay.sh -> ==> dist/mode-2-test.efi ready (<N> bytes)\n\nFull code in plan doc PT Task 4.\n\n```json:metadata\n{\"files\": [\"scripts/make-mode2-test-overlay.sh\"], \"verifyCommand\": \"bash scripts/make-mode2-test-overlay.sh\", \"acceptanceCriteria\": [\"script produces dist/mode-2-test.efi from build+derive+compile+pack+concat\", \"accepts optional vbmeta path arg\", \"dist/mode-2-test.efi larger than dist/mode-2.efi; overlay locatable by parser_harness\", \"fails loudly on missing vbmeta/avbtool\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-05-18T03:00:00Z"
+}
