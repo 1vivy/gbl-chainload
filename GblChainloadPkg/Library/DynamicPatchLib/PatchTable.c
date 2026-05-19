@@ -11,7 +11,9 @@
 
 #include "../../../Include/Library/PatchDesc.h"
 #include "../../../Include/Library/DynamicPatchLib.h"
+#ifdef __HOST_BUILD__
 #include "PatchScope.h"
+#endif
 
 extern CONST PATCH_DESC kUniversalPatches[];
 extern CONST UINTN      kUniversalPatchesCount;
@@ -72,6 +74,7 @@ DynamicPatchLib_EnsureInit (VOID)
   }
 }
 
+#ifdef __HOST_BUILD__
 /* Runtime scope aggregator for host callers (abl-patcher).
    Builds the table from: universal, then (if oem != NONE) the OEM group,
    then (if include_mode1) the mode_1 group.  Replaces the compile-time
@@ -95,3 +98,4 @@ DynamicPatchLib_EnsureInitScoped (GBL_OEM oem, int include_mode1)
   gPatchTableLen = n;
   gAggregateInit = TRUE;
 }
+#endif /* __HOST_BUILD__ */
