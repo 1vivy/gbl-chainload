@@ -62,7 +62,8 @@ A terse summary printed via `ui_print`. All detail goes to the bundle.
 diag: pre-reboot install confidence
   EFISP        : mode-1 base + GBLP1 v1 ok (3 entries, all sha-verified)
   loader-ABL   : abl_a retains loader path ; abl_b does NOT — WON'T LOAD EFISP
-  graft needed : NO   (no chained-partition mismatches)
+  graft needed : NO   (no chained-partition mismatches without a valid graft)
+  fakelock req : NO   (no direct-hash mismatches in main vbmeta)
   logfs history: 4 prior gbl-chainload boots (newest: GblChainload_Boot42.txt)
   confidence   : HIGH — safe to reboot into chainload
 
@@ -194,9 +195,12 @@ Functions:
   raw image gives a usable count without mounting). Newest is the one
   with the highest trailing integer.
 - `check_graft` — invoke the new `vbmeta-graft list-hash`
-  subcommand against the active vbmeta and the by-name dir. Result
-  becomes the graft-needed summary line. Writes detail to
-  `graft-verdict.txt`.
+  subcommand against the active vbmeta and the by-name dir. Bucket
+  the per-partition `verdict=mismatch` rows into two groups by their
+  graft state: `graft=missing` rows go in the "graft mode required"
+  list; `graft=n/a` (plain-hash mismatch) rows go in the "needs
+  fakelock / mode-1" list. Both lists feed the summary lines. Writes
+  full detail to `graft-verdict.txt`.
 - `decide_tier` — pure function of the four already-computed booleans
   (efisp_pe_present, gblp1_valid, base_efi_matches_mode_n,
   any_slot_loader_path). Prints the headline.
@@ -255,14 +259,56 @@ fingerprint-vs-MANIFEST step.
 vbmeta-graft list-hash <active-vbmeta.img> <byname-dir>
 ```
 
-For every hash descriptor in `<active-vbmeta.img>`: resolve
+For every descriptor in `<active-vbmeta.img>`: resolve
 `<byname-dir>/<part_name>_<slot>` (slot derived from the vbmeta
-filename), compute the digest exactly as `libavb` does — `SHA-256(salt
-|| image_bytes[0 .. image_size))` where `salt` and `image_size` come
-from the descriptor — and compare to the descriptor's `digest` field.
-Chain descriptors (whole-vbmeta delegation, e.g. `vbmeta_system`) are
-listed but reported as `verdict=chain` and excluded from the
-graft-needed tally — they are not verified by direct hashing.
+filename) and produce two independent results.
+
+**1. Raw digest check** (for hash descriptors only). Compute the
+digest exactly as `libavb` does — `SHA-256(salt || image_bytes[0 ..
+image_size))` where `salt` and `image_size` come from the descriptor
+— and compare to the descriptor's `digest` field. Reported as
+`digest=ok` / `digest=mismatch`. Chain descriptors report `digest=n/a`
+(no hash to check at this layer; the work is delegated).
+
+**2. Graft probe** (for any partition). Scan the on-disk partition
+for a valid AVB vbmeta blob at the graft-natural offset
+(`round_up(custom_content_size, 4K)`) and validate its signature
+against the OEM public key embedded in the candidate's auxiliary
+block. Reported as `graft=ok` (a stock-OEM-signed vbmeta lives at
+the natural offset — AOSP init will accept this partition via the
+active vbmeta's chain descriptor), `graft=missing` (chain descriptor
+exists but no valid graft), or `graft=n/a` (descriptor is a plain
+hash; the graft mechanism does not apply here).
+
+**Verdict** (the diag-consumable column) is the boot-pass-fail
+answer, derived from the two results above:
+
+- Hash descriptor + `digest=ok` → `verdict=match`.
+- Hash descriptor + `digest=mismatch` → `verdict=mismatch` (graft
+  mode cannot fix a direct hash descriptor; this is the mode-1
+  fakelock's responsibility).
+- Chain descriptor + `graft=ok` → `verdict=match` (AOSP init follows
+  the chain, lands on the grafted OEM-signed vbmeta, accepts).
+- Chain descriptor + `graft=missing` → `verdict=mismatch` (graft
+  mode required for this partition).
+
+Output, one line per partition:
+
+```
+partition=system        type=hash  declared=8589934592 digest=ok       graft=n/a    verdict=match
+partition=vbmeta_system type=chain declared=-          digest=n/a      graft=ok     verdict=match
+partition=recovery      type=chain declared=-          digest=n/a      graft=missing verdict=mismatch
+partition=vendor        type=hash  declared=805306368  digest=mismatch graft=n/a    verdict=mismatch
+```
+
+The graft-needed tally in the diag summary counts partitions where
+`verdict=mismatch` **and** `graft=missing` (i.e. graft mode can
+actually help). Plain-hash mismatches are reported on a separate
+line as "needs fakelock / mode-1" since `graft` mode will not change
+their outcome.
+
+Reuses the existing descriptor walker; ~120 added lines of C
+(descriptor walk + graft probe + dual-column emit).
 
 Output, one line per partition:
 
