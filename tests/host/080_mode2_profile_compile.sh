@@ -52,6 +52,10 @@ reject "version!=1" "$OUT/badver.toml"
 sed 's/^color *= *0/color = 9/' "$OUT/good.toml" > "$OUT/badcolor.toml"
 reject "color>3" "$OUT/badcolor.toml"
 
+# color < 0 (negative integer — valid TOML, caught by 0 <= v guard)
+sed 's/^color *= *0/color = -1/' "$OUT/good.toml" > "$OUT/badcolor_neg.toml"
+reject "color<0" "$OUT/badcolor_neg.toml"
+
 # is_unlocked > 1
 sed 's/^is_unlocked *= *0/is_unlocked = 5/' "$OUT/good.toml" > "$OUT/badunlk.toml"
 reject "is_unlocked>1" "$OUT/badunlk.toml"

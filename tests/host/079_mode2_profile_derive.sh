@@ -26,9 +26,11 @@ for key in is_unlocked color system_version system_spl; do
     || { echo "FAIL: '${key}' missing from TOML"; exit 1; }
 done
 
-# Digest keys must be quoted 64-hex strings.
-grep -Eq '^(rot_digest|pubkey_digest|vbh) *= *"[0-9a-f]{64}"' "$OUT/profile.toml" \
-  || { echo "FAIL: digest key(s) missing or malformed in TOML"; exit 1; }
+# Digest keys must be quoted 64-hex strings — check each one individually.
+for key in rot_digest pubkey_digest vbh; do
+  grep -Eq "^${key} *= *\"[0-9a-f]{64}\"" "$OUT/profile.toml" \
+    || { echo "FAIL: '${key}' missing or malformed in TOML"; exit 1; }
+done
 
 # Encoded numeric values must be non-zero hex (catches encoder regressions that emit 0x0).
 grep -Eq '^system_version *= *0x[0-9a-f]*[1-9a-f][0-9a-f]*' "$OUT/profile.toml" \
