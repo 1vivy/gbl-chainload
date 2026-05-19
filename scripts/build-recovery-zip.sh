@@ -2,7 +2,7 @@
 # scripts/build-recovery-zip.sh — assemble a single-mode installer ZIP
 # from the zip-gbl-chainload submodule.
 #
-#   build-recovery-zip.sh --mode diag|install|graft|profile
+#   build-recovery-zip.sh --mode diag|graft|mode-0-install|mode-1-install|mode-2-install
 #
 # Hard-fails if the submodule's vendored binaries have drifted from
 # zip/bin/MANIFEST (run zip/update-tools.sh to refresh).
@@ -13,8 +13,8 @@ ROOT=$(pwd)
 MODE=""
 [ "${1:-}" = --mode ] && MODE="${2:-}"
 case "$MODE" in
-  diag|install|graft|profile) ;;
-  *) echo "usage: $0 --mode diag|install|graft|profile" >&2; exit 2 ;;
+  diag|graft|mode-0-install|mode-1-install|mode-2-install) ;;
+  *) echo "usage: $0 --mode diag|graft|mode-0-install|mode-1-install|mode-2-install" >&2; exit 2 ;;
 esac
 
 SUB=zip
@@ -58,9 +58,17 @@ rm -rf "$STAGE/update-tools.sh" "$STAGE/README.md"
 find "$STAGE" -mindepth 1 -name '.*' -prune -exec rm -rf {} +
 
 echo "$MODE" > "$STAGE/modes/SELECTED"
+# Prune the non-selected modes. A real mode is a <name>.sh + <name>.conf pair;
+# a .sh is only a removable mode-script when it has a sibling .conf. This
+# spares shared mode libs like install-common.sh (no install-common.conf),
+# which the three mode-N-install modes source and must stay in the ZIP.
 for f in "$STAGE"/modes/*.conf "$STAGE"/modes/*.sh; do
   b=$(basename "$f"); m=${b%.*}
-  [ "$m" = "$MODE" ] || rm -f "$f"
+  [ "$m" = "$MODE" ] && continue
+  case "$f" in
+    *.sh) [ -f "$STAGE/modes/$m.conf" ] || continue ;;  # shared lib, keep
+  esac
+  rm -f "$f"
 done
 
 # read the selected mode's declared artifact needs

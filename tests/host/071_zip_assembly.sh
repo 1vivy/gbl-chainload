@@ -22,7 +22,7 @@ done
 # SELECTED names diag; other modes are pruned out
 unzip -p "$ZIP" modes/SELECTED | grep -qx diag \
   || { echo "FAIL: SELECTED is not 'diag'"; exit 1; }
-if unzip -l "$ZIP" | grep -qE 'modes/(install|graft|profile)'; then
+if unzip -l "$ZIP" | grep -qE 'modes/(graft|mode-[012]-install)\.'; then
   echo "FAIL: non-selected modes were not pruned"; exit 1
 fi
 

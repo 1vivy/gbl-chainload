@@ -9,16 +9,22 @@ This is the recovery-flashable installer that delivers mode-2 to a device.
 
 ## 1. Goal & scope
 
-Build out the `profile` mode of the `zip/` framework (currently a stub) into a
+Build out the `mode-2-install` mode of the `zip/` framework into a
 recovery-flashable, **self-contained per-OTA** mode-2 installer. On flash it
 detects the OEM from `build.prop`, derives the mode-2 profile on-device from the
 stock vbmeta, builds an OEM-patched cached ABL, packs the
 `cached_abl + mode2_profile` GBLP1 overlay onto the mode-2 EFI, and writes EFISP
 plus the loader ABL.
 
+The two install modes (`install` → `mode-1-install`, `profile` →
+`mode-2-install`) are restructured into **three parallel install modes** —
+`mode-0-install`, `mode-1-install`, `mode-2-install` — that share a common body
+(`zip/modes/install-common.sh`) and differ only in the base EFI, the
+`abl-patcher` flags, and (mode-2 only) the profile derive/compile step.
+
 In scope: a multi-platform C `mode2-profile` tool, `abl-patcher` OEM patchsets,
-the `profile` mode script, a shared-install-machinery refactor, the bundled
-`zip/base/mode-2.efi`.
+the `mode-2-install` mode script, a shared-install-machinery refactor, the
+bundled `zip/base/mode-2.efi`.
 
 Out of scope: Windows tool builds (the deferred slice-4 "solidify host tools"
 PR); non-OnePlus OEMs (the mechanism is extensible; v1 populates OnePlus only);
@@ -63,29 +69,41 @@ implementations honest.
 the OEM group. v1 adds the `oneplus` group. New OEM = C code + a rebuild of the
 bundled aarch64 binary.
 
-### c. `profile` mode
+### c. `mode-2-install` mode
 
-`zip/modes/profile.{sh,conf}`, built out from the stub:
+`zip/modes/mode-2-install.{sh,conf}`:
 
-- `profile.conf`: `MODE_NAME=profile`, `MODE_DESC` updated,
+- `mode-2-install.conf`: `MODE_NAME=mode-2-install`, `MODE_DESC` updated,
   `MODE_WRITES="efisp abl"`, `MODE_EFI="mode-2.efi"`,
   `MODE_TOOLS="fv-unwrap abl-patcher gbl-pack gbl-commit mode2-profile"`.
-- `profile.sh`: the orchestration in §3.
+- `mode-2-install.sh`: a thin wrapper that sources `modes/install-common.sh`,
+  declares the mode-2 parameters, and overrides the `mode_preflight` /
+  `mode_prepare` hooks to add the stock-vbmeta gate and the OEM-detect +
+  derive/compile step. The shared orchestration is in §3.
 
-### d. Shared install machinery
+### d. Shared install machinery — three parallel install modes
 
-`install.sh`'s loader-ABL logic — `pick_scenario`, `preflight`,
-`resolve_restore_source`, `restore_abl`, `save_backup_abl` — is factored into a
-new `zip/core/` library that both `install.sh` and `profile.sh` source. This is
-a behaviour-preserving refactor of `install.sh`; the SP3 install-mode tests must
-still pass unchanged.
+The two install modes are restructured into **three parallel install modes**:
+`mode-0-install` (honest), `mode-1-install` (was `install`), `mode-2-install`
+(was `profile`). They share ~90% of their body, factored into
+`zip/modes/install-common.sh` — a mode-specific shared lib (it lives in
+`modes/`, not `core/`, because an install-mode body is gbl-chainload-specific
+whereas `core/` is generic framework infra). `install-common.sh` defines
+`preflight`, `build_payload`, `commit_efisp`, `mode_main`, plus two no-op hooks
+(`mode_preflight`, `mode_prepare`) a mode may override. Each
+`modes/mode-N-install.sh` is a thin file that sources `install-common.sh` and
+declares parameters (`M_EFI`, `M_PATCHER_ARGS`, `M_PACK_ARGS`, `M_LABEL`,
+`M_WANT_PROFILE`). The truly generic loader-ABL logic — `pick_scenario`,
+`resolve_restore_source`, `restore_abl`, `save_backup_abl` — remains in
+`zip/core/install_abl.sh`. This is a behaviour-preserving refactor of
+`install.sh`/`profile.sh`; the install-mode tests pass unchanged.
 
 ### e. Bundled `zip/base/mode-2.efi`
 
 A built mode-2 EFI, vendored at `zip/base/mode-2.efi` like the existing
 `base/mode-1.efi`, produced by `zip/update-tools.sh`.
 
-## 3. The `profile` mode flow
+## 3. The `mode-2-install` mode flow
 
 ```
 preflight      /sdcard/stock_vbmeta.img REQUIRED (else abort); slot resolved;
@@ -105,7 +123,8 @@ restore ABL    loader-ABL-to-slot via the shared install machinery (backup + ver
 ```
 
 Scenario selection (OTA vs reinstall → target slot) and the loader-ABL source
-come from the shared machinery (§2d), identical to `install` mode. The
+come from the shared machinery (§2d), identical to `mode-0-install` /
+`mode-1-install`. The
 mode-2-specific steps are: *detect OEM*, *derive*, *compile*, the `--oem` patch
 flag, the `--mode2-profile` pack flag, and the `mode-2.efi` base.
 
@@ -120,7 +139,7 @@ Three patch scopes:
 - **`oem/<id>`** — OEM-specific patches, selected by `--oem <id>`.
 
 Selection: the mode-2 cached ABL gets **`universal` + `oem/<id>`** (via
-`abl-patcher --oem <id>`); the `install`/mode-1 ZIP gets
+`abl-patcher --oem <id>`); the `mode-1-install` ZIP gets
 `universal + mode_1 + oem/<id>`. So a mode-2 cached ABL no longer carries
 mode-1's fakelock patches — it does not need them, and that was a flagged loose
 end from the empty-payload on-device test. No `mode_2` patch group exists in v1
@@ -187,10 +206,10 @@ Host tests (`tests/host/`):
   and *not* `mode_1`; existing dynamic-patch tests still pass.
 - **`gbl-pack`** — the `cached_abl + mode2_profile` (`ec=3`) container is
   already covered by `tests/host/081`.
-- **`install` mode regression** — the SP3 install-mode tests pass unchanged
-  after the shared-machinery refactor.
+- **install-mode regression** — the install-mode tests pass unchanged
+  after the shared-machinery refactor into the three `mode-N-install` modes.
 
-The `profile.sh` flow itself is validated on-device by a recovery flash — the
+The `mode-2-install` flow itself is validated on-device by a recovery flash — the
 user-run acceptance step, not automated.
 
 ## 7. Implementation decomposition (PR slices)
@@ -201,9 +220,11 @@ user-run acceptance step, not automated.
    sanitization host tests.
 2. **`abl-patcher` OEM patchsets** — the `universal`/`mode_1`/`oem` taxonomy,
    the `--oem` flag, the `oneplus` group.
-3. **The `profile` mode** — the shared-install-machinery refactor of
-   `install.sh` into `zip/core/`; `zip/modes/profile.{sh,conf}`;
-   `zip/base/mode-2.efi`; `build-recovery-zip.sh --mode profile`.
+3. **The install modes** — the shared-install-machinery refactor of
+   `install.sh`/`profile.sh` into `zip/modes/install-common.sh` (on top of
+   `zip/core/install_abl.sh`); the three thin `zip/modes/mode-N-install.{sh,conf}`
+   modes; `zip/base/mode-{0,1,2}.efi`;
+   `build-recovery-zip.sh --mode mode-{0,1,2}-install`.
 
 Slices land as separate feature branches / PRs against `main`. Slice 3 depends
 on slices 1 and 2 (it bundles the C tool and invokes `abl-patcher --oem`).

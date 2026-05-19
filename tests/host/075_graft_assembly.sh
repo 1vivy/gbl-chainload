@@ -19,7 +19,7 @@ done
 
 unzip -p "$ZIP" modes/SELECTED | grep -qx graft \
   || { echo "FAIL: SELECTED is not 'graft'"; exit 1; }
-if unzip -l "$ZIP" | grep -qE 'modes/(diag|install|profile)'; then
+if unzip -l "$ZIP" | grep -qE 'modes/(diag|mode-[012]-install)\.'; then
   echo "FAIL: non-selected modes were not pruned"; exit 1
 fi
 
