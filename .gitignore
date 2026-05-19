@@ -14,6 +14,8 @@ tools/gbl-commit/gbl-commit
 tools/gbl-commit/gbl-commit-android
 tools/vbmeta-graft/vbmeta-graft
 tools/vbmeta-graft/vbmeta-graft-android
+tools/mode2-profile/mode2-profile
+tools/mode2-profile/mode2-profile-android
 tests/*/test_*
 !tests/*/test_*.c
 !tests/*/test_*.h
