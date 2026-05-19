@@ -20,15 +20,10 @@ extern CONST UINTN      kUniversalPatchesCount;
 extern CONST PATCH_DESC kOemOneplusPatches[];
 extern CONST UINTN      kOemOneplusPatchesCount;
 
-#if (GBL_MODE >= 1)
-extern CONST PATCH_DESC kMode1Patches[];
-extern CONST UINTN      kMode1PatchesCount;
-#endif
-
-/* Unconditional externs for the runtime host aggregator: kMode1Patches always
-   exists in the linked object (mode_1/mode_1.c is in the abl-patcher Makefile);
-   only its *inclusion* in the table is conditional. */
-#ifdef __HOST_BUILD__
+/* kMode1Patches is needed when GBL_MODE >= 1 (on-device) *or* when building
+   for the host (abl-patcher): the object is always linked in both cases and
+   EnsureInitScoped decides at runtime whether to include the patches. */
+#if (GBL_MODE >= 1) || defined(__HOST_BUILD__)
 extern CONST PATCH_DESC kMode1Patches[];
 extern CONST UINTN      kMode1PatchesCount;
 #endif

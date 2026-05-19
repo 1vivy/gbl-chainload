@@ -6,6 +6,13 @@
 #   2. plain invocation          applies mode_1 patches (present in stderr).
 #   3. --oem bad                 exits non-zero with "error: unknown --oem".
 # SKIP-guarded if the PE fixture is absent (same fixture as 060).
+#
+# Coverage note: this test exercises --oem *routing* (the scope-selection path
+# through EnsureInitScoped), but cannot positively verify OEM-patch *application*
+# because the OnePlus OEM group (oem/oneplus_canoe.c) is currently empty — the
+# only OEM patch (patch7-orange-screen) is behind an unset GBL_PATCH7_ENABLED.
+# Once GBL_PATCH7_ENABLED is enabled, add a positive grep for that patch name in
+# the --oem oneplus run to close this coverage gap.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
@@ -64,5 +71,12 @@ if ! grep -qF "error: unknown --oem 'bad_oem_name'" "$OUT/bad_oem.log"; then
     exit 1
 fi
 echo "  ok: unknown --oem exits non-zero with clear message"
+
+# ---- Regression gate --------------------------------------------------------
+# Run sibling tests so a breakage in roundtrip / efisp-scan / mode taxonomy
+# surfaces here too.  Each test exits 0 on SKIP (missing fixture) already.
+bash tests/host/060_pack_roundtrip.sh
+bash tests/host/062_efisp_scan_gate.sh
+bash tests/045_mode_taxonomy_lint.sh
 
 echo "PASS: 083 abl-patcher oem"

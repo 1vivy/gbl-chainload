@@ -16,7 +16,7 @@ static int Usage (CONST char *argv0) {
     "       %s --oem <id> [--no-mode1] --in <abl.bin> [--out <patched.bin>]\n"
     "\n"
     "  --oem <id>         OEM patch group to apply (e.g. oneplus).\n"
-    "                     Default: GBL_OEM_NONE (universal only, + mode_1).\n"
+    "                     Default: GBL_OEM_NONE (no OEM group; universal + mode_1).\n"
     "  --no-mode1         Exclude mode_1 patches (use for mode-2 profile ZIP).\n"
     "                     Default: mode_1 patches included.\n",
     argv0, argv0, argv0);
@@ -53,7 +53,11 @@ int main (int argc, char **argv) {
 
   if (!In) return Usage (argv[0]);
 
-  /* Resolve OEM id and call the appropriate init path. */
+  /* Resolve OEM id and call the appropriate init path.
+     Default is GBL_OEM_NONE — EnsureInitScoped skips all OEM-group patches.
+     Previously plain invocation implicitly aggregated the OnePlus OEM patches;
+     that is no longer the case.  Callers needing OEM patches (e.g. the install
+     ZIP, if it wants OEM patches applied) must pass --oem <id> explicitly. */
   GBL_OEM Oem = GBL_OEM_NONE;
   if (OemStr != NULL) {
     if (strcmp (OemStr, "oneplus") == 0) {
