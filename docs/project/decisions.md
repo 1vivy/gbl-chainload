@@ -99,3 +99,18 @@ fastboot oem boot-efi
 ```
 
 Rejected for autonomous agent execution: flashing non-HLOS partitions, lock/unlock commands, active-slot switching, and non-HLOS erases.
+
+## Debug evidence boundary
+
+Decision: release validation and bug triage require diagnostic evidence from the
+host, EFI, and recovery layers before making bootchain claims.
+
+Required evidence is tracked in `docs/project/debug-vectors.md` and includes
+redacted bootloader-fastboot context, EFI UefiLog/logfs excerpts, recovery ZIP
+logs/manifests, graft metadata, and mode-2 profile provenance.
+
+Rationale: the XDA thread and `gbl_root_canoe` issue history show that similar
+user-visible symptoms can come from different layers: bootloader fastboot vs
+fastbootd confusion, stale cached ABL/profile data, wrong-slot recovery writes,
+Android-side root-hiding state, or real ABL/TEE interaction. Standardized debug
+bundles prevent overclaiming and make release gates reproducible.
