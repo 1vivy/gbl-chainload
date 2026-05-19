@@ -48,9 +48,9 @@ implementations live in `tools/mode2-profile/`, both producing the identical
     linked), validates it (§5), and packs the 120-byte binary.
 - **Python tool (`mode2-profile.py`)** — the existing host tool (PR #29),
   migrated **XML → TOML**: `derive` writes `.toml`; `compile` reads it via
-  `tomllib` (Python 3.11+ stdlib; the `tomli` backport is vendored as a
-  fallback if the host `python3` is older). Kept as the fast dev-iteration
-  path — edit-and-run, no compile cycle. Not shipped in the ZIP.
+  `tomllib` (the Python 3.11+ stdlib module — the tool requires Python
+  3.11+). Kept as the fast dev-iteration path — edit-and-run, no compile
+  cycle. Not shipped in the ZIP.
 
 A host test cross-checks the C tool's output against the Python tool's,
 byte-for-byte, on a real vbmeta fixture — that is what keeps the two

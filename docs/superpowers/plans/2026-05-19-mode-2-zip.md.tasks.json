@@ -43,10 +43,10 @@
     {
       "id": 41,
       "subject": "MZ Task 7: vendor mode2-profile + mode-2.efi, assemble profile ZIP",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [37, 38, 40],
       "description": "**Goal:** Wire the C tool + mode-2 base EFI into the recovery-tool build and ZIP vendoring; assemble gbl-chainload-profile.zip.\n\n**Files:** Modify scripts/build-recovery-tools.sh, zip/update-tools.sh (zip submodule).\n\n**Verify:** bash scripts/build-recovery-zip.sh --mode profile -> ==> dist/gbl-chainload-profile.zip\n\nFull detail in plan doc MZ Task 7.\n\n```json:metadata\n{\"files\": [\"scripts/build-recovery-tools.sh\", \"zip/update-tools.sh\"], \"verifyCommand\": \"bash scripts/build-recovery-zip.sh --mode profile\", \"acceptanceCriteria\": [\"build-recovery-tools.sh builds mode2-profile aarch64\", \"update-tools.sh vendors mode2-profile + mode-2.efi + MANIFEST\", \"build-recovery-zip.sh --mode profile assembles the ZIP with the new artifacts; skew checks pass\"]}\n```"
     }
   ],
-  "lastUpdated": "2026-05-19T12:00:00Z"
+  "lastUpdated": "2026-05-19T18:00:00Z"
 }
