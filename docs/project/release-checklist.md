@@ -18,6 +18,9 @@ short and update it as mode-2 and ZIP validation finishes.
 - [ ] Device validation logs are captured for mode-0, mode-1, and mode-2 RAM-load tests using only:
   `fastboot stage dist/<artifact>.efi` then `fastboot oem boot-efi`.
 - [ ] Device validation logs are captured for ZIP `diag`, `install`, and `graft` on the target recovery environment.
+- [ ] edk2 issue #11 (`Escape is borked`) is re-tested from both the physical fastboot menu and `fastboot oem escape`; the release-prep edk2 branch routes menu Escape through the same USB-teardown path as the host command.
+- [ ] edk2 issue #10 (`OEM unlock allowed doesn't seem to be working`) is re-tested across reboot/system boot; do not call the OEM-unlock UI release-ready until the FRP bit survives the reported flow.
+- [ ] edk2 issue #9 (`AVB WARNING unsigned:recovery after successful graft`) is re-tested after a current graft ZIP run; publish the graft flow only if the menu warning clears or the remaining warning is documented with exact getvar evidence.
 - [ ] The `zip/` submodule is committed first, then the parent branch records the updated submodule pointer.
 
 ## Known release notes / caveats
