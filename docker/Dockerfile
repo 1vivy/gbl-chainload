@@ -88,6 +88,79 @@ RUN set -eux; \
     rm -rf /tmp/xz /tmp/xz.tar.gz
 ENV LIBLZMA_ANDROID=/opt/liblzma-android
 
+# --- zig toolchain for Windows/macOS cross-compilation ---
+# zig cc cross-compiles the host-side tools to x86_64-windows-gnu and
+# x86_64/aarch64-macos from this Linux image: it bundles the mingw-w64
+# and macOS SDK headers, so there is no license-restricted SDK to
+# provision. The Android path stays on the NDK above, untouched.
+ARG ZIG_VER=0.13.0
+RUN curl -fsSL -o /tmp/zig.tar.xz \
+        "https://ziglang.org/download/${ZIG_VER}/zig-linux-x86_64-${ZIG_VER}.tar.xz" \
+ && mkdir -p /opt/zig \
+ && tar -xJf /tmp/zig.tar.xz -C /opt/zig --strip-components=1 \
+ && rm /tmp/zig.tar.xz
+ENV PATH=/opt/zig:$PATH
+
+# llvm-lipo (from the already-installed `llvm` apt package, version-
+# suffixed under /usr/lib/llvm-*/bin) onto PATH for the macOS
+# universal-binary merge step in build-cross-tools.sh.
+RUN ln -sf "$(ls /usr/lib/llvm-*/bin/llvm-lipo | head -1)" /usr/local/bin/llvm-lipo
+
+# --- Static liblzma for the Windows/macOS cross targets ---
+# fv-unwrap needs LZMA decode; zig's bundled target sysroots have no
+# liblzma. Cross-build xz-utils once per target with zig cc as CC
+# (llvm-ar/llvm-ranlib are object-format-agnostic). Same xz $(XZ_VER)
+# as the Android block above.
+RUN set -eux; \
+    curl -fsSL -o /tmp/xz.tar.gz \
+      "https://github.com/tukaani-project/xz/releases/download/v${XZ_VER}/xz-${XZ_VER}.tar.gz"; \
+    \
+    # Stub RC "compiler" for the Windows cross target: xz-utils generates a
+    # liblzma_w32res.rc DLL-version-info resource; we only build the static
+    # library, so the resource object is unused. However autotools/libtool
+    # still invokes RC and expects an output .obj.  This stub extracts the
+    # -o <outfile> argument and writes a minimal valid Windows COFF object
+    # (an empty translation-unit compiled with zig cc) so llvm-ar is happy.
+    printf '%s\n' '#!/bin/sh' \
+      'outfile=""' \
+      'while [ $# -gt 0 ]; do' \
+      '  case "$1" in -o) outfile="$2"; shift 2;; *) shift;; esac' \
+      'done' \
+      '[ -n "$outfile" ] || exit 0' \
+      'printf "typedef void empty;\n" > /tmp/_rc_empty.c' \
+      'zig cc -target x86_64-windows-gnu -c /tmp/_rc_empty.c -o "$outfile"' \
+      > /usr/local/bin/zig-rc-win && chmod +x /usr/local/bin/zig-rc-win; \
+    \
+    for spec in \
+        "x86_64-windows-gnu:x86_64-w64-mingw32:/opt/liblzma-windows" \
+        "x86_64-macos:x86_64-apple-darwin:/opt/liblzma-macos-x64" \
+        "aarch64-macos:aarch64-apple-darwin:/opt/liblzma-macos-arm64" ; do \
+      ztgt="${spec%%:*}"; rest="${spec#*:}"; \
+      host="${rest%%:*}"; prefix="${rest#*:}"; \
+      rc_arg=true; \
+      [ "$ztgt" = "x86_64-windows-gnu" ] && rc_arg=/usr/local/bin/zig-rc-win; \
+      rm -rf /tmp/xz && mkdir -p /tmp/xz; \
+      tar -xf /tmp/xz.tar.gz -C /tmp/xz --strip-components=1; \
+      cd /tmp/xz; \
+      ./configure \
+        --host="$host" \
+        --prefix="$prefix" \
+        --enable-static --disable-shared \
+        --disable-xz --disable-xzdec --disable-lzmadec --disable-lzmainfo \
+        --disable-lzma-links --disable-scripts --disable-doc \
+        --disable-nls --disable-threads \
+        CC="zig cc -target $ztgt" \
+        AR=llvm-ar RANLIB=llvm-ranlib \
+        RC="$rc_arg" \
+        CFLAGS="-O2"; \
+      make -j"$(nproc)"; make install; \
+      cd /; \
+    done; \
+    rm -rf /tmp/xz /tmp/xz.tar.gz
+ENV LIBLZMA_WINDOWS=/opt/liblzma-windows
+ENV LIBLZMA_MACOS_X64=/opt/liblzma-macos-x64
+ENV LIBLZMA_MACOS_ARM64=/opt/liblzma-macos-arm64
+
 # Default to a writable workdir; run --user maps host UID at runtime so
 # bind-mounted outputs are owned by the host user.
 WORKDIR /work
