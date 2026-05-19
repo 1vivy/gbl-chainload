@@ -10,6 +10,12 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <errno.h>
+#ifdef _WIN32
+#include <io.h>
+/* Windows: _commit() flushes a file descriptor; sync() does not exist. */
+static inline int fsync(int fd) { return _commit(fd); }
+static inline void sync(void) {}
+#endif
 #include "../../GblChainloadPkg/Library/GblPayloadLib/Internal/Sha256.h"
 
 static int read_file(const char *p, uint8_t **out, size_t *out_size) {

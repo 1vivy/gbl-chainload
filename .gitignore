@@ -43,6 +43,12 @@ tests/*/.omc/
 !/images/.gitkeep
 !/images/README.md
 
+# host-tool cross-compile artifacts
+tools/*/*.exe
+tools/*/*.pdb
+tools/*/*-macos-x64
+tools/*/*-macos-arm64
+
 # Mode-2 profile payloads — gitignored; manifest.json is tracked (Plan 2)
 profiles/*/profile.h
 profiles/*/[!manifest]*.bin

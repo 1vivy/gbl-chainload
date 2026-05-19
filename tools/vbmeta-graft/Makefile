@@ -25,4 +25,21 @@ vbmeta-graft-android: $(SRCS)
 	$(NDK_CC) $(NDK_CFLAGS) $^ -o $@
 
 clean:
-	rm -f vbmeta-graft vbmeta-graft-android
+	rm -f vbmeta-graft vbmeta-graft-android vbmeta-graft.exe \
+	      vbmeta-graft-macos-x64 vbmeta-graft-macos-arm64
+
+# --- Windows / macOS cross-compile (zig cc) ---
+XCFLAGS = -O2 -Wall -Wextra -std=c11 -D__HOST_BUILD__ $(INCS)
+
+windows:     vbmeta-graft.exe
+macos-x64:   vbmeta-graft-macos-x64
+macos-arm64: vbmeta-graft-macos-arm64
+
+vbmeta-graft.exe: $(SRCS)
+	zig cc -target x86_64-windows-gnu $(XCFLAGS) $^ -o $@
+
+vbmeta-graft-macos-x64: $(SRCS)
+	zig cc -target x86_64-macos $(XCFLAGS) $^ -o $@
+
+vbmeta-graft-macos-arm64: $(SRCS)
+	zig cc -target aarch64-macos $(XCFLAGS) $^ -o $@

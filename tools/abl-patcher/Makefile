@@ -22,7 +22,26 @@ abl-patcher: $(SRCS)
 	$(CC) $(CFLAGS) $^ -o $@
 
 clean:
-	rm -f abl-patcher abl-patcher-android *.o
+	rm -f abl-patcher abl-patcher-android abl-patcher.exe \
+	      abl-patcher-macos-x64 abl-patcher-macos-arm64 *.o
+
+# --- Windows / macOS cross-compile (zig cc) ---
+XCFLAGS = -O2 -Wall -Wextra -Wno-unused-parameter -std=c11 \
+          -D__HOST_BUILD__ -DGBL_MODE=1 \
+          -I$(PROJ)/GblChainloadPkg/Include/Library -I$(DPL)/Internal
+
+windows:     abl-patcher.exe
+macos-x64:   abl-patcher-macos-x64
+macos-arm64: abl-patcher-macos-arm64
+
+abl-patcher.exe: $(SRCS)
+	zig cc -target x86_64-windows-gnu $(XCFLAGS) $^ -o $@
+
+abl-patcher-macos-x64: $(SRCS)
+	zig cc -target x86_64-macos $(XCFLAGS) $^ -o $@
+
+abl-patcher-macos-arm64: $(SRCS)
+	zig cc -target aarch64-macos $(XCFLAGS) $^ -o $@
 
 # Quick self-check: build and exercise against the infiniti fixture.
 test: abl-patcher
