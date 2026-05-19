@@ -88,7 +88,7 @@ gbl-pack --out OUT [--cached-abl PE --source RAW --extracted PE] [--mode2-profil
 ```
 tools/gbl-pack/gbl-pack \
   --cached-abl patched.efi \
-  --source     images/infiniti/op15-infiniti-201-abl.img \
+  --source     tests/images/op15-infiniti-201-abl.img \
   --extracted  extracted.efi \
   --out        payload.bin
 ```
@@ -155,7 +155,7 @@ vbmeta-graft check <candidate-part-img> <main-vbmeta-img> <part>
 ```
 tools/vbmeta-graft/vbmeta-graft check \
   grafted_recovery.img \
-  images/infiniti/vbmeta.img \
+  images/vbmeta-infiniti-IN-16.0.7.201.img \
   recovery
 ```
 
@@ -174,7 +174,7 @@ mode2-profile compile <in.toml>    -o <out.bin>
 
 ```
 tools/mode2-profile/mode2-profile derive \
-  images/infiniti/vbmeta.img -o profile.toml
+  images/vbmeta-infiniti-IN-16.0.7.201.img -o profile.toml
 tools/mode2-profile/mode2-profile compile \
   profile.toml -o profile.bin
 ```
@@ -185,9 +185,13 @@ the shippable build (cross-compiles to Windows/macOS/Android with no Python
 runtime requirement); use the `.py` for dev iteration on the host:
 
 ```
-python3 tools/mode2-profile/mode2-profile.py derive  images/infiniti/vbmeta.img -o profile.toml
+python3 tools/mode2-profile/mode2-profile.py derive  images/vbmeta-infiniti-IN-16.0.7.201.img -o profile.toml
 python3 tools/mode2-profile/mode2-profile.py compile profile.toml              -o profile.bin
 ```
+
+**`mode2-profile.py derive` requires `avbtool.py`.** It is resolved in order:
+`$AVBTOOL`, `~/avbtool.py`, `/usr/bin/avbtool`, `/usr/local/bin/avbtool`.
+The C `mode2-profile derive` does not need `avbtool.py` (it has its own AVB parser).
 
 The `mode2-profile/vendor/tomlc99/` directory contains
 [tomlc99](https://github.com/cktan/tomlc99) by CK Tan (MIT) — a single-file
@@ -218,7 +222,7 @@ Mode 0 (no `mode_1` patches; minimal payload):
 
 ```
 python3 scripts/efisp-package.py \
-  --abl  images/infiniti/op15-infiniti-201-abl.img \
+  --abl  tests/images/op15-infiniti-201-abl.img \
   --mode 0 \
   --efi  dist/mode-0.efi
 ```
@@ -227,7 +231,7 @@ Mode 1 (universal + `mode_1` patches; cached ABL in the overlay):
 
 ```
 python3 scripts/efisp-package.py \
-  --abl  images/infiniti/op15-infiniti-201-abl.img \
+  --abl  tests/images/op15-infiniti-201-abl.img \
   --mode 1 \
   --efi  dist/mode-1.efi
 ```
@@ -236,10 +240,10 @@ Mode 2 (no `mode_1`; mode-2 profile + OEM patch group):
 
 ```
 python3 scripts/efisp-package.py \
-  --abl          images/infiniti/op15-infiniti-201-abl.img \
+  --abl          tests/images/op15-infiniti-201-abl.img \
   --mode         2 \
   --efi          dist/mode-2.efi \
-  --stock-vbmeta images/infiniti/vbmeta.img \
+  --stock-vbmeta images/vbmeta-infiniti-IN-16.0.7.201.img \
   --oem          oneplus
 ```
 
@@ -258,4 +262,6 @@ with `--out`.
 | mode2-profile    | ✓     | ✓       | ✓       | ✓     |
 | mode2-profile.py | ✓     | —       | ✓       | ✓     |
 
-`mode2-profile.py` needs only Python 3.11+ and runs unmodified on any host.
+`mode2-profile.py` runs on any host with Python 3.11+; `derive` additionally
+needs `avbtool.py` reachable via `$AVBTOOL`, `~/avbtool.py`, `/usr/bin/avbtool`,
+or `/usr/local/bin/avbtool`.
