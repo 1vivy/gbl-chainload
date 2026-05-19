@@ -1,0 +1,32 @@
+{
+  "planPath": "docs/superpowers/plans/2026-05-19-diag-confidence.md",
+  "tasks": [
+    {
+      "id": 1,
+      "subject": "Task 1: gblp1-inspect host tool",
+      "status": "pending",
+      "description": "**Goal:** A host + aarch64-Android static C tool that parses a GBLP1 container out of an EFISP-style image and emits machine-greppable per-entry lines with SHA-256 verification.\n\n**Files:** tools/gblp1-inspect/Makefile, tools/gblp1-inspect/gblp1-inspect.c, scripts/build-recovery-tools.sh, tests/host/084_gblp1_inspect.sh\n\n**Verify:** bash tests/host/084_gblp1_inspect.sh → PASS: 084 gblp1-inspect\n\n```json:metadata\n{\"files\": [\"tools/gblp1-inspect/Makefile\", \"tools/gblp1-inspect/gblp1-inspect.c\", \"scripts/build-recovery-tools.sh\", \"tests/host/084_gblp1_inspect.sh\"], \"verifyCommand\": \"bash tests/host/084_gblp1_inspect.sh\", \"acceptanceCriteria\": [\"host build succeeds\", \"android cross-build succeeds\", \"result: ok on clean payload\", \"result: ok on EFISP-prefixed payload\", \"result: bad_crc on header corruption\", \"result: entry_sha_mismatch on entry corruption\", \"result: not_a_gblp1 on random input\", \"scripts/build-recovery-tools.sh produces dist/recovery/gblp1-inspect\", \"tests/host/084_gblp1_inspect.sh passes\"]}\n```"
+    },
+    {
+      "id": 2,
+      "subject": "Task 2: vbmeta-graft list-hash subcommand",
+      "status": "pending",
+      "description": "**Goal:** Add list-hash <active-vbmeta> <byname-dir> subcommand emitting per-descriptor digest/graft/verdict triples per spec §7.4.\n\n**Files:** tools/vbmeta-graft/vbmeta-graft.c, tests/host/085_vbmeta_descriptor_hash.sh\n\n**Verify:** bash tests/host/074_vbmeta_graft.sh && bash tests/host/085_vbmeta_descriptor_hash.sh\n\n```json:metadata\n{\"files\": [\"tools/vbmeta-graft/vbmeta-graft.c\", \"tests/host/085_vbmeta_descriptor_hash.sh\"], \"verifyCommand\": \"bash tests/host/074_vbmeta_graft.sh && bash tests/host/085_vbmeta_descriptor_hash.sh\", \"acceptanceCriteria\": [\"list-hash emits partition=/type=/declared=/digest=/graft=/verdict= per descriptor\", \"digest=ok on a matching partition\", \"digest=mismatch on a perturbed body\", \"graft=ok on a partition carrying a stock OEM vbmeta at the natural offset\", \"graft=missing when no embedded vbmeta resolves\", \"list/check/graft subcommands unchanged — 074 still passes\", \"085 test passes\"]}\n```"
+    },
+    {
+      "id": 3,
+      "subject": "Task 3: diag.sh rewrite + bundle collection",
+      "status": "pending",
+      "blockedBy": [1, 2],
+      "description": "**Goal:** Rewrite zip/modes/diag.sh to produce the on-screen summary, /sdcard bundle, four confidence tiers. Add host dry-run test.\n\n**Files:** zip/modes/diag.sh, zip/modes/diag.conf, tests/host/086_diag_dryrun.sh, tests/host/helpers/diag_fake_byname.sh\n\n**Verify:** bash tests/host/086_diag_dryrun.sh → PASS: 086 diag dryrun\n\n```json:metadata\n{\"files\": [\"zip/modes/diag.sh\", \"zip/modes/diag.conf\", \"tests/host/086_diag_dryrun.sh\", \"tests/host/helpers/diag_fake_byname.sh\"], \"verifyCommand\": \"bash tests/host/086_diag_dryrun.sh\", \"acceptanceCriteria\": [\"diag.sh prints all required section headings\", \"bundle dir contains every file listed in spec §5\", \"tar.gz sibling produced\", \"HIGH/MEDIUM/LOW/NONE tier scripted scenarios match expected headline\", \"diag.conf MODE_TOOLS includes vbmeta-graft fv-unwrap gblp1-inspect\", \"086 test passes\"]}\n```"
+    },
+    {
+      "id": 4,
+      "subject": "Task 4: Cross-build + refresh vendored bins + build ZIP + open PR",
+      "status": "pending",
+      "blockedBy": [1, 2, 3],
+      "description": "**Goal:** Cross-build recovery tools, refresh zip/bin via update-tools.sh, build diag ZIP, push branch, open PR against main.\n\n**Files:** zip/bin/MANIFEST, zip/bin/gblp1-inspect, zip/bin/vbmeta-graft, dist/gbl-chainload-diag.zip\n\n**Verify:** bash tests/runall.sh && gh pr view --json url -q .url\n\n```json:metadata\n{\"files\": [\"zip/bin/MANIFEST\", \"zip/bin/gblp1-inspect\", \"zip/bin/vbmeta-graft\", \"dist/gbl-chainload-diag.zip\"], \"verifyCommand\": \"bash tests/runall.sh && gh pr view --json url -q .url\", \"acceptanceCriteria\": [\"dist/recovery/gblp1-inspect produced by build-recovery-tools.sh\", \"zip/bin/MANIFEST refreshed with gblp1-inspect line and new vbmeta-graft hash\", \"dist/gbl-chainload-diag.zip exists\", \"tests/runall.sh ends ALL TESTS PASS\", \"branch diag-confidence pushed\", \"PR opened against main with URL\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-05-19T20:30:00Z"
+}
