@@ -4,7 +4,7 @@
     {
       "id": 42,
       "subject": "HTC Task 1: Dockerfile — zig toolchain + cross-built liblzma",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** The docker build image gains the `zig` cross-compiler, a PATH-resolvable `llvm-lipo`, and three static `liblzma.a` archives (Windows + macOS x64/arm64).\n\n**Files:** Modify `docker/Dockerfile`.\n\n**Acceptance Criteria:** docker build succeeds; `zig version` + `llvm-lipo --version` run in the image; the three cross-built `liblzma.a` exist; the Android NDK block + `LIBLZMA_ANDROID` are untouched.\n\n**Verify:** `docker build -t gbl-chainload-build:latest -f docker/Dockerfile . && docker run --rm gbl-chainload-build:latest bash -c 'zig version && llvm-lipo --version | head -1 && ls -l /opt/liblzma-windows/lib/liblzma.a /opt/liblzma-macos-x64/lib/liblzma.a /opt/liblzma-macos-arm64/lib/liblzma.a'`\n\nFull code in plan doc HTC Task 1.\n\n```json:metadata\n{\"files\": [\"docker/Dockerfile\"], \"verifyCommand\": \"docker build -t gbl-chainload-build:latest -f docker/Dockerfile . && docker run --rm gbl-chainload-build:latest bash -c 'zig version && llvm-lipo --version | head -1 && ls -l /opt/liblzma-windows/lib/liblzma.a /opt/liblzma-macos-x64/lib/liblzma.a /opt/liblzma-macos-arm64/lib/liblzma.a'\", \"acceptanceCriteria\": [\"docker build succeeds\", \"zig + llvm-lipo run in the image\", \"three cross-built liblzma.a archives exist\", \"Android NDK block untouched\"]}\n```"
     },
     {
