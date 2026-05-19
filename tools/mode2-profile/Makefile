@@ -1,6 +1,6 @@
 # tools/mode2-profile/Makefile
 CC      ?= gcc
-CFLAGS  ?= -Wall -Wextra -O2 -std=c11 -DGBL_HOST_BUILD=1
+CFLAGS  ?= -Wall -Wextra -Werror -O2 -std=c11 -DGBL_HOST_BUILD=1
 SRCS     = mode2-profile.c vendor/tomlc99/toml.c
 HDRS     = vendor/tomlc99/toml.h ../shared/gbl_mode2_profile.h
 
@@ -15,7 +15,7 @@ mode2-profile: $(SRCS) $(HDRS)
 # --- Android cross-compile (NDK r27) ---
 NDK     ?= $(ANDROID_NDK)
 NDK_CC   = $(NDK)/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android31-clang
-NDK_CFLAGS = -static -O2 -Wall -Wextra -std=c11 -DGBL_HOST_BUILD=1
+NDK_CFLAGS = -static -O2 -Wall -Wextra -Werror -std=c11 -DGBL_HOST_BUILD=1
 
 android: mode2-profile-android
 

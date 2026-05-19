@@ -11,9 +11,6 @@
 static void wle16(uint8_t *p, uint16_t v){p[0]=v;p[1]=v>>8;}
 static void wle32(uint8_t *p, uint32_t v){p[0]=v;p[1]=v>>8;p[2]=v>>16;p[3]=v>>24;}
 
-/* fail: print "error: ..." to stderr and exit 1. No partial output. */
-static void fail(const char *msg){ fprintf(stderr,"error: %s\n",msg); exit(1); }
-
 /* hexkey: read a TOML string key, require exactly 64 lowercase-hex, decode
    into out[32]. */
 static void hexkey(toml_table_t *t, const char *key, uint8_t out[32]) {
@@ -61,7 +58,7 @@ static int do_compile(const char *in, const char *out) {
                  toml_free(t); return 1; }
     }
 
-    if (intkey(t,"version",1,1) != 1) fail("version must be 1");
+    intkey(t,"version",1,1);
     uint32_t is_unlocked    = (uint32_t)intkey(t,"is_unlocked",0,1);
     uint32_t color          = (uint32_t)intkey(t,"color",0,3);
     uint32_t system_version = (uint32_t)intkey(t,"system_version",0,0xFFFFFFFFLL);
@@ -87,10 +84,11 @@ static int do_compile(const char *in, const char *out) {
 
     FILE *o = fopen(out,"wb");
     if (!o) { perror(out); return 1; }
-    if (fwrite(b,1,sizeof b,o)!=sizeof b){ fclose(o);
+    if (fwrite(b,1,sizeof b,o)!=sizeof b){
+        fclose(o); remove(out);
         fprintf(stderr,"error: write failed\n"); return 1; }
     fclose(o);
-    fprintf(stderr,"wrote %s (%u bytes)\n", out, (unsigned)sizeof b);
+    fprintf(stdout,"wrote %s (%u bytes)\n", out, (unsigned)sizeof b);
     return 0;
 }
 
