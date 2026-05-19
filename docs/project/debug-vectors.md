@@ -88,6 +88,19 @@ For recovery-graft validation, record:
 These fields diagnose custom-recovery normal-boot failures, AVB WARNING reports,
 wrong-slot grafts, bad stock metadata sources, and oversized images.
 
+After grafting, also capture these fastboot variables from bootloader fastboot:
+
+- `vbmeta:slot`;
+- `vbmeta:warning`;
+- `vbmeta:recovery:status`;
+- `vbmeta:recovery:descriptor-type`;
+- `current-slot`.
+
+If `vbmeta:recovery:descriptor-type` is `chain` or `hash` and
+`vbmeta:recovery:status` is still `unsigned`, treat that as an EFI probe bug or
+policy override until proven otherwise. If `vbmeta:slot` does not match the slot
+grafted by the ZIP, suspect wrong-slot validation.
+
 ## Mode-2 profile evidence
 
 For host-side mode-2 tooling or the future profile ZIP, record:

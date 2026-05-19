@@ -25,6 +25,7 @@ Evidence to preserve:
 - Token preservation policy is grounded in a locked/unlocked raw image diff, not only static strings.
 - The writer table included non-unlock writers such as charge, UART, and DDR-control paths; this is why blanket partition-wide swallowing is too broad for a final policy.
 - Return-value handling for swallowed writes must keep callers on their expected success path.
+- OEM-unlock-allowed writes live in the last byte of the last `frp` block; the write path must flush and read back before publishing `oem-unlock-allowed=yes`, otherwise the menu/getvar state can lie about persistence.
 
 ## Fastboot authorization gate
 
@@ -43,6 +44,7 @@ Evidence to preserve:
 - Custom recovery under mode-1 can complete recovery boot while failing normal Android boot.
 - The failure is after ABL: userspace AVB / first-stage init re-reads the on-disk recovery metadata and rejects missing, invalid, or mismatched in-partition AVB footer/vbmeta.
 - The selected fix is disk-side grafting of stock recovery vbmeta/footer bytes onto the custom recovery image, either host-side or device-side.
+- A previous release-prep diagnostic path forced `recovery` to `unsigned` in mode-1 after probing main vbmeta. That made the fastboot-menu warning persist even when grafting was otherwise successful enough for Android normal boot. Current release-prep should trust the descriptor probe instead; any remaining warning needs exact `vbmeta:*` getvar evidence.
 
 Evidence to preserve:
 
