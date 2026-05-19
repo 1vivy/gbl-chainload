@@ -104,6 +104,7 @@ def main():
         f"{os.path.splitext(os.path.basename(args.abl))[0]}-mode{args.mode}.efi")
 
     tmp = tempfile.mkdtemp(prefix="efisp-package.")
+    wrote_out = False
     try:
         extracted = os.path.join(tmp, "extracted.efi")
         patched   = os.path.join(tmp, "patched.efi")
@@ -136,13 +137,14 @@ def main():
 
         # 5. concatenate base EFI + overlay -> the output payload
         os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
+        wrote_out = True
         with open(out, "wb") as o:
             with open(args.efi, "rb") as f:
                 shutil.copyfileobj(f, o)
             with open(payload, "rb") as f:
                 shutil.copyfileobj(f, o)
     except BaseException:
-        if os.path.isfile(out):
+        if wrote_out and os.path.isfile(out):
             os.unlink(out)        # no partial output
         raise
     finally:
