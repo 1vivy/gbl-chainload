@@ -58,15 +58,30 @@ rm -rf "$STAGE/update-tools.sh" "$STAGE/README.md"
 find "$STAGE" -mindepth 1 -name '.*' -prune -exec rm -rf {} +
 
 echo "$MODE" > "$STAGE/modes/SELECTED"
-# Prune the non-selected modes. A real mode is a <name>.sh + <name>.conf pair;
-# a .sh is only a removable mode-script when it has a sibling .conf. This
-# spares shared mode libs like install-common.sh (no install-common.conf),
-# which the three mode-N-install modes source and must stay in the ZIP.
+# Prune the non-selected modes. A real mode is a <name>.sh + <name>.conf pair.
+# A .sh with no sibling .conf is a shared mode lib (e.g. install-common.sh,
+# which the three mode-N-install modes source): keep it only when the selected
+# mode's .sh actually sources it, so diag/graft ZIPs do not gain dead libs.
+# Mode stems are enumerated up front (a real mode = a .conf file), before any
+# deletion, so removing mode X's .conf does not hide mode Y's pairing.
+MODE_STEMS=""
+for c in "$STAGE"/modes/*.conf; do
+  [ -f "$c" ] || continue
+  b=$(basename "$c"); MODE_STEMS="$MODE_STEMS ${b%.conf}"
+done
 for f in "$STAGE"/modes/*.conf "$STAGE"/modes/*.sh; do
+  [ -f "$f" ] || continue
   b=$(basename "$f"); m=${b%.*}
   [ "$m" = "$MODE" ] && continue
   case "$f" in
-    *.sh) [ -f "$STAGE/modes/$m.conf" ] || continue ;;  # shared lib, keep
+    *.sh) case " $MODE_STEMS " in
+            *" $m "*) ;;          # a paired mode script - removable
+            *)                    # no sibling .conf: a shared mode lib -
+                                  # keep only if the selected mode sources it
+              grep -q "modes/$b" "$STAGE/modes/$MODE.sh" 2>/dev/null \
+                && continue
+              ;;
+          esac ;;
   esac
   rm -f "$f"
 done
