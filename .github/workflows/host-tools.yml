@@ -1,0 +1,89 @@
+name: host-tools
+
+on:
+  push:
+    paths:
+      - 'tools/**'
+      - 'scripts/build-cross-tools.sh'
+      - 'docker/**'
+      - '.github/workflows/host-tools.yml'
+  pull_request:
+    paths:
+      - 'tools/**'
+      - 'scripts/build-cross-tools.sh'
+      - 'docker/**'
+      - '.github/workflows/host-tools.yml'
+  workflow_dispatch:
+
+jobs:
+  cross-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Build the docker image
+        run: docker build -t gbl-chainload-build:latest -f docker/Dockerfile .
+      - name: Cross-build the host-side tools
+        run: bash scripts/build-cross-tools.sh all
+      - name: Upload Windows binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: tools-windows
+          path: dist/windows
+      - name: Upload macOS binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: tools-macos
+          path: dist/macos
+
+  test-windows:
+    needs: cross-build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: tools-windows
+          path: dist/windows
+      - name: Smoke-test each .exe
+        shell: bash
+        run: |
+          set -u
+          fail=0
+          for t in fv-unwrap abl-patcher gbl-pack gbl-commit vbmeta-graft mode2-profile; do
+            bin="dist/windows/$t.exe"
+            out=$("$bin" 2>&1 || true)
+            if printf '%s' "$out" | grep -qiE 'usage|--in|derive'; then
+              echo "ok  $t"
+            else
+              echo "FAIL $t — no usage banner; output was: $out"
+              fail=1
+            fi
+          done
+          exit $fail
+
+  test-macos:
+    needs: cross-build
+    runs-on: macos-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: tools-macos
+          path: dist/macos
+      - name: Smoke-test each universal binary
+        shell: bash
+        run: |
+          set -u
+          fail=0
+          for t in fv-unwrap abl-patcher gbl-pack gbl-commit vbmeta-graft mode2-profile; do
+            bin="dist/macos/$t"
+            chmod +x "$bin"
+            out=$("$bin" 2>&1 || true)
+            if printf '%s' "$out" | grep -qiE 'usage|--in|derive'; then
+              echo "ok  $t"
+            else
+              echo "FAIL $t — no usage banner; output was: $out"
+              fail=1
+            fi
+          done
+          exit $fail
