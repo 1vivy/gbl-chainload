@@ -117,6 +117,14 @@ Useful getvars:
 - `vbmeta:warning`
 - `vbmeta:<partition>:status`
 - `vbmeta:<partition>:descriptor-type`
+- `vbmeta:<partition>:present`
+
+The warning surface is descriptor-coverage based. For boot/init-critical
+partition candidates that exist on the device, `uncovered:<partition>` means the
+active top-level `vbmeta` descriptor walk did not find hash, hashtree, or chain
+coverage for that partition. This is intentionally broader than the recovery
+graft case: unsigned or uncovered boot inputs such as `dtbo` can also block boot
+or first-stage init paths.
 
 Useful commands:
 

@@ -22,7 +22,7 @@ short and update it as mode-2 and ZIP validation finishes.
 - [ ] Validation matrix records device region/model, firmware build, active slot, target slot, mode/artifact, RAM-load vs persistent install, stock vs custom recovery, clean vs migrated data state, and old `gbl_root_canoe` history if applicable.
 - [ ] edk2 issue #11 (`Escape is borked`) is re-tested from both the physical fastboot menu and `fastboot oem escape`; the release-prep edk2 branch routes menu Escape through the same USB-teardown path as the host command.
 - [ ] edk2 issue #10 (`OEM unlock allowed doesn't seem to be working`) is re-tested across reboot/system boot; release-prep now flushes and readbacks the FRP write, but do not call the OEM-unlock UI release-ready until the bit survives the reported flow.
-- [ ] edk2 issue #9 (`AVB WARNING unsigned:recovery after successful graft`) is re-tested after a current graft ZIP run; release-prep no longer forces `recovery` to `unsigned` in mode-1, so any remaining warning must be backed by exact `vbmeta:*` getvar evidence.
+- [ ] edk2 issue #9 (`AVB WARNING after successful graft`) is re-tested after a current graft ZIP run; release-prep warnings are descriptor-coverage based across boot/init-critical partition candidates, so any remaining warning must be backed by exact `vbmeta:*` getvar evidence and interpreted as `uncovered:<part>` / probe error rather than a recovery-only heuristic.
 - [ ] The `zip/` submodule is committed first, then the parent branch records the updated submodule pointer.
 
 ## Known release notes / caveats

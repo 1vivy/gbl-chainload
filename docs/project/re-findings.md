@@ -44,7 +44,7 @@ Evidence to preserve:
 - Custom recovery under mode-1 can complete recovery boot while failing normal Android boot.
 - The failure is after ABL: userspace AVB / first-stage init re-reads the on-disk recovery metadata and rejects missing, invalid, or mismatched in-partition AVB footer/vbmeta.
 - The selected fix is disk-side grafting of stock recovery vbmeta/footer bytes onto the custom recovery image, either host-side or device-side.
-- A previous release-prep diagnostic path forced `recovery` to `unsigned` in mode-1 after probing main vbmeta. That made the fastboot-menu warning persist even when grafting was otherwise successful enough for Android normal boot. Current release-prep should trust the descriptor probe instead; any remaining warning needs exact `vbmeta:*` getvar evidence.
+- A previous release-prep diagnostic path forced `recovery` to `unsigned` in mode-1 after probing main vbmeta. That made the fastboot-menu warning persist even when grafting was otherwise successful enough for Android normal boot. Current release-prep should use descriptor-coverage warnings across boot/init-critical partition candidates; this keeps recovery graft validation visible while also catching uncovered inputs such as `dtbo` that can block boot or first-stage init paths.
 
 Evidence to preserve:
 

@@ -94,12 +94,19 @@ After grafting, also capture these fastboot variables from bootloader fastboot:
 - `vbmeta:warning`;
 - `vbmeta:recovery:status`;
 - `vbmeta:recovery:descriptor-type`;
+- `vbmeta:recovery:present`;
+- `vbmeta:dtbo:status`;
+- `vbmeta:dtbo:descriptor-type`;
+- `vbmeta:dtbo:present`;
 - `current-slot`.
 
-If `vbmeta:recovery:descriptor-type` is `chain` or `hash` and
-`vbmeta:recovery:status` is still `unsigned`, treat that as an EFI probe bug or
-policy override until proven otherwise. If `vbmeta:slot` does not match the slot
-grafted by the ZIP, suspect wrong-slot validation.
+Warning semantics are descriptor-coverage based. For a present boot/init-critical
+partition candidate, `uncovered:<part>` means the active top-level `vbmeta`
+descriptor walk did not find hash, hashtree, or chain coverage for that
+partition. That is expected to catch recovery graft mistakes, but also unsigned
+boot inputs such as `dtbo` that can block boot or first-stage init paths. If
+`vbmeta:slot` does not match the slot grafted by the ZIP, suspect wrong-slot
+validation.
 
 ## Mode-2 profile evidence
 
