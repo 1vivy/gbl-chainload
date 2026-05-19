@@ -6,7 +6,8 @@ fv-unwrap: fv-unwrap.c
 	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
 
 clean:
-	rm -f fv-unwrap fv-unwrap-android *.o
+	rm -f fv-unwrap fv-unwrap-android fv-unwrap.exe \
+	      fv-unwrap-macos-x64 fv-unwrap-macos-arm64 *.o
 
 # --- Android cross-compile target (NDK r27) ---
 # Links the static liblzma cross-compiled by docker/Dockerfile into
@@ -23,3 +24,28 @@ android: fv-unwrap-android
 fv-unwrap-android: fv-unwrap.c $(LIBLZMA_ANDROID)/lib/liblzma.a
 	$(NDK_CC) $(NDK_CFLAGS) -I$(LIBLZMA_ANDROID)/include -o $@ \
 	    fv-unwrap.c $(LIBLZMA_ANDROID)/lib/liblzma.a
+
+# --- Windows / macOS cross-compile (zig cc) ---
+# Links the static liblzma cross-compiled per target by docker/Dockerfile
+# into $(LIBLZMA_WINDOWS|MACOS_X64|MACOS_ARM64) — the same -llzma role as
+# the host (-llzma) and android ($(LIBLZMA_ANDROID)) builds.
+XCFLAGS = -O2 -Wall -Wextra -std=c11
+
+windows:     fv-unwrap.exe
+macos-x64:   fv-unwrap-macos-x64
+macos-arm64: fv-unwrap-macos-arm64
+
+fv-unwrap.exe: fv-unwrap.c $(LIBLZMA_WINDOWS)/lib/liblzma.a
+	zig cc -target x86_64-windows-gnu $(XCFLAGS) \
+	    -I$(LIBLZMA_WINDOWS)/include -o $@ \
+	    fv-unwrap.c $(LIBLZMA_WINDOWS)/lib/liblzma.a
+
+fv-unwrap-macos-x64: fv-unwrap.c $(LIBLZMA_MACOS_X64)/lib/liblzma.a
+	zig cc -target x86_64-macos $(XCFLAGS) \
+	    -I$(LIBLZMA_MACOS_X64)/include -o $@ \
+	    fv-unwrap.c $(LIBLZMA_MACOS_X64)/lib/liblzma.a
+
+fv-unwrap-macos-arm64: fv-unwrap.c $(LIBLZMA_MACOS_ARM64)/lib/liblzma.a
+	zig cc -target aarch64-macos $(XCFLAGS) \
+	    -I$(LIBLZMA_MACOS_ARM64)/include -o $@ \
+	    fv-unwrap.c $(LIBLZMA_MACOS_ARM64)/lib/liblzma.a
