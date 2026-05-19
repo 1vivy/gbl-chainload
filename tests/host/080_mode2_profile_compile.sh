@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/host/080_mode2_profile_compile.sh — compile a profile XML and confirm
+# tests/host/080_mode2_profile_compile.sh — compile a profile TOML and confirm
 # the EDK2 parser accepts the resulting binary.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
@@ -10,20 +10,19 @@ M2P=tools/mode2-profile/mode2-profile.py
 OUT=tests/host/.last/080
 mkdir -p "$OUT"
 
-# A well-formed profile XML.
-cat > "$OUT/good.xml" <<'XML'
-<gbl-chainload-mode2-profile version="1">
-  <is-unlocked>0</is-unlocked>
-  <color>0</color>
-  <system-version>0x40000</system-version>
-  <system-spl>0x9A4</system-spl>
-  <rot-digest>1111111111111111111111111111111111111111111111111111111111111111</rot-digest>
-  <pubkey-digest>2222222222222222222222222222222222222222222222222222222222222222</pubkey-digest>
-  <vbh>3333333333333333333333333333333333333333333333333333333333333333</vbh>
-</gbl-chainload-mode2-profile>
-XML
+# A well-formed profile TOML.
+cat > "$OUT/good.toml" <<'TOML'
+version        = 1
+is_unlocked    = 0
+color          = 0
+system_version = 0x40000
+system_spl     = 0x9A4
+rot_digest     = "1111111111111111111111111111111111111111111111111111111111111111"
+pubkey_digest  = "2222222222222222222222222222222222222222222222222222222222222222"
+vbh            = "3333333333333333333333333333333333333333333333333333333333333333"
+TOML
 
-python3 "$M2P" compile "$OUT/good.xml" -o "$OUT/good.bin" >"$OUT/compile.log" 2>&1 \
+python3 "$M2P" compile "$OUT/good.toml" -o "$OUT/good.bin" >"$OUT/compile.log" 2>&1 \
   || { echo "FAIL: compile failed"; cat "$OUT/compile.log"; exit 1; }
 
 # Exactly 120 bytes.
@@ -35,7 +34,7 @@ sz=$(stat -c%s "$OUT/good.bin")
   || { echo "FAIL: EDK2 parser rejected the compiled profile"; exit 1; }
 
 # Rejection cases — each must exit non-zero and not write output.
-reject() {  # <name> <xml-file>
+reject() {  # <name> <toml-file>
   rm -f "$OUT/reject.bin"
   if python3 "$M2P" compile "$2" -o "$OUT/reject.bin" >/dev/null 2>&1; then
     echo "FAIL: compile accepted bad input ($1)"; exit 1
@@ -44,33 +43,46 @@ reject() {  # <name> <xml-file>
     echo "FAIL: $1 left an output file behind"; exit 1
   fi
 }
-sed 's:<color>0</color>:<color>9</color>:' "$OUT/good.xml" > "$OUT/badcolor.xml"
-reject "color>3" "$OUT/badcolor.xml"
-sed 's:<is-unlocked>0</is-unlocked>:<is-unlocked>5</is-unlocked>:' "$OUT/good.xml" > "$OUT/badunlk.xml"
-reject "is-unlocked>1" "$OUT/badunlk.xml"
-sed 's:version="1":version="2":' "$OUT/good.xml" > "$OUT/badver.xml"
-reject "version!=1" "$OUT/badver.xml"
-sed 's:<vbh>3333:<vbh>33:' "$OUT/good.xml" > "$OUT/badvbh.xml"
-reject "short vbh digest" "$OUT/badvbh.xml"
-printf '<gbl-chainload-mode2-profile version="1"><is-unlocked>' > "$OUT/malformed.xml"
-reject "malformed XML" "$OUT/malformed.xml"
 
-# Boundary case: max valid values (is-unlocked=1, color=3 = GBL_M2P_COLOR_RED).
-cat > "$OUT/good_max.xml" <<'XML'
-<gbl-chainload-mode2-profile version="1">
-  <is-unlocked>1</is-unlocked>
-  <color>3</color>
-  <system-version>0x40000</system-version>
-  <system-spl>0x9A4</system-spl>
-  <rot-digest>1111111111111111111111111111111111111111111111111111111111111111</rot-digest>
-  <pubkey-digest>2222222222222222222222222222222222222222222222222222222222222222</pubkey-digest>
-  <vbh>3333333333333333333333333333333333333333333333333333333333333333</vbh>
-</gbl-chainload-mode2-profile>
-XML
+# bad version
+sed 's/^version *= *1/version = 2/' "$OUT/good.toml" > "$OUT/badver.toml"
+reject "version!=1" "$OUT/badver.toml"
 
-python3 "$M2P" compile "$OUT/good_max.xml" -o "$OUT/good_max.bin" >"$OUT/compile_max.log" 2>&1 \
+# color > 3
+sed 's/^color *= *0/color = 9/' "$OUT/good.toml" > "$OUT/badcolor.toml"
+reject "color>3" "$OUT/badcolor.toml"
+
+# is_unlocked > 1
+sed 's/^is_unlocked *= *0/is_unlocked = 5/' "$OUT/good.toml" > "$OUT/badunlk.toml"
+reject "is_unlocked>1" "$OUT/badunlk.toml"
+
+# vbh digest too short (2 hex chars)
+sed 's/^vbh *= *"33*/vbh = "33/' "$OUT/good.toml" > "$OUT/badvbh.toml"
+reject "short vbh digest" "$OUT/badvbh.toml"
+
+# unknown key
+sed '/^version/a unknownkey = 1' "$OUT/good.toml" > "$OUT/unknownkey.toml"
+reject "unknown key" "$OUT/unknownkey.toml"
+
+# malformed TOML (truncated)
+printf 'version = 1\nis_unlocked = ' > "$OUT/malformed.toml"
+reject "malformed TOML" "$OUT/malformed.toml"
+
+# Boundary case: max valid values (is_unlocked=1, color=3 = GBL_M2P_COLOR_RED).
+cat > "$OUT/good_max.toml" <<'TOML'
+version        = 1
+is_unlocked    = 1
+color          = 3
+system_version = 0x40000
+system_spl     = 0x9A4
+rot_digest     = "1111111111111111111111111111111111111111111111111111111111111111"
+pubkey_digest  = "2222222222222222222222222222222222222222222222222222222222222222"
+vbh            = "3333333333333333333333333333333333333333333333333333333333333333"
+TOML
+
+python3 "$M2P" compile "$OUT/good_max.toml" -o "$OUT/good_max.bin" >"$OUT/compile_max.log" 2>&1 \
   || { echo "FAIL: compile rejected max-valid profile"; cat "$OUT/compile_max.log"; exit 1; }
 "$H" profile-parse "$OUT/good_max.bin" | grep -q 'status=0' \
-  || { echo "FAIL: EDK2 parser rejected max-valid profile (is-unlocked=1 color=3)"; exit 1; }
+  || { echo "FAIL: EDK2 parser rejected max-valid profile (is_unlocked=1 color=3)"; exit 1; }
 
 echo "PASS: 080 mode2 profile compile"
