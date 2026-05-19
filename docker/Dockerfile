@@ -124,9 +124,9 @@ RUN set -eux; \
     printf '%s\n' '#!/bin/sh' \
       'outfile=""' \
       'while [ $# -gt 0 ]; do' \
-      '  case "$1" in -o) outfile="$2"; shift 2;; *) shift;; esac' \
+      '  case "$1" in -o) outfile="$2"; shift 2;; -o=*) outfile="${1#-o=}"; shift;; -o*) outfile="${1#-o}"; shift;; *) shift;; esac' \
       'done' \
-      '[ -n "$outfile" ] || exit 0' \
+      '[ -n "$outfile" ] || { echo "zig-rc-win: no -o <outfile> found in args" >&2; exit 1; }' \
       'printf "typedef void empty;\n" > /tmp/_rc_empty.c' \
       'zig cc -target x86_64-windows-gnu -c /tmp/_rc_empty.c -o "$outfile"' \
       > /usr/local/bin/zig-rc-win && chmod +x /usr/local/bin/zig-rc-win; \
