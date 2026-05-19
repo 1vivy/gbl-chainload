@@ -6,6 +6,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <stddef.h>
+#include <errno.h>
 #include "vendor/tomlc99/toml.h"
 #include "../shared/gbl_mode2_profile.h"
 #include "Internal/Sha256.h"
@@ -42,7 +43,7 @@ static int64_t intkey(toml_table_t *t, const char *key, int64_t lo, int64_t hi) 
 
 static int do_compile(const char *in, const char *out) {
     FILE *f = fopen(in,"r");
-    if (!f) { perror(in); return 1; }
+    if (!f) { fprintf(stderr,"error: cannot open %s: %s\n",in,strerror(errno)); return 1; }
     char errbuf[200];
     toml_table_t *t = toml_parse_file(f, errbuf, sizeof errbuf);
     fclose(f);
@@ -85,7 +86,7 @@ static int do_compile(const char *in, const char *out) {
     memcpy(b+88, vbh, 32);
 
     FILE *o = fopen(out,"wb");
-    if (!o) { perror(out); return 1; }
+    if (!o) { fprintf(stderr,"error: cannot open %s: %s\n",out,strerror(errno)); return 1; }
     if (fwrite(b,1,sizeof b,o)!=sizeof b){
         fclose(o); remove(out);
         fprintf(stderr,"error: write failed\n"); return 1; }
@@ -93,8 +94,6 @@ static int do_compile(const char *in, const char *out) {
     fprintf(stdout,"wrote %s (%u bytes)\n", out, (unsigned)sizeof b);
     return 0;
 }
-
-int derive_main(int argc, char **argv);  /* implemented below */
 
 /* ---- AVB vbmeta header field byte offsets (big-endian, from avbtool.py
    AvbVBMetaHeader format string — cross-verified against the 256-byte struct)
@@ -147,10 +146,10 @@ int derive_main(int argc, char **argv) {
 
     /* --- read entire file into memory --- */
     FILE *fv = fopen(vbmeta_path, "rb");
-    if (!fv) { perror(vbmeta_path); return 1; }
-    if (fseek(fv, 0, SEEK_END) != 0) { perror("fseek"); fclose(fv); return 1; }
+    if (!fv) { fprintf(stderr,"error: cannot open %s: %s\n",vbmeta_path,strerror(errno)); return 1; }
+    if (fseek(fv, 0, SEEK_END) != 0) { fprintf(stderr,"error: fseek: %s\n",strerror(errno)); fclose(fv); return 1; }
     long fsz = ftell(fv);
-    if (fsz < 0) { perror("ftell"); fclose(fv); return 1; }
+    if (fsz < 0) { fprintf(stderr,"error: ftell: %s\n",strerror(errno)); fclose(fv); return 1; }
     rewind(fv);
     if ((size_t)fsz < AVB_HDR_SIZE) {
         fprintf(stderr, "error: %s: too small to be a vbmeta image\n",
@@ -185,9 +184,14 @@ int derive_main(int argc, char **argv) {
         free(img); return 1;
     }
 
+    /* Fix 1: overflow-safe bounds checks before any addition */
+    if (auth_size > (uint64_t)fsz - AVB_HDR_SIZE) {
+        fprintf(stderr,"error: %s: auth block extends past file\n",
+                vbmeta_path);
+        free(img); return 1;
+    }
     uint64_t aux_off = AVB_HDR_SIZE + auth_size;
-    /* bounds checks */
-    if (aux_off > (uint64_t)fsz || aux_size > (uint64_t)fsz - aux_off) {
+    if (aux_size > (uint64_t)fsz - aux_off) {
         fprintf(stderr,"error: %s: aux block extends past file\n",
                 vbmeta_path);
         free(img); return 1;
@@ -218,8 +222,11 @@ int derive_main(int argc, char **argv) {
     }
     gbl_sha256(pubkey, (size_t)pk_size, pubkey_digest);
 
-    /* vbh = SHA256(image[0 .. 256 + auth_size + aux_size]) */
-    uint64_t vbmeta_size = AVB_HDR_SIZE + auth_size + aux_size;
+    /* vbh = SHA256(image[0 .. 256 + auth_size + aux_size])
+       No overflow possible: auth_size and aux_size were already validated to
+       fit within fsz - AVB_HDR_SIZE and fsz - aux_off respectively, so
+       aux_off + aux_size <= fsz, and vbmeta_size == aux_off + aux_size. */
+    uint64_t vbmeta_size = aux_off + aux_size;
     if (vbmeta_size > (uint64_t)fsz) {
         fprintf(stderr,"error: %s: vbmeta declares %llu bytes but file is only %ld\n",
                 vbmeta_path, (unsigned long long)vbmeta_size, fsz);
@@ -255,6 +262,10 @@ int derive_main(int argc, char **argv) {
             uint64_t vlen = rbe64(d + 24);
             /* key starts at d+32, followed by \0, then value, then \0.
                Total descriptor span is 16+nb bytes (tag+nb header = 16, body = nb). */
+            /* Fix 4: pre-check individual lengths before combining to prevent wrap */
+            if (klen > nb || vlen > nb - klen) {
+                doff += 16 + nb; continue;
+            }
             if (klen + 1 + vlen + 1 > nb - 16u) {
                 doff += 16 + nb; continue;
             }
@@ -299,6 +310,19 @@ int derive_main(int argc, char **argv) {
         const char *p = os_ver_str[0] ? os_ver_str : "0";
         /* sscanf handles "M", "M.N", "M.N.P" */
         sscanf(p, "%d.%d.%d", &major, &minor, &sub);
+        /* Fix 3: match Python _encode_os_version range checks */
+        if (minor < 0 || minor > 0x7F) {
+            fprintf(stderr,"error: OS version minor %d exceeds 7-bit limit\n", minor);
+            free(img); return 1;
+        }
+        if (sub < 0 || sub > 0x7F) {
+            fprintf(stderr,"error: OS version sub %d exceeds 7-bit limit\n", sub);
+            free(img); return 1;
+        }
+        if (major < 0 || major > 0x3FFFF) {
+            fprintf(stderr,"error: OS version major %d exceeds 18-bit limit\n", major);
+            free(img); return 1;
+        }
         os_ver_encoded = ((uint64_t)major << 14) | ((uint64_t)minor << 7)
                          | (uint64_t)sub;
     }
@@ -310,6 +334,19 @@ int derive_main(int argc, char **argv) {
             fprintf(stderr,
                 "error: unrecognized security patch %s (expected YYYY-MM-DD)\n",
                 spl_str);
+            free(img); return 1;
+        }
+        /* Fix 2: match Python _encode_spl range checks */
+        if (year < 2000 || year > 2127) {
+            fprintf(stderr,"error: SPL year %d out of range (2000-2127)\n", year);
+            free(img); return 1;
+        }
+        if (month < 1 || month > 12) {
+            fprintf(stderr,"error: SPL month %d out of range (1-12)\n", month);
+            free(img); return 1;
+        }
+        if (day < 1 || day > 31) {
+            fprintf(stderr,"error: SPL day %d out of range (1-31)\n", day);
             free(img); return 1;
         }
         spl_encoded = ((uint64_t)day << 11) | ((uint64_t)(year - 2000) << 4)
@@ -335,9 +372,9 @@ int derive_main(int argc, char **argv) {
          system_spl     = 0xXX
     */
     FILE *fo = fopen(out_path, "w");
-    if (!fo) { perror(out_path); return 1; }
+    if (!fo) { fprintf(stderr,"error: cannot open %s: %s\n",out_path,strerror(errno)); return 1; }
 
-    fprintf(fo,
+    int wok = fprintf(fo,
         "# generated by mode2-profile derive\n"
         "# source: PosixPath('%s')\n"
         "# sha256: %s\n"
@@ -357,8 +394,12 @@ int derive_main(int argc, char **argv) {
         (unsigned long long)os_ver_encoded,
         (unsigned long long)spl_encoded,
         rot_hex, pk_hex, vbh_hex);
-
-    fclose(fo);
+    /* Fix 5: detect write failures (full disk etc.) */
+    if (wok < 0 || fclose(fo) != 0) {
+        remove(out_path);
+        fprintf(stderr,"error: write failed for %s\n", out_path);
+        return 1;
+    }
 
     fprintf(stdout, "wrote %s\n", out_path);
     fprintf(stdout, "  rot_digest    = %s\n", rot_hex);
