@@ -5,8 +5,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <stddef.h>
 #include "vendor/tomlc99/toml.h"
 #include "../shared/gbl_mode2_profile.h"
+#include "Internal/Sha256.h"
 
 static void wle16(uint8_t *p, uint16_t v){p[0]=v;p[1]=v>>8;}
 static void wle32(uint8_t *p, uint32_t v){p[0]=v;p[1]=v>>8;p[2]=v>>16;p[3]=v>>24;}
@@ -92,13 +94,281 @@ static int do_compile(const char *in, const char *out) {
     return 0;
 }
 
-int derive_main(int argc, char **argv);  /* Task 3, in this file */
+int derive_main(int argc, char **argv);  /* implemented below */
 
-/* Stub so the tool links before Task 3 implements derive_main. */
+/* ---- AVB vbmeta header field byte offsets (big-endian, from avbtool.py
+   AvbVBMetaHeader format string — cross-verified against the 256-byte struct)
+   magic@0(4), req_maj@4(4), req_min@8(4),
+   auth_size@12(8), aux_size@20(8), alg_type@28(4),
+   hash_off@32(8), hash_size@40(8), sig_off@48(8), sig_size@56(8),
+   pk_off@64(8),  pk_size@72(8), pkm_off@80(8), pkm_size@88(8),
+   desc_off@96(8), desc_size@104(8), rollback@112(8),
+   flags@120(4), rollback_loc@124(4), release@128(48), padding(80) = 256 */
+
+#define AVB_HDR_SIZE         256u
+#define AVB_AUTH_SIZE_OFF     12u
+#define AVB_AUX_SIZE_OFF      20u
+#define AVB_PK_OFF_OFF        64u
+#define AVB_PK_SIZE_OFF       72u
+#define AVB_DESC_OFF_OFF      96u
+#define AVB_DESC_SIZE_OFF    104u
+
+static uint64_t rbe64(const uint8_t *p) {
+    return ((uint64_t)p[0]<<56)|((uint64_t)p[1]<<48)|
+           ((uint64_t)p[2]<<40)|((uint64_t)p[3]<<32)|
+           ((uint64_t)p[4]<<24)|((uint64_t)p[5]<<16)|
+           ((uint64_t)p[6]<< 8)| (uint64_t)p[7];
+}
+
+static void hex64(const uint8_t digest[32], char out[65]) {
+    static const char h[] = "0123456789abcdef";
+    for (int i = 0; i < 32; i++) {
+        out[2*i]   = h[digest[i] >> 4];
+        out[2*i+1] = h[digest[i] & 0xf];
+    }
+    out[64] = '\0';
+}
+
+/*
+ * derive_main — AVB vbmeta reader; writes a TOML profile byte-identical to
+ * the Python mode2-profile.py cmd_derive output.
+ *
+ * Usage: mode2-profile derive <vbmeta.img> -o <out.toml>
+ */
 int derive_main(int argc, char **argv) {
-    (void)argc; (void)argv;
-    fprintf(stderr,"error: derive not yet implemented\n");
-    return 2;
+    /* argv: [0]=prog [1]="derive" [2]=vbmeta [3]="-o" [4]=output */
+    if (argc < 5 || strcmp(argv[3], "-o") != 0) {
+        fprintf(stderr,
+            "usage: mode2-profile derive <vbmeta.img> -o <out.toml>\n");
+        return 2;
+    }
+    const char *vbmeta_path = argv[2];
+    const char *out_path    = argv[4];
+
+    /* --- read entire file into memory --- */
+    FILE *fv = fopen(vbmeta_path, "rb");
+    if (!fv) { perror(vbmeta_path); return 1; }
+    if (fseek(fv, 0, SEEK_END) != 0) { perror("fseek"); fclose(fv); return 1; }
+    long fsz = ftell(fv);
+    if (fsz < 0) { perror("ftell"); fclose(fv); return 1; }
+    rewind(fv);
+    if ((size_t)fsz < AVB_HDR_SIZE) {
+        fprintf(stderr, "error: %s: too small to be a vbmeta image\n",
+                vbmeta_path);
+        fclose(fv); return 1;
+    }
+    uint8_t *img = (uint8_t *)malloc((size_t)fsz);
+    if (!img) { fprintf(stderr,"error: out of memory\n"); fclose(fv); return 1; }
+    if (fread(img, 1, (size_t)fsz, fv) != (size_t)fsz) {
+        fprintf(stderr,"error: read failed\n"); free(img); fclose(fv); return 1;
+    }
+    fclose(fv);
+
+    /* --- verify magic --- */
+    if (memcmp(img, "AVB0", 4) != 0) {
+        fprintf(stderr,"error: %s: not a vbmeta image (bad magic)\n",
+                vbmeta_path);
+        free(img); return 1;
+    }
+
+    /* --- parse header --- */
+    uint64_t auth_size  = rbe64(img + AVB_AUTH_SIZE_OFF);
+    uint64_t aux_size   = rbe64(img + AVB_AUX_SIZE_OFF);
+    uint64_t pk_off     = rbe64(img + AVB_PK_OFF_OFF);   /* within aux */
+    uint64_t pk_size    = rbe64(img + AVB_PK_SIZE_OFF);
+    uint64_t desc_off   = rbe64(img + AVB_DESC_OFF_OFF); /* within aux */
+    uint64_t desc_size  = rbe64(img + AVB_DESC_SIZE_OFF);
+
+    if (pk_size == 0) {
+        fprintf(stderr,"error: %s: vbmeta has no public key (unsigned?)\n",
+                vbmeta_path);
+        free(img); return 1;
+    }
+
+    uint64_t aux_off = AVB_HDR_SIZE + auth_size;
+    /* bounds checks */
+    if (aux_off > (uint64_t)fsz || aux_size > (uint64_t)fsz - aux_off) {
+        fprintf(stderr,"error: %s: aux block extends past file\n",
+                vbmeta_path);
+        free(img); return 1;
+    }
+    if (pk_off > aux_size || pk_size > aux_size - pk_off) {
+        fprintf(stderr,"error: %s: public key extends past aux block\n",
+                vbmeta_path);
+        free(img); return 1;
+    }
+    if (desc_off > aux_size || desc_size > aux_size - desc_off) {
+        fprintf(stderr,"error: %s: descriptor region extends past aux block\n",
+                vbmeta_path);
+        free(img); return 1;
+    }
+
+    const uint8_t *pubkey = img + aux_off + pk_off;
+
+    /* --- compute digests --- */
+    /* rot_digest = SHA256(pubkey || 0x00) */
+    uint8_t rot_digest[32], pubkey_digest[32], vbh_digest[32];
+    {
+        uint8_t *buf = (uint8_t *)malloc(pk_size + 1);
+        if (!buf) { fprintf(stderr,"error: out of memory\n"); free(img); return 1; }
+        memcpy(buf, pubkey, pk_size);
+        buf[pk_size] = 0x00;
+        gbl_sha256(buf, pk_size + 1, rot_digest);
+        free(buf);
+    }
+    gbl_sha256(pubkey, (size_t)pk_size, pubkey_digest);
+
+    /* vbh = SHA256(image[0 .. 256 + auth_size + aux_size]) */
+    uint64_t vbmeta_size = AVB_HDR_SIZE + auth_size + aux_size;
+    if (vbmeta_size > (uint64_t)fsz) {
+        fprintf(stderr,"error: %s: vbmeta declares %llu bytes but file is only %ld\n",
+                vbmeta_path, (unsigned long long)vbmeta_size, fsz);
+        free(img); return 1;
+    }
+    gbl_sha256(img, (size_t)vbmeta_size, vbh_digest);
+
+    /* sha256 of the whole file (for the provenance comment) */
+    uint8_t src_sha_bytes[32];
+    gbl_sha256(img, (size_t)fsz, src_sha_bytes);
+    char src_sha[65]; hex64(src_sha_bytes, src_sha);
+
+    /* --- walk property descriptors --- */
+    const uint8_t *desc_data = img + aux_off + desc_off;
+    uint64_t os_ver_encoded = 0, spl_encoded = 0;
+    char os_ver_str[128] = {0}, spl_str[128] = {0};
+    int found_os  = 0, found_spl = 0;
+
+    uint64_t doff = 0;
+    while (doff + 16 <= desc_size) {
+        const uint8_t *d = desc_data + doff;
+        uint64_t tag = rbe64(d);
+        uint64_t nb  = rbe64(d + 8);  /* num_bytes_following (already padded) */
+
+        /* check we don't read past desc_data */
+        if (nb > desc_size - doff - 16) break;
+
+        if (tag == 0) {
+            /* property descriptor — body starts at d+16
+               body layout: key_size(u64 BE), val_size(u64 BE), key\0val\0 */
+            if (nb < 16) { doff += 16 + nb; continue; }
+            uint64_t klen = rbe64(d + 16);
+            uint64_t vlen = rbe64(d + 24);
+            /* key starts at d+32, followed by \0, then value, then \0.
+               Total descriptor span is 16+nb bytes (tag+nb header = 16, body = nb). */
+            if (klen + 1 + vlen + 1 > nb - 16u) {
+                doff += 16 + nb; continue;
+            }
+            const char *key = (const char *)(d + 32);
+            const char *val = (const char *)(d + 32 + klen + 1);
+
+            if (klen == strlen("com.android.build.boot.os_version") &&
+                memcmp(key, "com.android.build.boot.os_version", klen) == 0) {
+                size_t vsz = vlen < sizeof(os_ver_str)-1 ? (size_t)vlen
+                                                          : sizeof(os_ver_str)-1;
+                memcpy(os_ver_str, val, vsz);
+                os_ver_str[vsz] = '\0';
+                found_os = 1;
+            }
+            if (klen == strlen("com.android.build.boot.security_patch") &&
+                memcmp(key, "com.android.build.boot.security_patch", klen) == 0) {
+                size_t vsz = vlen < sizeof(spl_str)-1 ? (size_t)vlen
+                                                       : sizeof(spl_str)-1;
+                memcpy(spl_str, val, vsz);
+                spl_str[vsz] = '\0';
+                found_spl = 1;
+            }
+        }
+        doff += 16 + nb;
+    }
+
+    if (!found_os) {
+        fprintf(stderr,
+            "error: vbmeta has no com.android.build.boot.os_version property\n");
+        free(img); return 1;
+    }
+    if (!found_spl) {
+        fprintf(stderr,
+            "error: vbmeta has no com.android.build.boot.security_patch property\n");
+        free(img); return 1;
+    }
+
+    /* --- encode os_version --- */
+    {
+        int major=0, minor=0, sub=0;
+        /* parse M.N.P — missing components default to 0 */
+        const char *p = os_ver_str[0] ? os_ver_str : "0";
+        /* sscanf handles "M", "M.N", "M.N.P" */
+        sscanf(p, "%d.%d.%d", &major, &minor, &sub);
+        os_ver_encoded = ((uint64_t)major << 14) | ((uint64_t)minor << 7)
+                         | (uint64_t)sub;
+    }
+
+    /* --- encode spl --- */
+    {
+        int year=0, month=0, day=0;
+        if (sscanf(spl_str, "%d-%d-%d", &year, &month, &day) < 3) {
+            fprintf(stderr,
+                "error: unrecognized security patch %s (expected YYYY-MM-DD)\n",
+                spl_str);
+            free(img); return 1;
+        }
+        spl_encoded = ((uint64_t)day << 11) | ((uint64_t)(year - 2000) << 4)
+                      | (uint64_t)month;
+    }
+
+    /* hex-encode digests */
+    char rot_hex[65], pk_hex[65], vbh_hex[65];
+    hex64(rot_digest,   rot_hex);
+    hex64(pubkey_digest, pk_hex);
+    hex64(vbh_digest,   vbh_hex);
+
+    free(img);
+
+    /* --- write TOML (byte-identical layout to Python cmd_derive) ---
+       Python uses repr(Path(vbmeta_path)) for the source comment, which
+       renders as PosixPath('...') on Linux.
+       Python uses {os_ver:x} / {spl:x} for the hex literal (no leading zeros,
+       no 0x prefix in the comment — the comment format is:
+         # os_version: 'ver_str' -> 0xXX   spl: 'spl_str' -> 0xXX
+       and the TOML values are:
+         system_version = 0xXX   (Python f"0x{os_ver:x}")
+         system_spl     = 0xXX
+    */
+    FILE *fo = fopen(out_path, "w");
+    if (!fo) { perror(out_path); return 1; }
+
+    fprintf(fo,
+        "# generated by mode2-profile derive\n"
+        "# source: PosixPath('%s')\n"
+        "# sha256: %s\n"
+        "# os_version: '%s' -> 0x%llx   spl: '%s' -> 0x%llx\n"
+        "version        = 1\n"
+        "is_unlocked    = 0\n"
+        "color          = 0\n"
+        "system_version = 0x%llx\n"
+        "system_spl     = 0x%llx\n"
+        "rot_digest     = \"%s\"\n"
+        "pubkey_digest  = \"%s\"\n"
+        "vbh            = \"%s\"\n",
+        vbmeta_path,
+        src_sha,
+        os_ver_str, (unsigned long long)os_ver_encoded,
+        spl_str,    (unsigned long long)spl_encoded,
+        (unsigned long long)os_ver_encoded,
+        (unsigned long long)spl_encoded,
+        rot_hex, pk_hex, vbh_hex);
+
+    fclose(fo);
+
+    fprintf(stdout, "wrote %s\n", out_path);
+    fprintf(stdout, "  rot_digest    = %s\n", rot_hex);
+    fprintf(stdout, "  pubkey_digest = %s\n", pk_hex);
+    fprintf(stdout, "  vbh           = %s\n", vbh_hex);
+    fprintf(stdout, "  os_version    = '%s' -> 0x%llx\n",
+            os_ver_str, (unsigned long long)os_ver_encoded);
+    fprintf(stdout, "  spl           = '%s' -> 0x%llx\n",
+            spl_str,    (unsigned long long)spl_encoded);
+    return 0;
 }
 
 int main(int argc, char **argv) {

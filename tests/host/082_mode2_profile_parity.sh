@@ -61,6 +61,41 @@ fi
 [ ! -f "$OUT/c_reject.bin" ] \
   || { echo "FAIL: C tool left output file after rejection (color=9)"; exit 1; }
 
-# ---- (Task 3 derive parity block goes here) ----
+# ---- derive parity (SKIP-guarded if fixture or avbtool absent) ----
+
+VBMETA="images/vbmeta-infiniti-IN-16.0.7.201.img"
+AVBTOOL="${AVBTOOL:-$HOME/avbtool.py}"
+
+if [ -f "$VBMETA" ] && [ -f "$AVBTOOL" ]; then
+  python3 "$PY" derive "$VBMETA" -o "$OUT/py_derive.toml" \
+    >"$OUT/py_derive.log" 2>&1 \
+    || { echo "FAIL: Python derive failed"; cat "$OUT/py_derive.log"; exit 1; }
+
+  "$C_TOOL" derive "$VBMETA" -o "$OUT/c_derive.toml" \
+    >"$OUT/c_derive.log" 2>&1 \
+    || { echo "FAIL: C derive failed"; cat "$OUT/c_derive.log"; exit 1; }
+
+  # TOML outputs must be byte-identical.
+  cmp "$OUT/py_derive.toml" "$OUT/c_derive.toml" \
+    || { echo "FAIL: C and Python derive TOML outputs differ"; exit 1; }
+
+  # Now compile both derived TOMLs and verify the binaries are also identical.
+  python3 "$PY" compile "$OUT/py_derive.toml" -o "$OUT/py_derive.bin" \
+    >"$OUT/py_derive_compile.log" 2>&1 \
+    || { echo "FAIL: Python compile of derived TOML failed"; \
+         cat "$OUT/py_derive_compile.log"; exit 1; }
+
+  "$C_TOOL" compile "$OUT/c_derive.toml" -o "$OUT/c_derive.bin" \
+    >"$OUT/c_derive_compile.log" 2>&1 \
+    || { echo "FAIL: C compile of derived TOML failed"; \
+         cat "$OUT/c_derive_compile.log"; exit 1; }
+
+  cmp "$OUT/py_derive.bin" "$OUT/c_derive.bin" \
+    || { echo "FAIL: derived TOML -> binary: C and Python outputs differ"; exit 1; }
+
+  echo "  derive parity: PASS (vbmeta fixture found)"
+else
+  echo "  derive parity: SKIP (fixture or avbtool absent)"
+fi
 
 echo "PASS: 082 mode2-profile parity"
