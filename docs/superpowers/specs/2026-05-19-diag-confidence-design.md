@@ -61,7 +61,7 @@ A terse summary printed via `ui_print`. All detail goes to the bundle.
 ```
 diag: pre-reboot install confidence
   EFISP        : mode-1 base + GBLP1 v1 ok (3 entries, all sha-verified)
-  loader-ABL   : abl_a retains loader path ; abl_b stock
+  loader-ABL   : abl_a retains loader path ; abl_b does NOT — WON'T LOAD EFISP
   graft needed : NO   (no chained-partition mismatches)
   logfs history: 4 prior gbl-chainload boots (newest: GblChainload_Boot42.txt)
   confidence   : HIGH — safe to reboot into chainload
@@ -69,6 +69,16 @@ diag: pre-reboot install confidence
   bundle saved : /sdcard/gbl-chainload-diag-20260519-203015.tar.gz
                  directory:  /sdcard/gbl-chainload-diag-20260519-203015/
 ```
+
+Note on terminology: the on-disk ABL is **always** OEM-signed
+(XBL verifies it before handoff), so "stock vs patched" is the wrong
+axis. The axis that matters is whether the OEM-signed ABL build that
+happens to be on disk is one of the **vulnerable** builds that scans
+EFISP for a PE and loads it (the "loader path"). The installer
+deliberately writes a vulnerable build to the target slot. A
+current/hardened OEM ABL on disk would not load EFISP at all,
+regardless of what we put on EFISP — hence "WON'T LOAD EFISP" is the
+operationally correct phrasing, never "stock".
 
 ### 4.1 Confidence tiers
 
@@ -79,7 +89,7 @@ verifier.
 | Tier   | Rule                                                                                                                                                |
 |--------|-----------------------------------------------------------------------------------------------------------------------------------------------------|
 | HIGH   | GBLP1 valid; base-EFI fingerprint matches a known mode-N hash from `zip/bin/MANIFEST`; at least one slot's ABL retains the loader path.             |
-| MEDIUM | GBLP1 valid; base-EFI fingerprint matches; both slots' ABLs are stock/patched-out, so the loader will not be reached as-is.                         |
+| MEDIUM | GBLP1 valid; base-EFI fingerprint matches; neither slot's ABL retains the loader path, so EFISP will not be loaded on reboot.                    |
 | LOW    | EFISP holds a PE but GBLP1 is missing, the header CRC fails, or any entry's SHA-256 mismatches.                                                     |
 | NONE   | EFISP does not start with `MZ`, or is empty/unreadable.                                                                                             |
 
@@ -169,8 +179,11 @@ Functions:
   `zip/bin/MANIFEST`. Result becomes the EFISP summary line.
 - `collect_abl` — for each slot: `dd` to `abl_<slot>.img`, `fv-unwrap`
   to a tmp PE, scan for the 10-byte UTF-16 LE `efisp` signature from
-  `tools/shared/patch_signatures.h`. Result becomes the loader-ABL
-  summary line. Writes detail to `loader-abl.txt`.
+  `tools/shared/patch_signatures.h`. Presence of the signature means
+  the OEM-signed ABL on disk is a vulnerable build that retains the
+  EFISP loader path; absence means EFISP will not be loaded from that
+  slot. Result becomes the loader-ABL summary line. Writes detail to
+  `loader-abl.txt`.
 - `collect_vbmeta` — for each slot: `dd` to `vbmeta_<slot>.img`. Run
   `vbmeta-graft list` against the active slot's image, capture to
   `vbmeta-descriptors.txt`.
