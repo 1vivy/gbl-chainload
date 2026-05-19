@@ -1,0 +1,52 @@
+{
+  "planPath": "docs/superpowers/plans/2026-05-19-mode-2-zip.md",
+  "tasks": [
+    {
+      "id": 35,
+      "subject": "MZ Task 1: TOML schema + migrate Python tool",
+      "status": "pending",
+      "description": "**Goal:** Move the profile intermediate XML->TOML; migrate mode2-profile.py (derive writes .toml, compile reads via tomllib).\n\n**Files:** Modify tools/mode2-profile/mode2-profile.py, tests/host/079_mode2_profile_derive.sh, tests/host/080_mode2_profile_compile.sh.\n\n**Verify:** bash tests/host/079_mode2_profile_derive.sh && bash tests/host/080_mode2_profile_compile.sh -> both PASS\n\nFull code in plan doc MZ Task 1.\n\n```json:metadata\n{\"files\": [\"tools/mode2-profile/mode2-profile.py\", \"tests/host/079_mode2_profile_derive.sh\", \"tests/host/080_mode2_profile_compile.sh\"], \"verifyCommand\": \"bash tests/host/079_mode2_profile_derive.sh && bash tests/host/080_mode2_profile_compile.sh\", \"acceptanceCriteria\": [\"derive writes flat TOML with all 8 keys + provenance comment\", \"compile parses via tomllib, validates, packs 120-byte binary, rejects malformed/unknown/out-of-range\", \"tests 079 + 080 pass against TOML\"]}\n```"
+    },
+    {
+      "id": 36,
+      "subject": "MZ Task 2: C mode2-profile tool — scaffold + compile",
+      "status": "pending",
+      "blockedBy": [35],
+      "description": "**Goal:** Multi-platform C mode2-profile tool — Makefile (host+android), vendored tomlc99, the compile subcommand.\n\n**Files:** Create tools/mode2-profile/mode2-profile.c, tools/mode2-profile/Makefile, tools/mode2-profile/vendor/tomlc99/{toml.c,toml.h}, tests/host/082_mode2_profile_parity.sh.\n\n**Verify:** bash tests/host/082_mode2_profile_parity.sh -> PASS: 082 mode2-profile parity\n\nFull code in plan doc MZ Task 2.\n\n```json:metadata\n{\"files\": [\"tools/mode2-profile/mode2-profile.c\", \"tools/mode2-profile/Makefile\", \"tools/mode2-profile/vendor/tomlc99/toml.c\", \"tools/mode2-profile/vendor/tomlc99/toml.h\", \"tests/host/082_mode2_profile_parity.sh\"], \"verifyCommand\": \"bash tests/host/082_mode2_profile_parity.sh\", \"acceptanceCriteria\": [\"make builds host + android binaries\", \"compile output byte-identical to Python tool; rejects malformed/out-of-range\", \"tests/host/082 passes (compile half)\"]}\n```"
+    },
+    {
+      "id": 37,
+      "subject": "MZ Task 3: C mode2-profile — derive subcommand",
+      "status": "pending",
+      "blockedBy": [36],
+      "description": "**Goal:** Implement derive in the C tool — a plain-C AVB vbmeta reader producing the .toml, byte-identical to the Python tool.\n\n**Files:** Modify tools/mode2-profile/mode2-profile.c, tools/mode2-profile/Makefile, tests/host/082_mode2_profile_parity.sh.\n\n**Verify:** bash tests/host/082_mode2_profile_parity.sh -> PASS: 082 mode2-profile parity\n\nFull spec in plan doc MZ Task 3.\n\n```json:metadata\n{\"files\": [\"tools/mode2-profile/mode2-profile.c\", \"tools/mode2-profile/Makefile\", \"tests/host/082_mode2_profile_parity.sh\"], \"verifyCommand\": \"bash tests/host/082_mode2_profile_parity.sh\", \"acceptanceCriteria\": [\"derive .toml byte-identical to Python tool for the same vbmeta\", \"aborts non-zero on unreadable/too-small/unsigned/descriptor-less vbmeta\", \"tests/host/082 passes incl. derive parity\"]}\n```"
+    },
+    {
+      "id": 38,
+      "subject": "MZ Task 4: abl-patcher --oem runtime scope selection",
+      "status": "pending",
+      "description": "**Goal:** Runtime-selectable host patch aggregation so abl-patcher applies universal+oem (mode-2) vs universal+mode_1+oem (mode-1).\n\n**Files:** Create GblChainloadPkg/Library/DynamicPatchLib/PatchScope.h, tests/host/083_abl_patcher_oem.sh; Modify GblChainloadPkg/Library/DynamicPatchLib/PatchTable.c, tools/abl-patcher/abl-patcher.c, tools/abl-patcher/Makefile.\n\n**Verify:** bash tests/host/083_abl_patcher_oem.sh -> PASS: 083 abl-patcher oem\n\nFull code in plan doc MZ Task 4.\n\n```json:metadata\n{\"files\": [\"GblChainloadPkg/Library/DynamicPatchLib/PatchScope.h\", \"GblChainloadPkg/Library/DynamicPatchLib/PatchTable.c\", \"tools/abl-patcher/abl-patcher.c\", \"tools/abl-patcher/Makefile\", \"tests/host/083_abl_patcher_oem.sh\"], \"verifyCommand\": \"bash tests/host/083_abl_patcher_oem.sh\", \"acceptanceCriteria\": [\"abl-patcher --oem oneplus --no-mode1 applies universal+oneplus not mode_1; plain abl-patcher still applies mode_1\", \"unknown --oem exits non-zero clearly\", \"tests 060/062/045 still pass\", \"tests/host/083 passes\"]}\n```"
+    },
+    {
+      "id": 39,
+      "subject": "MZ Task 5: factor shared loader-ABL machinery into zip/core/",
+      "status": "pending",
+      "description": "**Goal:** Move install.sh's loader-ABL functions into a zip/core/ library both install.sh and profile.sh source — behaviour-preserving refactor. (zip/ is a submodule.)\n\n**Files:** Create zip/core/install_abl.sh; Modify zip/modes/install.sh, zip/META-INF/com/google/android/update-binary.\n\n**Verify:** bash scripts/build-recovery-zip.sh --mode install -> ==> dist/gbl-chainload-install.zip\n\nFull detail in plan doc MZ Task 5.\n\n```json:metadata\n{\"files\": [\"zip/core/install_abl.sh\", \"zip/modes/install.sh\", \"zip/META-INF/com/google/android/update-binary\"], \"verifyCommand\": \"bash scripts/build-recovery-zip.sh --mode install\", \"acceptanceCriteria\": [\"loader-ABL functions moved to zip/core/install_abl.sh; install.sh sources it, behaviour unchanged\", \"build-recovery-zip.sh --mode install still assembles\", \"shellcheck clean\"]}\n```"
+    },
+    {
+      "id": 40,
+      "subject": "MZ Task 6: the profile mode",
+      "status": "pending",
+      "blockedBy": [39],
+      "description": "**Goal:** Implement zip/modes/profile.{sh,conf} — the mode-2 installer body. (zip/ is a submodule.)\n\n**Files:** Modify zip/modes/profile.conf, zip/modes/profile.sh.\n\n**Verify:** sh -n zip/modes/profile.sh exits 0; shellcheck --shell=sh zip/modes/profile.sh clean.\n\nFull code in plan doc MZ Task 6.\n\n```json:metadata\n{\"files\": [\"zip/modes/profile.conf\", \"zip/modes/profile.sh\"], \"verifyCommand\": \"sh -n zip/modes/profile.sh\", \"acceptanceCriteria\": [\"profile.conf declares mode-2.efi / efisp abl / the 5 tools\", \"profile.sh mode_main runs detect-OEM->preflight->derive/compile->OEM-patched cache ABL->gbl-pack->concat->commit EFISP+loader ABL; aborts before any write on bad OEM / missing stock_vbmeta\", \"sh -n and shellcheck clean\"]}\n```"
+    },
+    {
+      "id": 41,
+      "subject": "MZ Task 7: vendor mode2-profile + mode-2.efi, assemble profile ZIP",
+      "status": "pending",
+      "blockedBy": [37, 38, 40],
+      "description": "**Goal:** Wire the C tool + mode-2 base EFI into the recovery-tool build and ZIP vendoring; assemble gbl-chainload-profile.zip.\n\n**Files:** Modify scripts/build-recovery-tools.sh, zip/update-tools.sh (zip submodule).\n\n**Verify:** bash scripts/build-recovery-zip.sh --mode profile -> ==> dist/gbl-chainload-profile.zip\n\nFull detail in plan doc MZ Task 7.\n\n```json:metadata\n{\"files\": [\"scripts/build-recovery-tools.sh\", \"zip/update-tools.sh\"], \"verifyCommand\": \"bash scripts/build-recovery-zip.sh --mode profile\", \"acceptanceCriteria\": [\"build-recovery-tools.sh builds mode2-profile aarch64\", \"update-tools.sh vendors mode2-profile + mode-2.efi + MANIFEST\", \"build-recovery-zip.sh --mode profile assembles the ZIP with the new artifacts; skew checks pass\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-05-19T00:00:00Z"
+}
