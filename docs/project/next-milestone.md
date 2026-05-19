@@ -1,6 +1,6 @@
 # Next milestone
 
-Milestone marker: **companion module/tooling suite + mode taxonomy cleanup**.
+Milestone marker: **release hardening for ZIP delivery and mode-2 profile lifecycle.**
 
 ## Objectives kept for this milestone
 
@@ -47,8 +47,8 @@ Goal: turn mode-2 from mechanism into a maintainable profile-driven flow.
 
 Deliverables:
 
-- Decide and document the parked profile format and naming convention; current placeholder: `/sdcard/gbl-chainload_profile.xml`.
-- Build/populate the profile from `/sdcard/stock_vbmeta.img` when the profile does not already exist.
+- Use the parked TOML profile convention: `/sdcard/gbl-chainload_profile.toml`.
+- Build/populate the profile TOML from `/sdcard/stock_vbmeta.img` when the profile does not already exist.
 - Produce a separate mode-2 ZIP that layers on top of the cache-ABL work rather than replacing it.
 - Keep cache-ABL support in mode-2 builds.
 - Provide profile validation and clear stale/missing-profile errors.
@@ -85,6 +85,6 @@ Acceptance:
 2. Cache-ABL static payload design and `--cache-abl` build flag.
 3. gbl-chainload ZIP flow that uses `/sdcard/backup_abl.img` as the stable fallback convention.
 4. Recovery graft ZIP, because the preferred OTA path is custom recovery OTA flash followed by gbl-chainload ZIP and recovery-graft ZIP.
-5. Mode-2 ZIP/profile flow layered on top of cache-ABL, using `/sdcard/gbl-chainload_profile.xml` and `/sdcard/stock_vbmeta.img` conventions unless superseded by implementation evidence.
+5. Mode-2 ZIP/profile flow layered on top of cache-ABL, using `/sdcard/gbl-chainload_profile.toml` and `/sdcard/stock_vbmeta.img` conventions unless superseded by implementation evidence.
 
 Each item should land as one or more feature branches with PRs against `main`.

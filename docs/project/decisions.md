@@ -75,7 +75,7 @@ Decision: mode-2 should be a separate ZIP layered on top of cache-ABL work.
 
 Conventions to validate during implementation:
 
-- Park profile at `/sdcard/gbl-chainload_profile.xml`.
+- Park profile at `/sdcard/gbl-chainload_profile.toml`.
 - If no profile exists, build/populate it from `/sdcard/stock_vbmeta.img`.
 - Keep cache-ABL support in mode-2 builds.
 

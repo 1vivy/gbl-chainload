@@ -4,11 +4,15 @@ EFI System Partition (EFISP) chainloader for OnePlus/Oppo devices using Qualcomm
 
 ## Status
 
-v2 shim is usable for mode-0 and mode-1. Project documentation, reverse-engineering findings, and the current milestone marker live in [`docs/project/`](docs/project/).
+Release readiness is tracked in [`docs/project/release-checklist.md`](docs/project/release-checklist.md). Project documentation, reverse-engineering findings, and milestone notes live in [`docs/project/`](docs/project/).
 
-Working artifacts: `dist/mode-0.efi` (unlocked observation + universal preservation build) and `dist/mode-1.efi` (protocol-hook fakelock via `QCOM_VERIFIEDBOOT_PROTOCOL` mutation; KM/Oplus see locked/green when stock images verify cleanly).
+Working EFI artifacts:
 
-Mode-1 supports the "stock recovery + custom system" use case by default. Custom recovery + normal boot requires a disk-side graft of stock vbmeta — see [`docs/project/next-milestone.md`](docs/project/next-milestone.md). Both a host script and a device-side companion module remain next-milestone work; neither ships today.
+- `dist/mode-0.efi` — unlocked observation + universal preservation build.
+- `dist/mode-1.efi` — protocol-hook fakelock via `QCOM_VERIFIEDBOOT_PROTOCOL` mutation; KM/Oplus see locked/green when stock images verify cleanly.
+- `dist/mode-2.efi` — TA-payload spoof mechanism for custom-ROM mode. Release use also needs a matching mode-2 profile overlay.
+
+Recovery ZIP packaging is assembled from the `zip/` submodule with `scripts/build-recovery-zip.sh`. The diagnostic ZIP is safe/no-write; installer, graft, and profile ZIP release status is called out in the release checklist rather than implied by the build command alone.
 
 ## Modes
 
@@ -23,6 +27,33 @@ Mode-1 supports the "stock recovery + custom system" use case by default. Custom
 ./scripts/build.sh --mode 1               # fakelock production silent
 ./scripts/build.sh --mode 1 --auto --debug --verbose   # fakelock dev capture
 ./scripts/build.sh --mode 2               # TA-payload spoof (custom-ROM mode)
+```
+
+Mode-2 profile helper:
+
+```bash
+AVBTOOL=/path/to/avbtool.py \
+  python3 tools/mode2-profile/mode2-profile.py derive stock_vbmeta.img -o profile.toml
+python3 tools/mode2-profile/mode2-profile.py compile profile.toml -o profile.bin
+```
+
+Staged mode-2 test overlay:
+
+```bash
+scripts/make-mode2-test-overlay.sh [stock-vbmeta.img]
+```
+
+Recovery ZIP assembly:
+
+```bash
+git submodule update --init --recursive
+scripts/build-recovery-zip.sh --mode diag
+```
+
+Run host validation with:
+
+```bash
+bash tests/runall.sh
 ```
 
 ## Logging
@@ -103,7 +134,7 @@ Fastboot screen additions:
 - `Enable OEM unlock` menu action.
 - `Escape` menu action.
 
-There is also an untested `Boot ESP` menu option intended for directly booting operating systems from USB.
+`Boot ESP` is an experimental menu option for directly booting operating systems from USB. It is not part of the release validation surface.
 
 ## Mode-0 reserve preservation test plan
 

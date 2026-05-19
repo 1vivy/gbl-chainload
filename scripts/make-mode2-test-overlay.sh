@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # scripts/make-mode2-test-overlay.sh — build a staged-bootable mode-2 test EFI.
 #
-# Pipeline: build mode-2 EFI -> derive profile XML from a stock vbmeta ->
+# Pipeline: build mode-2 EFI -> derive profile TOML from a stock vbmeta ->
 # compile to a 120-byte binary -> gbl-pack into a GBLP1 0x0010 overlay ->
 # concatenate onto dist/mode-2-debug-verbose.efi -> dist/mode-2-test.efi
 #
@@ -33,10 +33,10 @@ echo "==> Building mode-2 EFI"
 [ -f "$BUILT_EFI" ] || { echo "error: build did not produce $BUILT_EFI" >&2; exit 1; }
 
 echo "==> Deriving profile from $VBMETA"
-AVBTOOL="$AVBTOOL" python3 "$M2P" derive "$VBMETA" -o "$OUT/profile.xml"
+AVBTOOL="$AVBTOOL" python3 "$M2P" derive "$VBMETA" -o "$OUT/profile.toml"
 
 echo "==> Compiling profile"
-python3 "$M2P" compile "$OUT/profile.xml" -o "$OUT/profile.bin"
+python3 "$M2P" compile "$OUT/profile.toml" -o "$OUT/profile.bin"
 
 echo "==> Packing GBLP1 0x0010 overlay"
 tools/gbl-pack/gbl-pack --mode2-profile "$OUT/profile.bin" --out "$OUT/overlay.bin"
