@@ -58,10 +58,19 @@ rm -rf "$STAGE/update-tools.sh" "$STAGE/README.md"
 find "$STAGE" -mindepth 1 -name '.*' -prune -exec rm -rf {} +
 
 echo "$MODE" > "$STAGE/modes/SELECTED"
+
+# read the selected mode's declared artifact needs (MODE_TOOLS / MODE_EFI for
+# the bin/ + base/ prune below; MODE_LIB for the modes/ prune just after).
+MODE_TOOLS=""; MODE_EFI=""; MODE_LIB=""
+# shellcheck disable=SC1090
+. "$SUB/modes/$MODE.conf"
+
 # Prune the non-selected modes. A real mode is a <name>.sh + <name>.conf pair.
 # A .sh with no sibling .conf is a shared mode lib (e.g. install-common.sh,
 # which the three mode-N-install modes source): keep it only when the selected
-# mode's .sh actually sources it, so diag/graft ZIPs do not gain dead libs.
+# mode's .conf declares it as MODE_LIB, so diag/graft ZIPs do not gain dead
+# libs. This is declarative (parallel to MODE_TOOLS/MODE_EFI) rather than
+# grepping the mode's script source for a source-path string.
 # Mode stems are enumerated up front (a real mode = a .conf file), before any
 # deletion, so removing mode X's .conf does not hide mode Y's pairing.
 MODE_STEMS=""
@@ -77,19 +86,13 @@ for f in "$STAGE"/modes/*.conf "$STAGE"/modes/*.sh; do
     *.sh) case " $MODE_STEMS " in
             *" $m "*) ;;          # a paired mode script - removable
             *)                    # no sibling .conf: a shared mode lib -
-                                  # keep only if the selected mode sources it
-              grep -q "modes/$b" "$STAGE/modes/$MODE.sh" 2>/dev/null \
-                && continue
+                                  # keep only if the selected mode declares it
+              [ "$b" = "$MODE_LIB" ] && continue
               ;;
           esac ;;
   esac
   rm -f "$f"
 done
-
-# read the selected mode's declared artifact needs
-MODE_TOOLS=""; MODE_EFI=""
-# shellcheck disable=SC1090
-. "$SUB/modes/$MODE.conf"
 
 # prune bin/: keep MANIFEST (shipped for on-device provenance) and
 # busybox-arm64 (core infrastructure, always bundled - not a per-mode
