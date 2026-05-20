@@ -52,7 +52,12 @@ typedef enum {
 EFI_STATUS EFIAPI AvbParse_Footer (IN CONST UINT8 *Partition, IN UINT64 PartitionSize, OUT GBL_AVB_FOOTER *FooterOut);
 EFI_STATUS EFIAPI AvbParse_VbmetaHeader (IN CONST UINT8 *Vbmeta, IN UINT64 VbmetaSize, OUT GBL_AVB_VBMETA_HEADER *HeaderOut);
 EFI_STATUS EFIAPI AvbParse_NextDescriptor (IN CONST UINT8 *AuxBlock, IN UINT64 AuxSize, IN OUT UINT64 *Cursor, OUT GBL_AVB_DESCRIPTOR_TAG *TagOut, OUT CONST UINT8 **DescriptorOut, OUT UINT64 *DescriptorLenOut);
-EFI_STATUS EFIAPI AvbParse_HashDescriptor (IN CONST UINT8 *Descriptor, IN UINT64 DescriptorLen, OUT CONST UINT8 **PartitionNameOut, OUT UINT32 *PartitionNameLenOut, OUT CONST UINT8 **DigestOut, OUT UINT32 *DigestLenOut);
+EFI_STATUS EFIAPI AvbParse_HashDescriptor (
+  IN CONST UINT8   *Descriptor, IN UINT64 DescriptorLen,
+  OUT CONST UINT8 **PartitionNameOut, OUT UINT32 *PartitionNameLenOut,
+  OUT CONST UINT8 **DigestOut, OUT UINT32 *DigestLenOut,
+  OUT CONST UINT8 **SaltOut OPTIONAL, OUT UINT32 *SaltLenOut OPTIONAL,
+  OUT UINT64       *ImageSizeOut OPTIONAL);
 EFI_STATUS EFIAPI AvbParse_ChainPartitionDescriptor (IN CONST UINT8 *Descriptor, IN UINT64 DescriptorLen, OUT CONST UINT8 **PartitionNameOut, OUT UINT32 *PartitionNameLenOut, OUT CONST UINT8 **PublicKeyOut, OUT UINT32 *PublicKeyLenOut);
 
 #endif

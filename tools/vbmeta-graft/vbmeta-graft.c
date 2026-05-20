@@ -182,7 +182,8 @@ static void list_cb(GBL_AVB_DESCRIPTOR_TAG tag, const uint8_t *desc,
     kind = "hash";
     const uint8_t *digest;
     uint32_t digest_len;
-    AvbParse_HashDescriptor(desc, desc_len, &name, &name_len, &digest, &digest_len);
+    AvbParse_HashDescriptor(desc, desc_len, &name, &name_len, &digest, &digest_len,
+                            NULL, NULL, NULL);
   } else if (tag == GblAvbDescChainPartitionTag) {
     kind = "chain";
     const uint8_t *pk;
@@ -394,8 +395,10 @@ static int cmd_graft(const char *stock_path, const char *custom_path,
  *  72   reserved[60]
  * 132   variable: name || salt || digest
  *
- * AvbParse_HashDescriptor only extracts name and digest; we read image_size
- * and salt manually from the raw descriptor bytes.
+ * TODO(Task 2 migration): AvbParse_HashDescriptor now returns salt and
+ * image_size via optional outs (added in feat(avb): AvbParse_HashDescriptor
+ * — optional salt + image_size outs). Switch this caller to use those outs
+ * and delete the manual offset reads at desc+16 / desc+60 / desc+132+name_len.
  */
 
 /* Derive slot suffix: env GBL_VBMETA_SLOT > tail-match _a/_b on path > "a" */
@@ -493,7 +496,8 @@ static void lh_cb(GBL_AVB_DESCRIPTOR_TAG tag, const uint8_t *desc,
     const uint8_t *digest = NULL;
     uint32_t digest_len = 0;
     if (AvbParse_HashDescriptor(desc, desc_len, &name, &name_len,
-                                &digest, &digest_len) != EFI_SUCCESS)
+                                &digest, &digest_len,
+                                NULL, NULL, NULL) != EFI_SUCCESS)
       return;
 
     /* Read image_size and salt from raw descriptor bytes.

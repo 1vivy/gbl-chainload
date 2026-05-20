@@ -31,6 +31,9 @@ typedef char CHAR8;
 #ifndef CONST
 #define CONST const
 #endif
+#ifndef OPTIONAL
+#define OPTIONAL
+#endif
 typedef int EFI_STATUS;
 #define EFI_SUCCESS              0
 #define EFI_NOT_FOUND            14

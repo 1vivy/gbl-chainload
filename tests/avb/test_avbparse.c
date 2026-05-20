@@ -5,6 +5,7 @@
 
 #define IN
 #define OUT
+#define OPTIONAL
 #define EFIAPI
 #define STATIC static
 #define CONST const
@@ -92,6 +93,11 @@ static void put_u32_be (UINT8 *p, UINT32 v) {
 }
 static void put_u64_be (UINT8 *p, UINT64 v) {
   for (int i = 0; i < 8; ++i) p[i] = (v >> (56 - i*8)) & 0xff;
+}
+static UINT64 get_u64_be (const UINT8 *p) {
+  UINT64 v = 0;
+  for (int i = 0; i < 8; ++i) v = (v << 8) | p[i];
+  return v;
 }
 
 static void make_vbmeta_header (UINT8 *out256,
@@ -265,7 +271,8 @@ static void test_parse_hash_descriptor (void) {
 
   CONST UINT8 *name; UINT32 name_len;
   CONST UINT8 *out_digest; UINT32 out_dlen;
-  EFI_STATUS s = AvbParse_HashDescriptor (desc, dlen, &name, &name_len, &out_digest, &out_dlen);
+  EFI_STATUS s = AvbParse_HashDescriptor (desc, dlen, &name, &name_len, &out_digest, &out_dlen,
+                                          NULL, NULL, NULL);
   assert (s == EFI_SUCCESS);
   assert (name_len == 9);
   assert (memcmp (name, "init_boot", 9) == 0);
@@ -328,9 +335,60 @@ static void test_parse_hash_descriptor_truncated_body (void) {
 
   CONST UINT8 *name; UINT32 name_len;
   CONST UINT8 *out_digest; UINT32 out_dlen;
-  EFI_STATUS s = AvbParse_HashDescriptor (desc, 100, &name, &name_len, &out_digest, &out_dlen);
+  EFI_STATUS s = AvbParse_HashDescriptor (desc, 100, &name, &name_len, &out_digest, &out_dlen,
+                                          NULL, NULL, NULL);
   assert (s == EFI_INVALID_PARAMETER);
   printf ("ok test_parse_hash_descriptor_truncated_body\n");
+}
+
+static void test_parse_hash_descriptor_with_optional_outs (void) {
+  UINT8 desc[256];
+  memset (desc, 0, sizeof (desc));
+  UINT8 digest[32]; memset (digest, 0xAB, 32);
+  UINT8 salt_bytes[8] = { 0x53, 0x41, 0x4c, 0x54, 0x21, 0x21, 0x21, 0x21 };
+  UINT64 dlen = build_hash_descriptor (desc, "init_boot", digest, 32);
+  /* Patch salt + image_size onto build_hash_descriptor's output.
+     Existing layout has name @ 132..132+9 then digest at 132+9..132+9+32 with
+     salt_len=0. Insert 8 bytes of salt between name and digest. */
+  put_u32_be (desc + 60, 8);                       /* salt_len = 8 */
+  put_u64_be (desc + 16, 0xC0FFEE0000000123ULL);   /* image_size */
+  memmove (desc + 132 + 9 + 8, desc + 132 + 9, 32); /* shift digest right */
+  memcpy (desc + 132 + 9, salt_bytes, 8);
+  /* Bump num_bytes_following (header u64 BE @ +8) by 8 for the inserted salt. */
+  put_u64_be (desc + 8, get_u64_be (desc + 8) + 8);
+  dlen += 8;
+
+  CONST UINT8 *name; UINT32 name_len;
+  CONST UINT8 *out_digest; UINT32 out_dlen;
+  CONST UINT8 *out_salt; UINT32 out_salt_len;
+  UINT64 out_image_size;
+  EFI_STATUS s = AvbParse_HashDescriptor (desc, dlen,
+                                          &name, &name_len,
+                                          &out_digest, &out_dlen,
+                                          &out_salt, &out_salt_len,
+                                          &out_image_size);
+  assert (s == EFI_SUCCESS);
+  assert (name_len == 9);
+  assert (out_dlen == 32);
+  assert (out_salt_len == 8);
+  assert (memcmp (out_salt, salt_bytes, 8) == 0);
+  assert (out_image_size == 0xC0FFEE0000000123ULL);
+  assert (memcmp (out_digest, digest, 32) == 0);
+  printf ("ok test_parse_hash_descriptor_with_optional_outs\n");
+
+  /* NULL-passthrough: same call with optional outs NULL must succeed and
+     leave the required outs correct. */
+  CONST UINT8 *name2; UINT32 name_len2;
+  CONST UINT8 *digest2; UINT32 dlen2;
+  s = AvbParse_HashDescriptor (desc, dlen,
+                               &name2, &name_len2, &digest2, &dlen2,
+                               NULL, NULL, NULL);
+  assert (s == EFI_SUCCESS);
+  assert (name_len2 == 9);
+  assert (dlen2 == 32);
+  assert (memcmp (digest2, digest, 32) == 0);
+  assert (digest2 == out_digest);
+  printf ("ok test_parse_hash_descriptor_with_optional_outs (NULL passthrough)\n");
 }
 
 int main (void) {
@@ -346,6 +404,7 @@ int main (void) {
   test_descriptor_iter_truncated_trailer ();
   test_descriptor_iter_nbf_exceeds_aux ();
   test_parse_hash_descriptor_truncated_body ();
+  test_parse_hash_descriptor_with_optional_outs ();
   printf ("ALL PASS\n");
   return 0;
 }
