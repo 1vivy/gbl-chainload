@@ -7,7 +7,7 @@ fv-unwrap: fv-unwrap.c
 
 clean:
 	rm -f fv-unwrap fv-unwrap-android fv-unwrap.exe \
-	      fv-unwrap-macos-x64 fv-unwrap-macos-arm64 *.o
+	      fv-unwrap-macos-x64 fv-unwrap-macos-arm64 fv-unwrap-linux *.o
 
 # --- Android cross-compile target (NDK r27) ---
 # Links the static liblzma cross-compiled by docker/Dockerfile into
@@ -34,6 +34,7 @@ XCFLAGS = -O2 -Wall -Wextra -std=c11
 windows:     fv-unwrap.exe
 macos-x64:   fv-unwrap-macos-x64
 macos-arm64: fv-unwrap-macos-arm64
+linux:       fv-unwrap-linux
 
 fv-unwrap.exe: fv-unwrap.c $(LIBLZMA_WINDOWS)/lib/liblzma.a
 	zig cc -target x86_64-windows-gnu $(XCFLAGS) \
@@ -49,6 +50,11 @@ fv-unwrap-macos-arm64: fv-unwrap.c $(LIBLZMA_MACOS_ARM64)/lib/liblzma.a
 	zig cc -target aarch64-macos $(XCFLAGS) \
 	    -I$(LIBLZMA_MACOS_ARM64)/include -o $@ \
 	    fv-unwrap.c $(LIBLZMA_MACOS_ARM64)/lib/liblzma.a
+
+fv-unwrap-linux: fv-unwrap.c $(LIBLZMA_LINUX)/lib/liblzma.a
+	zig cc -target x86_64-linux-musl $(XCFLAGS) -static \
+	    -I$(LIBLZMA_LINUX)/include -o $@ \
+	    fv-unwrap.c $(LIBLZMA_LINUX)/lib/liblzma.a
 
 # Project version (single source of truth: top-level VERSION file).
 GBL_TOOL_VERSION := $(shell tr -d '[:space:]' < $(dir $(lastword $(MAKEFILE_LIST)))../../VERSION)

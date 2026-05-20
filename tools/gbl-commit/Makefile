@@ -26,7 +26,7 @@ gbl-commit-android: gbl-commit.c $(GPL)/Sha256.c $(GPL)/Internal/Sha256.h
 
 clean:
 	rm -f gbl-commit gbl-commit-android gbl-commit.exe \
-	      gbl-commit-macos-x64 gbl-commit-macos-arm64
+	      gbl-commit-macos-x64 gbl-commit-macos-arm64 gbl-commit-linux
 
 # --- Windows / macOS cross-compile (zig cc) ---
 XCFLAGS = -O2 -Wall -Wextra -Werror -std=c99 -D_FILE_OFFSET_BITS=64 \
@@ -36,6 +36,7 @@ XSRCS   = gbl-commit.c $(GPL)/Sha256.c
 windows:     gbl-commit.exe
 macos-x64:   gbl-commit-macos-x64
 macos-arm64: gbl-commit-macos-arm64
+linux:       gbl-commit-linux
 
 gbl-commit.exe: $(XSRCS)
 	zig cc -target x86_64-windows-gnu $(XCFLAGS) -o $@ $(XSRCS)
@@ -45,6 +46,9 @@ gbl-commit-macos-x64: $(XSRCS)
 
 gbl-commit-macos-arm64: $(XSRCS)
 	zig cc -target aarch64-macos $(XCFLAGS) -o $@ $(XSRCS)
+
+gbl-commit-linux: $(XSRCS)
+	zig cc -target x86_64-linux-musl $(XCFLAGS) -static -o $@ $(XSRCS)
 
 # Project version (single source of truth: top-level VERSION file).
 GBL_TOOL_VERSION := $(shell tr -d '[:space:]' < $(dir $(lastword $(MAKEFILE_LIST)))../../VERSION)

@@ -32,7 +32,7 @@ gbl-pack-android: gbl-pack.c pack.c pack.h ../shared/gblp1.h ../shared/efisp_sca
 
 clean:
 	rm -f gbl-pack gbl-pack-android gbl-pack.exe \
-	      gbl-pack-macos-x64 gbl-pack-macos-arm64 Sha256.o
+	      gbl-pack-macos-x64 gbl-pack-macos-arm64 gbl-pack-linux Sha256.o
 
 # --- Windows / macOS cross-compile (zig cc) ---
 XCFLAGS = -O2 -Wall -Wextra -Werror -std=c99 -DGBL_HOST_BUILD=1 -I$(GPL)
@@ -41,6 +41,7 @@ XSRCS   = gbl-pack.c pack.c $(PARSER_SRCS_NODEP) $(GPL)/Sha256.c
 windows:     gbl-pack.exe
 macos-x64:   gbl-pack-macos-x64
 macos-arm64: gbl-pack-macos-arm64
+linux:       gbl-pack-linux
 
 gbl-pack.exe: $(XSRCS)
 	zig cc -target x86_64-windows-gnu $(XCFLAGS) -o $@ $(XSRCS)
@@ -50,6 +51,9 @@ gbl-pack-macos-x64: $(XSRCS)
 
 gbl-pack-macos-arm64: $(XSRCS)
 	zig cc -target aarch64-macos $(XCFLAGS) -o $@ $(XSRCS)
+
+gbl-pack-linux: $(XSRCS)
+	zig cc -target x86_64-linux-musl $(XCFLAGS) -static -o $@ $(XSRCS)
 
 # Project version (single source of truth: top-level VERSION file).
 GBL_TOOL_VERSION := $(shell tr -d '[:space:]' < $(dir $(lastword $(MAKEFILE_LIST)))../../VERSION)

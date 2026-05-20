@@ -23,7 +23,7 @@ abl-patcher: $(SRCS)
 
 clean:
 	rm -f abl-patcher abl-patcher-android abl-patcher.exe \
-	      abl-patcher-macos-x64 abl-patcher-macos-arm64 *.o
+	      abl-patcher-macos-x64 abl-patcher-macos-arm64 abl-patcher-linux *.o
 
 # --- Windows / macOS cross-compile (zig cc) ---
 XCFLAGS = -O2 -Wall -Wextra -Wno-unused-parameter -std=c11 \
@@ -33,6 +33,7 @@ XCFLAGS = -O2 -Wall -Wextra -Wno-unused-parameter -std=c11 \
 windows:     abl-patcher.exe
 macos-x64:   abl-patcher-macos-x64
 macos-arm64: abl-patcher-macos-arm64
+linux:       abl-patcher-linux
 
 abl-patcher.exe: $(SRCS)
 	zig cc -target x86_64-windows-gnu $(XCFLAGS) $^ -o $@
@@ -42,6 +43,9 @@ abl-patcher-macos-x64: $(SRCS)
 
 abl-patcher-macos-arm64: $(SRCS)
 	zig cc -target aarch64-macos $(XCFLAGS) $^ -o $@
+
+abl-patcher-linux: $(SRCS)
+	zig cc -target x86_64-linux-musl $(XCFLAGS) -static $^ -o $@
 
 # Quick self-check: build and exercise against the infiniti fixture.
 test: abl-patcher

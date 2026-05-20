@@ -25,7 +25,28 @@ gblp1-inspect-android: $(SRCS) $(HDRS)
 	$(NDK_CC) $(NDK_CFLAGS) -o $@ $(SRCS)
 
 clean:
-	rm -f gblp1-inspect gblp1-inspect-android
+	rm -f gblp1-inspect gblp1-inspect-android gblp1-inspect.exe \
+	      gblp1-inspect-macos-x64 gblp1-inspect-macos-arm64 gblp1-inspect-linux
+
+# --- Windows / macOS / Linux cross-compile (zig cc) ---
+XCFLAGS = -O2 -Wall -Wextra -Werror -std=c99 -DGBL_HOST_BUILD=1 -I$(GPL)
+
+windows:     gblp1-inspect.exe
+macos-x64:   gblp1-inspect-macos-x64
+macos-arm64: gblp1-inspect-macos-arm64
+linux:       gblp1-inspect-linux
+
+gblp1-inspect.exe: $(SRCS) $(HDRS)
+	zig cc -target x86_64-windows-gnu $(XCFLAGS) -o $@ $(SRCS)
+
+gblp1-inspect-macos-x64: $(SRCS) $(HDRS)
+	zig cc -target x86_64-macos $(XCFLAGS) -o $@ $(SRCS)
+
+gblp1-inspect-macos-arm64: $(SRCS) $(HDRS)
+	zig cc -target aarch64-macos $(XCFLAGS) -o $@ $(SRCS)
+
+gblp1-inspect-linux: $(SRCS) $(HDRS)
+	zig cc -target x86_64-linux-musl $(XCFLAGS) -static -o $@ $(SRCS)
 
 # Project version (single source of truth: top-level VERSION file).
 GBL_TOOL_VERSION := $(shell tr -d '[:space:]' < $(dir $(lastword $(MAKEFILE_LIST)))../../VERSION)

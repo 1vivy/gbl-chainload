@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# scripts/build-cross-tools.sh — cross-compile the six host-side tools for
-# Windows and/or macOS inside the docker build image. Outputs to
-# dist/windows/ (<tool>.exe) and dist/macos/ (universal <tool>).
+# scripts/build-cross-tools.sh — cross-compile the host-side tools for
+# Windows, macOS, and/or Linux inside the docker build image. Outputs to
+# dist/windows/ (<tool>.exe), dist/macos/ (universal <tool>), and
+# dist/linux/ (static x86_64 ELF <tool>).
 #
-#   build-cross-tools.sh windows | macos | all
+#   build-cross-tools.sh windows | macos | linux | all
 #
 # Sibling of build-recovery-tools.sh (which builds the aarch64 Android
 # tools). dist/ is git-ignored — these binaries are built on demand.
@@ -12,15 +13,15 @@ cd "$(dirname "$0")/.."
 
 OS="${1:-}"
 case "$OS" in
-  windows|macos|all) ;;
-  *) echo "usage: $0 windows|macos|all" >&2; exit 2 ;;
+  windows|macos|linux|all) ;;
+  *) echo "usage: $0 windows|macos|linux|all" >&2; exit 2 ;;
 esac
 
 # WSL/Docker-Desktop credential-helper quirk: an empty DOCKER_CONFIG dir
 # avoids the desktop.exe credstore lookup that fails under WSL.
 export DOCKER_CONFIG="${DOCKER_CONFIG:-$(mktemp -d)}"
 
-TOOLS="fv-unwrap abl-patcher gbl-pack gbl-commit vbmeta-graft mode2-profile"
+TOOLS="fv-unwrap abl-patcher gbl-pack gbl-commit vbmeta-graft mode2-profile gblp1-inspect"
 
 docker run --rm -v "$PWD:/work" -w /work gbl-chainload-build:latest bash -c '
   set -e
@@ -46,9 +47,19 @@ docker run --rm -v "$PWD:/work" -w /work gbl-chainload-build:latest bash -c '
     done
     ( cd dist/macos && sha256sum $TOOLS > SHA256SUMS )
   fi
+  if [ "$OS" = linux ] || [ "$OS" = all ]; then
+    mkdir -p dist/linux
+    for t in $TOOLS; do
+      make -C tools/$t clean
+      make -C tools/$t linux
+      install -Dm755 tools/$t/$t-linux dist/linux/$t
+    done
+    ( cd dist/linux && sha256sum $TOOLS > SHA256SUMS )
+  fi
 '
 
 echo "==> cross-build done"
 [ -d dist/windows ] && ls -la dist/windows
 [ -d dist/macos ]   && ls -la dist/macos
+[ -d dist/linux ]   && ls -la dist/linux
 exit 0

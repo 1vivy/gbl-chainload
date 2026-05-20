@@ -134,7 +134,8 @@ RUN set -eux; \
     for spec in \
         "x86_64-windows-gnu:x86_64-w64-mingw32:/opt/liblzma-windows" \
         "x86_64-macos:x86_64-apple-darwin:/opt/liblzma-macos-x64" \
-        "aarch64-macos:aarch64-apple-darwin:/opt/liblzma-macos-arm64" ; do \
+        "aarch64-macos:aarch64-apple-darwin:/opt/liblzma-macos-arm64" \
+        "x86_64-linux-musl:x86_64-linux-musl:/opt/liblzma-linux" ; do \
       ztgt="${spec%%:*}"; rest="${spec#*:}"; \
       host="${rest%%:*}"; prefix="${rest#*:}"; \
       rc_arg=true; \
@@ -160,6 +161,7 @@ RUN set -eux; \
 ENV LIBLZMA_WINDOWS=/opt/liblzma-windows
 ENV LIBLZMA_MACOS_X64=/opt/liblzma-macos-x64
 ENV LIBLZMA_MACOS_ARM64=/opt/liblzma-macos-arm64
+ENV LIBLZMA_LINUX=/opt/liblzma-linux
 
 # Default to a writable workdir; run --user maps host UID at runtime so
 # bind-mounted outputs are owned by the host user.
