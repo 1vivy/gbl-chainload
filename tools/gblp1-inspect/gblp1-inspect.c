@@ -91,7 +91,7 @@ int main(int argc, char **argv) {
         uint32_t poff    = rle32(e + 4);
         uint32_t psize   = rle32(e + 8);
         const uint8_t *want_sha = e + 16;
-        if (poff + psize > total_size) {
+        if (psize > total_size || poff > total_size - psize) {
             printf("entry: type=0x%04x (%s) offset=0x%x size=%u sha256=OUT_OF_BOUNDS\n",
                    type, type_name(type), poff, psize);
             sha_fail = 1; continue;

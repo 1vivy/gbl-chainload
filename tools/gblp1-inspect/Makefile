@@ -7,7 +7,7 @@ GPL     := $(PROJ)/GblChainloadPkg/Library/GblPayloadLib
 CFLAGS  += -DGBL_HOST_BUILD=1 -I$(GPL)
 
 SRCS    := gblp1-inspect.c $(GPL)/Crc32.c $(GPL)/Sha256.c
-HDRS    := ../shared/gblp1.h $(GPL)/Internal/Sha256.h
+HDRS    := ../shared/gblp1.h $(GPL)/Internal/Sha256.h $(GPL)/Internal/Crc32.h
 
 all: gblp1-inspect
 
