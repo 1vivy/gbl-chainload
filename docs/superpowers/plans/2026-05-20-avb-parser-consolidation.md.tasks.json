@@ -17,14 +17,14 @@
     {
       "id": 3,
       "subject": "Task 3: Migrate mode2-profile.c (host) to AvbParseLib",
-      "status": "in_progress",
+      "status": "completed",
       "blockedBy": [1],
       "description": "**Goal:** Delete ~80 LOC of duplicated AVB parsing in `tools/mode2-profile/mode2-profile.c` in favor of `AvbParse_VbmetaHeader` + `AvbParse_NextDescriptor` from AvbParseLib. TOML output must remain byte-identical to the pre-migration baseline.\n\n**Files:**\n- Modify: `tools/mode2-profile/Makefile`\n- Modify: `tools/mode2-profile/mode2-profile.c`\n- Create: `tools/mode2-profile/tests/regression-fixture.sh`\n\n**Verify:** `cd /home/vivy/gbl-chainload/tools/mode2-profile && bash tests/regression-fixture.sh` → 'PASS: mode2-profile TOML output byte-identical to baseline'.\n\n```json:metadata\n{\"files\": [\"tools/mode2-profile/Makefile\", \"tools/mode2-profile/mode2-profile.c\", \"tools/mode2-profile/tests/regression-fixture.sh\"], \"verifyCommand\": \"cd /home/vivy/gbl-chainload/tools/mode2-profile && bash tests/regression-fixture.sh\", \"acceptanceCriteria\": [\"rbe64 and all AVB_*_OFF macros removed from mode2-profile.c\", \"mode2-profile.c uses AvbParse_VbmetaHeader and AvbParse_NextDescriptor\", \"Makefile builds native + android + windows + macos-x64 + macos-arm64 targets\", \"TOML output byte-identical to pre-migration baseline on a real fixture\"]}\n```"
     },
     {
       "id": 4,
       "subject": "Task 4: Cross-tree verification + audit closure",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [2, 3],
       "description": "**Goal:** Confirm no stragglers — no other code references the removed B implementations, no other host tool reinvents AVB parsing. Open PR.\n\n**Verify:** All four grep audits return expected output (3 empty, 1 limited to libavb tree); all host tests pass; on-device evidence captured in PR.\n\n```json:metadata\n{\"files\": [], \"verifyCommand\": \"cd /home/vivy/gbl-chainload && grep -rn 'rbe64\\\\|put_u64_be\\\\|put_u32_be' tools/ tests/avb/; grep -rn 'AVB_HDR_SIZE\\\\|AVB_AUTH_SIZE_OFF\\\\|AVB_AUX_SIZE_OFF\\\\|AVB_PK_OFF_OFF\\\\|AVB_PK_SIZE_OFF\\\\|AVB_DESC_OFF_OFF\\\\|AVB_DESC_SIZE_OFF' tools/; grep -rn 'STATIC EFI_STATUS AvbParse_' edk2/QcomModulePkg/; grep -rn 'avb_vbmeta_image_verify' edk2/QcomModulePkg/ | grep -v 'Library/avb/libavb/'\", \"acceptanceCriteria\": [\"No literal AVB offsets remain in tools/\", \"No STATIC AvbParse_ remain in edk2/QcomModulePkg/\", \"No external consumer of avb_vbmeta_image_verify outside libavb tree\", \"All host tests pass: test_avbparse, vbmeta-graft, mode2-profile regression\", \"On-device fastboot menu + oem vbmeta-status match pre-change baseline\", \"PR opened against main with structured body\"]}\n```"
     }
