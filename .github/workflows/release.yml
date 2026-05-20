@@ -1,0 +1,213 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (X.Y.Z, no leading v)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      sha: ${{ steps.resolve.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+      - name: Resolve version
+        id: resolve
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            ver="${GITHUB_REF_NAME#v}"
+          else
+            ver="${{ inputs.version }}"
+          fi
+          if [[ ! "$ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::version '$ver' is not X.Y.Z"; exit 1
+          fi
+          file_ver=$(tr -d '[:space:]' < VERSION)
+          if [[ "$ver" != "$file_ver" ]]; then
+            echo "::error::version '$ver' != VERSION '$file_ver'"; exit 1
+          fi
+          echo "version=$ver" >> "$GITHUB_OUTPUT"
+          echo "sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+      - name: Check CHANGELOG section
+        run: |
+          set -euo pipefail
+          ver="${{ steps.resolve.outputs.version }}"
+          if ! grep -E "^## v${ver}( |$)" CHANGELOG.md > /dev/null; then
+            echo "::error::add a '## v${ver}' section to CHANGELOG.md before tagging"
+            exit 1
+          fi
+      - name: Check CI green at this SHA
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          sha="${{ steps.resolve.outputs.sha }}"
+          runs=$(gh api "repos/${{ github.repository }}/actions/workflows/ci.yml/runs?head_sha=${sha}" --jq '.workflow_runs[] | select(.conclusion=="success") | .id' | head -1)
+          if [[ -z "$runs" ]]; then
+            echo "::error::no successful CI run for SHA ${sha}"; exit 1
+          fi
+      - name: MANIFEST drift check
+        run: |
+          set -euo pipefail
+          cd zip && grep -E '^[0-9a-f]{64}  ' bin/MANIFEST | sha256sum -c --status
+
+  prep-image:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/Dockerfile
+          tags: gbl-chainload-build:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          outputs: type=docker,dest=/tmp/image.tar
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build-image
+          path: /tmp/image.tar
+          retention-days: 1
+
+  build-host-tools:
+    needs: [verify, prep-image]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-image
+          path: /tmp
+      - name: Load docker image
+        run: docker load -i /tmp/image.tar
+      - name: Cross-build all platforms
+        run: bash scripts/build-cross-tools.sh all
+      - name: Assemble per-platform tool zips
+        run: |
+          set -euo pipefail
+          ver="${{ needs.verify.outputs.version }}"
+          mkdir -p release-stage
+          for plat in linux windows macos; do
+            stage="release-stage/gbl-chainload-tools-${plat}-v${ver}"
+            mkdir -p "$stage/bin"
+            cp -v dist/${plat}/* "$stage/bin/" 2>/dev/null || true
+            # Move SHA256SUMS up out of bin/ if it was copied there:
+            if [ -f "$stage/bin/SHA256SUMS" ]; then
+              mv "$stage/bin/SHA256SUMS" "$stage/SHA256SUMS"
+            fi
+            cp tools/RELEASE_README.md "$stage/README.md"
+            cp VERSION "$stage/VERSION"
+            cp scripts/efisp-package.py "$stage/"
+            (cd release-stage && zip -r "gbl-chainload-tools-${plat}-v${ver}.zip" "gbl-chainload-tools-${plat}-v${ver}")
+          done
+          ls -la release-stage/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: host-tool-zips
+          path: release-stage/*.zip
+          retention-days: 1
+
+  build-zips:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Build all five installer ZIPs
+        run: |
+          set -euo pipefail
+          ver="${{ needs.verify.outputs.version }}"
+          mkdir -p release-stage
+          for m in diag graft mode-0-install mode-1-install mode-2-install; do
+            bash scripts/build-recovery-zip.sh --mode "$m"
+            mv "dist/gbl-chainload-${m}.zip" "release-stage/gbl-chainload-${m}-v${ver}.zip"
+          done
+          ls -la release-stage/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer-zips
+          path: release-stage/*.zip
+          retention-days: 1
+
+  release:
+    needs: [verify, build-host-tools, build-zips]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: host-tool-zips
+          path: assets
+      - uses: actions/download-artifact@v4
+        with:
+          name: installer-zips
+          path: assets
+      - name: Compute top-level SHA256SUMS
+        run: |
+          cd assets
+          sha256sum *.zip > SHA256SUMS
+          cat SHA256SUMS
+      - name: Build release notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          ver="${{ needs.verify.outputs.version }}"
+          sha="${{ needs.verify.outputs.sha }}"
+          # Extract CHANGELOG prologue between '## v<ver>' and the next '## v':
+          awk -v ver="v${ver}" '
+            $0 ~ "^## " ver "( |$)" { p=1; next }
+            p && /^## v/             { p=0 }
+            p                         { print }
+          ' CHANGELOG.md > prologue.md
+          # Auto-generated PR list:
+          gh api -X POST "repos/${{ github.repository }}/releases/generate-notes" \
+            -f tag_name="v${ver}" \
+            -f target_commitish="${sha}" \
+            --jq .body > autonotes.md
+          {
+            cat prologue.md
+            printf '\n\n---\n\n'
+            cat autonotes.md
+          } > release-notes.md
+          echo "=== release-notes.md ==="
+          cat release-notes.md
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          ver="${{ needs.verify.outputs.version }}"
+          sha="${{ needs.verify.outputs.sha }}"
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            tag_arg="v${ver}"
+          else
+            tag_arg="v${ver} --target ${sha}"
+          fi
+          # shellcheck disable=SC2086
+          gh release create $tag_arg \
+            --draft \
+            --title "gbl-chainload v${ver}" \
+            --notes-file release-notes.md \
+            assets/*.zip assets/SHA256SUMS
