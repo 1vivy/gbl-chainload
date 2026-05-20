@@ -107,17 +107,32 @@ jobs:
           set -euo pipefail
           ver="${{ needs.verify.outputs.version }}"
           mkdir -p release-stage
+          tools="fv-unwrap abl-patcher gbl-pack gbl-commit vbmeta-graft mode2-profile gblp1-inspect"
           for plat in linux windows macos; do
             stage="release-stage/gbl-chainload-tools-${plat}-v${ver}"
             mkdir -p "$stage/bin"
-            cp -v dist/${plat}/* "$stage/bin/" 2>/dev/null || true
-            # Move SHA256SUMS up out of bin/ if it was copied there:
-            if [ -f "$stage/bin/SHA256SUMS" ]; then
-              mv "$stage/bin/SHA256SUMS" "$stage/SHA256SUMS"
-            fi
+            # Copy binaries (drop pre-existing SHA256SUMS — we regenerate below
+            # with bin/-relative paths so `sha256sum -c SHA256SUMS` works from
+            # the bundle root as documented in RELEASE_README.md).
+            find "dist/${plat}" -maxdepth 1 -type f ! -name SHA256SUMS -exec cp {} "$stage/bin/" \;
+            # Fail fast if the expected tools didn't land:
+            for t in $tools; do
+              if [ "$plat" = windows ]; then
+                if [ ! -f "$stage/bin/${t}.exe" ]; then
+                  echo "::error::missing $stage/bin/${t}.exe"; exit 1
+                fi
+              else
+                if [ ! -f "$stage/bin/${t}" ]; then
+                  echo "::error::missing $stage/bin/${t}"; exit 1
+                fi
+              fi
+            done
             cp tools/RELEASE_README.md "$stage/README.md"
             cp VERSION "$stage/VERSION"
             cp scripts/efisp-package.py "$stage/"
+            # Regenerate SHA256SUMS with bin/-relative paths so users can run
+            # `sha256sum -c SHA256SUMS` from the unzipped bundle root.
+            (cd "$stage" && find bin -maxdepth 1 -type f -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
             (cd release-stage && zip -r "gbl-chainload-tools-${plat}-v${ver}.zip" "gbl-chainload-tools-${plat}-v${ver}")
           done
           ls -la release-stage/

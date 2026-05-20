@@ -39,15 +39,25 @@ def _read_version() -> str:
     return "unknown"
 
 
+def _candidates(name: str):
+    """On Windows, also look for <name>.exe — bundles ship platform-suffixed bins."""
+    if os.name == "nt":
+        return (name + ".exe", name)
+    return (name,)
+
+
 def _resolve_tool(name: str, override) -> str:
+    cands = _candidates(name)
     if override:
-        p = os.path.join(override, name)
-        if not os.path.isfile(p):
-            die(f"--bin-dir does not contain '{name}': {p}")
-        return p
-    p = os.path.join(SCRIPT_DIR, "bin", name)
-    if os.path.isfile(p):
-        return p
+        for c in cands:
+            p = os.path.join(override, c)
+            if os.path.isfile(p):
+                return p
+        die(f"--bin-dir does not contain '{name}': {override}")
+    for c in cands:
+        p = os.path.join(SCRIPT_DIR, "bin", c)
+        if os.path.isfile(p):
+            return p
     # In-repo cross-build discovery: dist/<platform>/<tool>
     import platform as _plat
     sys_name = _plat.system().lower()
@@ -56,10 +66,12 @@ def _resolve_tool(name: str, override) -> str:
         # Walk up from SCRIPT_DIR looking for repo root with dist/<plat>/
         d = SCRIPT_DIR
         for _ in range(4):  # at most 4 levels up
-            cand = os.path.join(d, "dist", plat_dir, name)
-            if os.path.isfile(cand):
-                return cand
+            for c in cands:
+                cand = os.path.join(d, "dist", plat_dir, c)
+                if os.path.isfile(cand):
+                    return cand
             d = os.path.dirname(d)
+    # PATH lookup honors PATHEXT on Windows automatically via shutil.which.
     p = shutil.which(name)
     if not p:
         die(f"tool '{name}' not found in --bin-dir or {SCRIPT_DIR}/bin or $PATH")
