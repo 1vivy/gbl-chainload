@@ -1,0 +1,67 @@
+{
+  "planPath": "docs/superpowers/plans/2026-05-20-release-workflow.md",
+  "tasks": [
+    {
+      "id": 13,
+      "subject": "Task 1: VERSION file + build pipeline + Entry.c remnant",
+      "status": "pending",
+      "description": "**Goal:** Plumb a top-level `VERSION` file through the EDK II build so every `.c` compiled by `GblChainloadPkg.dsc` sees `GBL_CHAINLOAD_VERSION`. Remove the .dsc `2.0` default and Entry.c `v2` fallback.\n\n**Files:** VERSION (new), scripts/build.sh, scripts/build-inside-docker.sh, GblChainloadPkg/GblChainloadPkg.dsc, GblChainloadPkg/Application/GblChainload/Entry.c\n\n**Verify:** echo 2.2.0 > VERSION && bash scripts/build.sh --mode 0 && strings dist/mode-0.efi | grep -cF 2.2.0\n\n```json:metadata\n{\"files\": [\"VERSION\", \"scripts/build.sh\", \"scripts/build-inside-docker.sh\", \"GblChainloadPkg/GblChainloadPkg.dsc\", \"GblChainloadPkg/Application/GblChainload/Entry.c\"], \"verifyCommand\": \"echo 2.2.0 > VERSION && bash scripts/build.sh --mode 0 && strings dist/mode-0.efi | grep -cF 2.2.0\", \"acceptanceCriteria\": [\"VERSION file at repo root contains 2.2.0\", \"scripts/build.sh --mode 0 succeeds\", \"strings of dist/mode-0.efi contains 2.2.0 at least once\", \"GblChainloadPkg.dsc has no DEFINE GBL_CHAINLOAD_VERSION line\", \"Entry.c uses #error not v2 fallback\"]}\n```"
+    },
+    {
+      "id": 14,
+      "subject": "Task 2: Fastboot menu row + getvar (edk2 fork)",
+      "status": "pending",
+      "blockedBy": [13],
+      "description": "**Goal:** Add VERSION row to fastboot menu and gbl-chainload_version getvar. Both linked into our chainloaded EFI from the edk2 fork.\n\n**Files:** edk2/QcomModulePkg/Library/BootLib/FastbootMenu.c, edk2/QcomModulePkg/Library/FastbootLib/FastbootCmds.c\n\n**Verify:** bash scripts/build.sh --mode 0 && strings dist/mode-0.efi | grep -E '^(VERSION - 2\\.2\\.0|gbl-chainload_version)$' | sort -u | wc -l → 2\n\n```json:metadata\n{\"files\": [\"edk2/QcomModulePkg/Library/BootLib/FastbootMenu.c\", \"edk2/QcomModulePkg/Library/FastbootLib/FastbootCmds.c\"], \"verifyCommand\": \"bash scripts/build.sh --mode 0 && [[ $(strings dist/mode-0.efi | grep -E '^(VERSION - 2\\\\.2\\\\.0|gbl-chainload_version)$' | sort -u | wc -l) -eq 2 ]]\", \"acceptanceCriteria\": [\"FastbootMenu.c declares new VERSION row after MODE row\", \"FastbootCmds.c publishes gbl-chainload_version getvar\", \"rebuilt mode-0.efi contains both literals\"]}\n```"
+    },
+    {
+      "id": 15,
+      "subject": "Task 3: Host tools — --version + Makefile wiring + gbl-pack remnant",
+      "status": "pending",
+      "blockedBy": [13],
+      "description": "**USER-ORDERED GATE — NON-SKIPPABLE.** This task was requested by the user in the current conversation. MUST NOT be closed by walking around it. Close only after every acceptance criterion has been re-validated independently with output captured.\n\n**Goal:** Each of seven host tools accepts --version, prints VERSION, exits 0. gbl-pack 1.0.0 hardcode removed. No project-version remnant survives outside protocol/schema/Android-domain.\n\n**Files:** Makefile + .c for each of fv-unwrap, abl-patcher, gbl-pack, gbl-commit, vbmeta-graft, mode2-profile, gblp1-inspect\n\n**Verify:** bash scripts/build-recovery-tools.sh; for each tool, ./dist/recovery/$t --version | grep -qF $(cat VERSION); remnant grep returns zero.\n\n```json:metadata\n{\"files\": [\"tools/fv-unwrap/Makefile\", \"tools/fv-unwrap/fv-unwrap.c\", \"tools/abl-patcher/Makefile\", \"tools/abl-patcher/abl-patcher.c\", \"tools/gbl-pack/Makefile\", \"tools/gbl-pack/gbl-pack.c\", \"tools/gbl-commit/Makefile\", \"tools/gbl-commit/gbl-commit.c\", \"tools/vbmeta-graft/Makefile\", \"tools/vbmeta-graft/vbmeta-graft.c\", \"tools/mode2-profile/Makefile\", \"tools/mode2-profile/mode2-profile.c\", \"tools/gblp1-inspect/Makefile\", \"tools/gblp1-inspect/gblp1-inspect.c\"], \"verifyCommand\": \"bash scripts/build-recovery-tools.sh && for t in fv-unwrap abl-patcher gbl-pack gbl-commit vbmeta-graft mode2-profile gblp1-inspect; do out=$(./dist/recovery/$t --version 2>&1 || true); printf '%s' \\\"$out\\\" | grep -qF \\\"$(cat VERSION)\\\" || exit 1; done && ! grep -rn -E '\\\"gbl-pack 1\\\\.0\\\\.0\\\"|\\\"v2\\\"' --include='*.c' --include='*.h' --exclude-dir=edk2 --exclude-dir=Build .\", \"acceptanceCriteria\": [\"every tool Makefile sources GBL_TOOL_VERSION from VERSION\", \"every tool main() handles --version printing VERSION and exiting 0\", \"gbl-pack.c packer_version uses macro, no literal 1.0.0\", \"remnant grep returns zero non-edk2/non-Build matches\", \"all seven binaries print VERSION at --version\"], \"userGate\": true, \"tags\": [\"user-gate\"]}\n```"
+    },
+    {
+      "id": 16,
+      "subject": "Task 4: build-cross-tools.sh — add Linux x86_64 target",
+      "status": "pending",
+      "blockedBy": [15],
+      "description": "**Goal:** Extend zig-based cross-build with linux target; static x86_64. `all` becomes win+macos+linux.\n\n**Files:** scripts/build-cross-tools.sh + each tool Makefile (add `linux:` target)\n\n**Verify:** bash scripts/build-cross-tools.sh linux && file dist/linux/fv-unwrap | grep 'ELF 64-bit.*x86_64.*statically' && ./dist/linux/fv-unwrap --version | grep -qF $(cat VERSION)\n\n```json:metadata\n{\"files\": [\"scripts/build-cross-tools.sh\", \"tools/fv-unwrap/Makefile\", \"tools/abl-patcher/Makefile\", \"tools/gbl-pack/Makefile\", \"tools/gbl-commit/Makefile\", \"tools/vbmeta-graft/Makefile\", \"tools/mode2-profile/Makefile\", \"tools/gblp1-inspect/Makefile\"], \"verifyCommand\": \"bash scripts/build-cross-tools.sh linux && file dist/linux/fv-unwrap | grep -q 'ELF 64-bit.*x86_64.*statically linked' && ./dist/linux/fv-unwrap --version | grep -qF \\\"$(cat VERSION)\\\"\", \"acceptanceCriteria\": [\"dist/linux populated with 7 binaries plus SHA256SUMS\", \"binaries are static x86_64 ELF\", \"all target builds win+macos+linux\", \"fv-unwrap --version prints VERSION on ubuntu-latest\"]}\n```"
+    },
+    {
+      "id": 17,
+      "subject": "Task 5: efisp-package.py — --bin-dir, --version, script-dir fallback",
+      "status": "pending",
+      "blockedBy": [13],
+      "description": "**Goal:** efisp-package.py self-contained inside unzipped bundle. Adjacent bin/ + VERSION found via script_dir.\n\n**Files:** scripts/efisp-package.py\n\n**Verify:** python3 scripts/efisp-package.py --version | grep -qF $(cat VERSION); tmp-dir test also works.\n\n```json:metadata\n{\"files\": [\"scripts/efisp-package.py\"], \"verifyCommand\": \"python3 scripts/efisp-package.py --version | grep -qF \\\"$(cat VERSION)\\\"\", \"acceptanceCriteria\": [\"--version prints VERSION file contents\", \"--bin-dir overrides tool resolution\", \"script-adjacent bin/ wins over PATH when --bin-dir absent\", \"PATH fallback when no adjacent bin/\"]}\n```"
+    },
+    {
+      "id": 18,
+      "subject": "Task 6: build-recovery-zip.sh + update-binary — VERSION substitution",
+      "status": "pending",
+      "blockedBy": [13],
+      "description": "**Goal:** Installer ZIPs greet user with `gbl-chainload v<VER>` via ui_print. build-recovery-zip.sh substitutes __GBL_VERSION__ placeholder in staged update-binary.\n\n**Files:** scripts/build-recovery-zip.sh, zip/META-INF/com/google/android/update-binary (zip submodule).\n\n**Verify:** All 5 modes' ZIPs contain `gbl-chainload v<VER>` and no `__GBL_VERSION__`.\n\nNote: zip submodule main push needs user authorization.\n\n```json:metadata\n{\"files\": [\"scripts/build-recovery-zip.sh\", \"zip/META-INF/com/google/android/update-binary\"], \"verifyCommand\": \"for m in diag graft mode-0-install mode-1-install mode-2-install; do bash scripts/build-recovery-zip.sh --mode \\\"$m\\\"; unzip -p dist/gbl-chainload-${m}.zip META-INF/com/google/android/update-binary | grep -qF \\\"gbl-chainload v$(cat VERSION)\\\" || exit 1; ! unzip -p dist/gbl-chainload-${m}.zip META-INF/com/google/android/update-binary | grep -q '__GBL_VERSION__' || exit 1; done\", \"acceptanceCriteria\": [\"update-binary contains __GBL_VERSION__ placeholder once\", \"build-recovery-zip.sh substitutes placeholder in staged file\", \"all five ZIPs carry gbl-chainload v<VERSION> ui_print line\", \"no ZIP leaks the unsubstituted placeholder\"]}\n```"
+    },
+    {
+      "id": 19,
+      "subject": "Task 7: Static release-time files — RELEASE_README + .github/release.yml + CHANGELOG",
+      "status": "pending",
+      "description": "**Goal:** Three hand-curated text files the release workflow consumes.\n\n**Files:** tools/RELEASE_README.md (new), .github/release.yml (new), CHANGELOG.md (new).\n\n**Verify:** RELEASE_README ≥30 lines; release.yml valid YAML; CHANGELOG has ^## v2.2.0 section.\n\n```json:metadata\n{\"files\": [\"tools/RELEASE_README.md\", \".github/release.yml\", \"CHANGELOG.md\"], \"verifyCommand\": \"test -f tools/RELEASE_README.md && [[ $(wc -l < tools/RELEASE_README.md) -ge 30 ]] && python3 -c 'import yaml; yaml.safe_load(open(\\\".github/release.yml\\\"))' && grep -E '^## v2\\\\.2\\\\.0' CHANGELOG.md\", \"acceptanceCriteria\": [\"RELEASE_README has per-tool table and verify command\", \"release.yml valid YAML with four categories\", \"CHANGELOG has v2.2.0 section\"]}\n```"
+    },
+    {
+      "id": 20,
+      "subject": "Task 8: .github/workflows/release.yml — the workflow",
+      "status": "pending",
+      "blockedBy": [16, 17, 18, 19],
+      "description": "**Goal:** Complete release workflow per spec §3 — 5 jobs (verify, prep-image, build-host-tools, build-zips, release). Triggers on tag v* and workflow_dispatch.\n\n**Files:** .github/workflows/release.yml\n\n**Verify:** YAML parses; job set exactly matches the five; actionlint clean if installed.\n\n```json:metadata\n{\"files\": [\".github/workflows/release.yml\"], \"verifyCommand\": \"python3 -c 'import yaml; wf = yaml.safe_load(open(\\\".github/workflows/release.yml\\\")); assert set(wf[\\\"jobs\\\"]) == {\\\"verify\\\", \\\"prep-image\\\", \\\"build-host-tools\\\", \\\"build-zips\\\", \\\"release\\\"}, wf[\\\"jobs\\\"]'\", \"acceptanceCriteria\": [\"YAML parses\", \"actionlint clean if installed\", \"five jobs with correct needs graph\", \"verify enforces 5 gates\", \"prep-image uses gha docker cache\", \"build-host-tools produces 3 platform zips with full payload\", \"build-zips produces 5 versioned installer zips\", \"release posts single draft with SHA256SUMS + notes\"]}\n```"
+    },
+    {
+      "id": 21,
+      "subject": "Task 9: End-to-end dispatch smoke test",
+      "status": "pending",
+      "blockedBy": [13, 14, 15, 16, 17, 18, 19, 20],
+      "description": "**Goal:** Trigger release.yml via workflow_dispatch version=2.2.0, watch all jobs green, verify draft release has 9 assets, round-trip sha256sum -c locally.\n\n**Files:** none\n\n**Verify:** gh workflow run → gh run watch --exit-status → gh release view assets count == 9 → download + sha256sum -c OK.\n\n```json:metadata\n{\"files\": [], \"verifyCommand\": \"gh workflow run release.yml -f version=2.2.0 && sleep 10 && run_id=$(gh run list --workflow=release.yml --limit 1 --json databaseId --jq '.[0].databaseId') && gh run watch \\\"$run_id\\\" --exit-status && [[ $(gh release view v2.2.0 --json assets --jq '.assets | length') -eq 9 ]]\", \"acceptanceCriteria\": [\"dispatch run completes success on every job\", \"draft release v2.2.0 exists\", \"exactly 9 assets attached\", \"sha256sum -c verifies all 8 zips\", \"notes contain CHANGELOG prologue and auto What's Changed list\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-05-20T10:00:00Z"
+}
