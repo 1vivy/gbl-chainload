@@ -4,7 +4,7 @@
     {
       "id": 1,
       "subject": "Task 1: Extend UniversalPolicy_ShouldDropScmSip + close mode-2 deferred row",
-      "status": "pending",
+      "status": "completed",
       "description": "See plan docs/superpowers/plans/2026-05-20-universal-tz-rollback-drop.md Task 1. Files: UniversalBaseline.{h,c}, ScmHook.c (log strings only), mode-2 design doc.\n\n```json:metadata\n{\"files\": [\"GblChainloadPkg/Library/ProtocolHookLib/UniversalBaseline.h\", \"GblChainloadPkg/Library/ProtocolHookLib/UniversalBaseline.c\", \"GblChainloadPkg/Library/ProtocolHookLib/ScmHook.c\", \"docs/superpowers/specs/2026-05-17-mode-2-design.md\"], \"verifyCommand\": \"grep -n 'DROP-CANDIDATE' GblChainloadPkg/Library/ProtocolHookLib/ScmHook.c; ./build.sh --mode 1 && ./build.sh --mode 2\", \"acceptanceCriteria\": [\"UniversalPolicy_ShouldDropScmSip handles all 3 SmcIds with EFI_SUCCESS\", \"Each drop emits GBL_INFO 'DROPPED (universal)' line\", \"ScmHook.c free of 'DROP-CANDIDATE(NOT-DROPPED)' substring\", \"Mode-2 spec deferred-audit row closed\", \"build.sh succeeds for mode 1 and mode 2 with no new warnings\"]}\n```"
     },
     {
@@ -15,5 +15,5 @@
       "description": "See plan docs/superpowers/plans/2026-05-20-universal-tz-rollback-drop.md Task 2. USER-ORDERED GATE.\n\n```json:metadata\n{\"files\": [\".re-notes/sessions/2026-05-20-universal-tz-rollback-drop.md\"], \"verifyCommand\": \"cat .re-notes/sessions/2026-05-20-universal-tz-rollback-drop.md\", \"acceptanceCriteria\": [\"DROPPED (universal) log line for 0x32000110 or 0x0200011E observed on-device\", \"Mode-1 boots to lockscreen on infiniti\", \"Mode-2 boots to lockscreen on infiniti with both spoof and drop lines\", \"Keystore exercise post-boot has no KM_ERROR_*\", \"Power-cycle without re-staging keeps /data intact\", \"Evidence file written with PASS verdict\", \"PR opened on PASS\"], \"userGate\": true, \"tags\": [\"user-gate\"], \"gateScope\": \"task\", \"failurePolicy\": \"halt-and-report\"}\n```"
     }
   ],
-  "lastUpdated": "2026-05-20"
+  "lastUpdated": "2026-05-20T02:00:00Z"
 }
