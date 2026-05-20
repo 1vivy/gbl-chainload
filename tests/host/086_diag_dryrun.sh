@@ -46,7 +46,7 @@ run_one() {
     # Core stubs.
     byname() { [ -e "$BYNAME/$1" ] && echo "$BYNAME/$1" || true; }
     abort()   { echo "ABORT: $*" >&2; exit 1; }
-    BOOTMODE() { return 1; }   # always "recovery" in tests
+    export BOOTMODE=false   # always "recovery" in tests
 
     . "$WORKDIR/modes/diag.sh"
     mode_main
@@ -87,7 +87,7 @@ run_one() {
   local tgz_ok=1
   local tgz_listing
   tgz_listing=$(tar -tzf "$bundle.tar.gz" 2>/dev/null)
-  for f in report.txt env.txt efisp.img abl_a.img abl_b.img \
+  for f in report.txt env.txt getprop.boot.txt efisp.img abl_a.img abl_b.img \
             vbmeta_a.img vbmeta_b.img logfs.img \
             gblp1-inspect.txt loader-abl.txt vbmeta-descriptors.txt \
             graft-verdict.txt; do
