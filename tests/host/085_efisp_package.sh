@@ -19,10 +19,11 @@ mkdir -p "$OUT/tools"
 cp tools/fv-unwrap/fv-unwrap tools/abl-patcher/abl-patcher \
    tools/gbl-pack/gbl-pack "$OUT/tools/"
 
-# An fv-unwrap input is a raw ABL partition (LZMA-FV wrapped). Use the
-# first tests/images fixture if present; otherwise the test SKIPs.
-ABL=$(ls tests/images/*.img 2>/dev/null | head -1 || true)
-[ -n "$ABL" ] || { echo "SKIP: 085 — no tests/images/*.img fixture present"; exit 0; }
+# An fv-unwrap input is a raw ABL partition (LZMA-FV wrapped). The
+# tests/images/ dir also holds non-ABL fixtures (grafted-recovery.img,
+# vbmeta-*.img, …), so glob specifically for an *abl*.img.
+ABL=$(ls tests/images/*abl*.img 2>/dev/null | head -1 || true)
+[ -n "$ABL" ] || { echo "SKIP: 085 — no tests/images/*abl*.img fixture present"; exit 0; }
 
 # A throwaway base EFI: efisp-package.py just concatenates it, so any
 # small file with a PE 'MZ' header is enough for the structural check.
