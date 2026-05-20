@@ -49,6 +49,18 @@ SUFFIX=""
 BUILD_NAME="mode-${MODE}${SUFFIX}"
 ARTIFACT="dist/${BUILD_NAME}.efi"
 
+# Read version from top-level VERSION file (single source of truth).
+if [[ ! -f VERSION ]]; then
+  echo "error: VERSION file missing at repo root" >&2
+  exit 1
+fi
+GBL_CHAINLOAD_VERSION="$(head -n1 VERSION | tr -d '[:space:]')"
+if [[ -z "$GBL_CHAINLOAD_VERSION" ]]; then
+  echo "error: VERSION file at $REPO_ROOT/VERSION is empty (after whitespace strip)" >&2
+  exit 1
+fi
+export GBL_CHAINLOAD_VERSION
+
 IMAGE_TAG="gbl-chainload-build:latest"
 
 if command -v docker >/dev/null 2>&1; then
@@ -83,6 +95,7 @@ echo "==> Building $ARTIFACT (mode=$MODE auto=$AUTO debug=$DEBUG verbose=$VERBOS
   -e GBL_DEBUG="$DEBUG" \
   -e GBL_VERBOSE="$VERBOSE" \
   -e GBL_BUILD_NAME="$BUILD_NAME" \
+  -e GBL_CHAINLOAD_VERSION="$GBL_CHAINLOAD_VERSION" \
   "$IMAGE_TAG" \
   bash scripts/build-inside-docker.sh
 

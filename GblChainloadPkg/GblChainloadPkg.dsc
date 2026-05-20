@@ -57,7 +57,6 @@
   DEFINE TARGET_SUPPORTS_EARLY_USB_INIT   = 0
   # BootLib's UpdateCmdLine.c hard-references INIT_BIN; value is cosmetic.
   DEFINE INIT_BIN                         = /init
-  DEFINE GBL_CHAINLOAD_VERSION            = 2.0
 
   # v2 mode flags — overridden at build time via -D from build-inside-docker.sh.
   # These are integer flags, not legacy mode-name strings.

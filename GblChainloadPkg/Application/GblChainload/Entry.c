@@ -37,7 +37,7 @@ EFI_STATUS EFIAPI BootFlowChainLoad (VOID);
 #endif
 
 #ifndef GBL_CHAINLOAD_VERSION
-# define GBL_CHAINLOAD_VERSION "v2"
+#error "GBL_CHAINLOAD_VERSION must be defined by the build (VERSION file)"
 #endif
 
 #define KEY_WINDOW_MS  3000

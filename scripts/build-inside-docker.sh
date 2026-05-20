@@ -18,6 +18,11 @@ GBL_AUTO="${GBL_AUTO:-0}"
 GBL_DEBUG="${GBL_DEBUG:-0}"
 GBL_VERBOSE="${GBL_VERBOSE:-0}"
 
+if [[ -z "${GBL_CHAINLOAD_VERSION:-}" ]]; then
+  echo "error: GBL_CHAINLOAD_VERSION not set (must come from host VERSION file)" >&2
+  exit 1
+fi
+
 # Single-source-of-truth build identifier. Same shape as build.sh's artifact
 # filename so dist/<NAME>.efi and the on-device getvar build-name match. The
 # DSC substitutes this into FastbootCmds (getvar), FastbootMenu (display),
@@ -73,7 +78,8 @@ build \
   -D GBL_AUTO="$GBL_AUTO" \
   -D GBL_DEBUG="$GBL_DEBUG" \
   -D GBL_VERBOSE="$GBL_VERBOSE" \
-  -D GBL_BUILD_NAME="$GBL_BUILD_NAME"
+  -D GBL_BUILD_NAME="$GBL_BUILD_NAME" \
+  -D GBL_CHAINLOAD_VERSION="$GBL_CHAINLOAD_VERSION"
 
 # Verify expected output exists.
 EFI_OUT="Build/GblChainloadPkg/${BUILD_TARGET}_${TOOLCHAIN_TAG}/${ARCH}/GblChainload.efi"
