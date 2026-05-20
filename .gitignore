@@ -16,6 +16,8 @@ tools/vbmeta-graft/vbmeta-graft
 tools/vbmeta-graft/vbmeta-graft-android
 tools/mode2-profile/mode2-profile
 tools/mode2-profile/mode2-profile-android
+tools/gblp1-inspect/gblp1-inspect
+tools/gblp1-inspect/gblp1-inspect-android
 tests/*/test_*
 !tests/*/test_*.c
 !tests/*/test_*.h
