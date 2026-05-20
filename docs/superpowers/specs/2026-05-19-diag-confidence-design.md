@@ -136,21 +136,24 @@ AOSP first-stage init's libavb actually does (see
 Then bucketed per the **per-mode boot-blocker matrix**, derived from
 the actual AVB verify flow:
 
-| Bucket → mode    | `mode-2` | `mode-1` | `mode-0` |
-|------------------|----------|----------|----------|
-| Chain `graft=ok` | fine     | fine     | fine     |
-| Chain `graft=key_mismatch` | tolerated (orange-state) | **blocker** | **blocker** |
-| Chain `graft=no_vbmeta`    | tolerated (orange-state) | **blocker** (init `ok_not_signed`) | **blocker** |
-| Hash `digest=ok`           | fine     | fine     | fine     |
-| Hash `digest=mismatch`     | tolerated (orange-state) | tolerated (`patch10` + init's locked-state skim) | **blocker** |
+| Bucket → mode    | `mode-0` / `mode-2` | `mode-1` |
+|------------------|---------------------|----------|
+| Chain `graft=ok` | fine                | fine     |
+| Chain `graft=key_mismatch` | tolerated (orange-state) | **blocker** |
+| Chain `graft=no_vbmeta`    | tolerated (orange-state) | **blocker** (init `ok_not_signed`) |
+| Hash `digest=ok`           | fine                | fine     |
+| Hash `digest=mismatch`     | tolerated (orange-state) | tolerated (`patch10` + init's locked-state skim) |
 
 Rationale by mode:
 
-- **mode-2** keeps ABL honest (real `is_unlocked=1`), so libavb's
-  `allow_verification_error=true` lets AVB return orange-state on
-  any mismatch and ABL boots regardless. The TA-layer KM rewrite
-  produces a consistent locked attestation downstream. Nothing
-  AVB-related is a boot blocker.
+- **mode-0 and mode-2** both keep ABL honest about the real unlocked
+  state, so libavb's `allow_verification_error=true` lets AVB return
+  orange-state on any mismatch and ABL boots regardless. mode-0 stops
+  there (debug-observation build; no KM rewrite, so attestation will
+  be red); mode-2 additionally rewrites the KM/SPSS RoT payload at
+  the TA boundary for a coherent green attestation downstream.
+  Neither has any AVB-related boot blocker — both collapse to a
+  single "always `none`" UI bucket from diag's point of view.
 - **mode-1** has a libavb patch (`patch10`) that forces ABL-side
   AVB to return success. But AOSP first-stage init runs a fresh
   unpatched libavb instance and re-verifies the on-disk vbmeta;
@@ -160,18 +163,16 @@ Rationale by mode:
   the green/locked DeviceInfo that mode-1 fakes makes init treat
   the descriptor walk as a skim (see
   `docs/project/vbmeta-graft-vs-construct.md` §2b).
-- **mode-0** is stock-equivalent observation; nothing is patched, so
-  every mismatch is a real boot blocker.
 
 UI rendering of the `action req` line:
 
-| `BASE_EFI_MODE` | When clean                           | When dirty                                         |
-|-----------------|---------------------------------------|----------------------------------------------------|
-| `mode-2`        | `none`                                | `none` (always — orange-state tolerates)           |
-| `mode-1`        | `none`                                | `graft <chain-broken list>`                        |
-| `mode-0`        | `none`                                | `graft <chain>; hash <hash>` (one or both)         |
-| unknown         | `none (mode unknown — assumed mode-1)`| `graft <chain> (mode unknown — assumed mode-1)`    |
-| no active vbmeta| `unknown (no active vbmeta)`          | same                                               |
+| `BASE_EFI_MODE`   | When clean                            | When dirty                                         |
+|-------------------|---------------------------------------|----------------------------------------------------|
+| `mode-0`          | `none`                                | `none` (always — orange-state tolerates)           |
+| `mode-2`          | `none`                                | `none` (always — orange-state tolerates)           |
+| `mode-1`          | `none`                                | `graft <chain-broken list>`                        |
+| unknown           | `none (mode unknown — assumed mode-1)`| `graft <chain> (mode unknown — assumed mode-1)`    |
+| no active vbmeta  | `unknown (no active vbmeta)`          | same                                               |
 
 Unknown framing intentionally adopts mode-1 semantics (the most common
 pre-`zip/bin/MANIFEST`-fix install) so the operator gets actionable
