@@ -1,7 +1,10 @@
 /* tools/gblp1-inspect/gblp1-inspect.c — GBLP1 container inspector.
    Locates GBLP1 magic in an image (base-EFI prefix optional), validates
    the header CRC-32, verifies every entry's SHA-256 digest, and emits
-   machine-greppable lines. Exit 0 iff the container is fully valid. */
+   machine-greppable lines. Exit 0 iff the container is fully valid.
+   find_magic skips any magic occurrence whose header is not structurally
+   valid (version==1, header_size==28, flags&1, total_size<=avail, CRC ok)
+   so that embedded string literals in a base-EFI prefix are ignored. */
 #define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,6 +25,15 @@ static int slurp(const char *path, uint8_t **out, size_t *out_size) {
     fclose(f); *out = b; *out_size = (size_t)n; return 0;
 }
 
+static uint16_t rle16(const uint8_t *p) {
+    return (uint16_t)(p[0] | ((uint16_t)p[1] << 8));
+}
+
+static uint32_t rle32(const uint8_t *p) {
+    return (uint32_t)p[0] | ((uint32_t)p[1] << 8)
+         | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+}
+
 static const char *type_name(uint16_t t) {
     switch (t) {
         case GBLP1_TYPE_CACHED_ABL:    return "CACHED_ABL";
@@ -31,22 +43,32 @@ static const char *type_name(uint16_t t) {
     }
 }
 
+/* find_magic — return the offset of the first GBLP1 magic occurrence whose
+   header fields are all structurally valid.  Occurrences that are embedded
+   string constants (e.g. inside a base-EFI prefix) will fail the version /
+   header_size / flags / total_size / CRC checks and are silently skipped. */
 static ssize_t find_magic(const uint8_t *buf, size_t len) {
-    if (len < GBLP1_MAGIC_SIZE) return -1;
-    for (size_t i = 0; i + GBLP1_MAGIC_SIZE <= len; i++) {
-        if (memcmp(buf + i, GBLP1_MAGIC, GBLP1_MAGIC_SIZE) == 0)
-            return (ssize_t)i;
+    if (len < GBLP1_HEADER_SIZE) return -1;
+    for (size_t i = 0; i + GBLP1_HEADER_SIZE <= len; i++) {
+        if (memcmp(buf + i, GBLP1_MAGIC, GBLP1_MAGIC_SIZE) != 0)
+            continue;
+        /* Candidate found — validate header fields before committing. */
+        const uint8_t *h = buf + i;
+        size_t avail = len - i;
+        uint16_t version    = rle16(h + 8);
+        uint16_t hdr_size   = rle16(h + 10);
+        uint32_t flags      = rle32(h + 12);
+        uint32_t total_size = rle32(h + 16);
+        uint32_t hdr_crc    = rle32(h + 24);
+        if (version != GBLP1_VERSION)           continue;
+        if (hdr_size != GBLP1_HEADER_SIZE)      continue;
+        if ((flags & GBLP1_FLAGS_LE) == 0)      continue;
+        if (total_size > avail)                  continue;
+        if (total_size < GBLP1_HEADER_SIZE + GBLP1_FOOTER_SIZE) continue;
+        if (gbl_crc32(h, 24) != hdr_crc)        continue;
+        return (ssize_t)i;
     }
     return -1;
-}
-
-static uint16_t rle16(const uint8_t *p) {
-    return (uint16_t)(p[0] | ((uint16_t)p[1] << 8));
-}
-
-static uint32_t rle32(const uint8_t *p) {
-    return (uint32_t)p[0] | ((uint32_t)p[1] << 8)
-         | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
 }
 
 int main(int argc, char **argv) {
@@ -57,30 +79,13 @@ int main(int argc, char **argv) {
     ssize_t mo = find_magic(buf, blen);
     if (mo < 0) { puts("result: not_a_gblp1"); free(buf); return 1; }
 
+    /* find_magic already validated: version==1, header_size==28, flags&1,
+       total_size<=avail, header_crc32 matches.  Re-read the fields we need
+       for the entry-scan and footer check. */
     const uint8_t *h = buf + mo;
-    size_t avail = blen - (size_t)mo;
-    if (avail < GBLP1_HEADER_SIZE) {
-        puts("result: truncated"); free(buf); return 1;
-    }
     uint16_t version     = rle16(h + 8);
-    uint16_t hdr_size    = rle16(h + 10);
-    uint32_t flags       = rle32(h + 12);
     uint32_t total_size  = rle32(h + 16);
     uint32_t entry_count = rle32(h + 20);
-    uint32_t hdr_crc     = rle32(h + 24);
-    if (version != GBLP1_VERSION || hdr_size != GBLP1_HEADER_SIZE
-        || (flags & GBLP1_FLAGS_LE) == 0) {
-        puts("result: bad_magic"); free(buf); return 1;
-    }
-    if (total_size > avail || total_size < GBLP1_HEADER_SIZE + GBLP1_FOOTER_SIZE) {
-        puts("result: truncated"); free(buf); return 1;
-    }
-    uint32_t want_crc = gbl_crc32(h, 24);
-    if (want_crc != hdr_crc) {
-        printf("header: magic=ok version=%u header_crc32=BAD(want=%08x got=%08x)\n",
-               version, want_crc, hdr_crc);
-        puts("result: bad_crc"); free(buf); return 1;
-    }
     printf("header: magic=ok version=%u header_crc32=ok total_size=%u entry_count=%u\n",
            version, total_size, entry_count);
 

@@ -15,11 +15,13 @@ rm -rf "$OUT"
 mkdir -p "$OUT/byname" "$OUT/work" "$OUT/sdcard" "$OUT/zip"
 
 ZIP_ROOT="$REPO/zip"
-# Use the original PE as the base-EFI prefix for EFISP (it has MZ magic but
-# no embedded GBLP1 magic, so gblp1-inspect will find only the appended GBLP1).
-# zip/base/mode-*.efi are themselves GBLP1 containers (they carry the string
-# internally), which would confuse gblp1-inspect's magic scan.
-BASE_EFI="$REPO/images/pe/infiniti-EU-16.0.5.703.efi"
+# Use zip/base/mode-1.efi as the base-EFI prefix for EFISP.  With Fix A in
+# gblp1-inspect (magic+CRC validated together), the embedded GBLP1 string
+# inside mode-1.efi is skipped and only the appended real GBLP1 container is
+# selected.  Using the real base EFI also lets collect_efisp fingerprint it
+# against MANIFEST and populate BASE_EFI_MODE=mode-1, satisfying §4.1 HIGH.
+BASE_EFI="$REPO/zip/base/mode-1.efi"
+[ -f "$BASE_EFI" ] || { echo "ERROR: $BASE_EFI not found" >&2; exit 1; }
 
 # Canonical payload: prefer 060 output, fall back to 084 output.
 PAYLOAD=""
