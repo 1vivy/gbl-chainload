@@ -1,14 +1,15 @@
 # gbl-chainload host-side tools
 
-Six small C utilities (and one Python script) that turn a dumped ABL
-partition and a stock `vbmeta.img` into a ready-to-flash EFISP payload, then
-optionally write it to disk. Five of the C tools are dependency-free
-single-file builds; `fv-unwrap` links `liblzma`. `mode2-profile` ships as
-both a C binary and a pure-Python script — they produce byte-identical
-output, so the C tool is the shippable build path and `mode2-profile.py` is
-the dev iteration path. The off-device chain is also wrapped by
-`scripts/efisp-package.py`, which calls these tools in order and produces a
-single `installed.efi`.
+Six small C utilities (and one Python script) for turning a dumped ABL
+partition image into a ready-to-flash EFISP payload, then optionally writing
+it to disk. Some workflows also consume additional inputs; for example, a
+stock `vbmeta.img` is only needed for mode 2. Most of the C tools build
+without extra library dependencies; `fv-unwrap` links `liblzma`.
+`mode2-profile` ships as both a C binary and a pure-Python script — they
+produce byte-identical output, so the C tool is the shippable build path and
+`mode2-profile.py` is the dev iteration path. The off-device chain is also
+wrapped by `scripts/efisp-package.py`, which calls these tools in order and
+produces a single `installed.efi`.
 
 ## Building
 
