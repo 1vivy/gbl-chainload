@@ -22,6 +22,12 @@
 #include <stdint.h>
 #include <inttypes.h>
 #include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+#ifdef __linux__
+# include <sys/ioctl.h>
+# include <linux/fs.h>   /* BLKGETSIZE64 */
+#endif
 
 #include "Sha256.h"
 
@@ -60,6 +66,48 @@ static uint8_t *slurp(const char *path, size_t *len_out)
   fclose(f);
   *len_out = (size_t)n;
   return buf;
+}
+
+/* bd_open_size: open a path (regular file or block device) and return its
+ * total byte size.  For block devices, ioctl(BLKGETSIZE64) is used on Linux;
+ * on other platforms lseek(SEEK_END) is used (works for regular files and
+ * most block device implementations).  Returns -1 on error. */
+static int64_t bd_open_size(const char *path, int *fd_out)
+{
+  int fd = open(path, O_RDONLY);
+  if (fd < 0) { fprintf(stderr, "vbmeta-graft: %s: cannot open\n", path); return -1; }
+  struct stat st;
+  if (fstat(fd, &st) != 0) {
+    fprintf(stderr, "vbmeta-graft: %s: fstat error\n", path);
+    close(fd); return -1;
+  }
+  int64_t size = -1;
+#if defined(__linux__) && defined(BLKGETSIZE64)
+  if (S_ISBLK(st.st_mode)) {
+    uint64_t blksz = 0;
+    if (ioctl(fd, BLKGETSIZE64, &blksz) == 0)
+      size = (int64_t)blksz;
+    else {
+      fprintf(stderr, "vbmeta-graft: %s: BLKGETSIZE64 failed\n", path);
+      close(fd); return -1;
+    }
+  }
+#endif
+  if (size < 0) {
+    /* Regular file or non-Linux block device: use lseek. */
+    off_t end = lseek(fd, 0, SEEK_END);
+    if (end < 0) {
+      fprintf(stderr, "vbmeta-graft: %s: lseek error\n", path);
+      close(fd); return -1;
+    }
+    size = (int64_t)end;
+    if (lseek(fd, 0, SEEK_SET) < 0) {
+      fprintf(stderr, "vbmeta-graft: %s: lseek error\n", path);
+      close(fd); return -1;
+    }
+  }
+  *fd_out = fd;
+  return size;
 }
 
 /* locate_vbmeta: point at the vbmeta blob inside a buffer. If the buffer
@@ -381,8 +429,16 @@ static const uint8_t *find_avb0(const uint8_t *buf, size_t len)
   return NULL;
 }
 
-/* Probe partition buffer for a valid OEM-signed vbmeta blob whose embedded
- * public key matches chain_pk/chain_pk_len. Returns 1 if found, 0 if not. */
+/* Probe partition buffer for a valid OEM-keyed vbmeta blob whose embedded
+ * public key matches chain_pk/chain_pk_len. Returns 1 if found, 0 if not.
+ *
+ * NOTE — "OEM-keyed" means the public key bytes embedded in the vbmeta aux
+ * block match the bytes named in the main vbmeta's chain descriptor.  This
+ * is a key-identity check, NOT a signature verification — the threat model
+ * (spec §3) is operator self-diagnosis of a just-installed payload, not a
+ * cryptographic attestation.  Full sig-verify would require the OEM private
+ * key and would substantially expand the AVB code surface for no practical
+ * benefit to the intended use case. */
 static int probe_graft(const uint8_t *part, size_t part_len,
                        const uint8_t *chain_pk, uint32_t chain_pk_len)
 {
@@ -464,47 +520,50 @@ static void lh_cb(GBL_AVB_DESCRIPTOR_TAG tag, const uint8_t *desc,
     snprintf(path, sizeof(path), "%s/%.*s_%s",
              ctx->byname_dir, (int)name_len, (const char *)name, ctx->slot);
 
-    /* Compute: SHA-256(salt || partition_bytes[0..image_size)) */
+    /* Compute: SHA-256(salt || partition_bytes[0..image_size))
+     * Uses streaming SHA-256 so large (>128 MiB) partitions like system/vendor
+     * are handled correctly.  Opens the path with open(O_RDONLY) so block
+     * devices (on-device /dev/block/by-name/...) are supported alongside
+     * regular files used in host-side tests. */
     const char *digest_status = "missing";
     const char *verdict = "mismatch";
-    uint8_t *part_buf = NULL;
-    size_t part_len = 0;
-
-    part_buf = slurp(path, &part_len);
-    if (part_buf) {
+    int part_fd = -1;
+    int64_t part_sz = bd_open_size(path, &part_fd);
+    if (part_sz > 0) {
       uint64_t read_size = image_size;
-      if (read_size > (uint64_t)part_len)
-        read_size = (uint64_t)part_len;
+      if (read_size > (uint64_t)part_sz)
+        read_size = (uint64_t)part_sz;
 
-      /* SHA-256(salt || content) — two-pass: compute via concatenated input */
-      /* Use a streaming approach: init context, feed salt, feed image bytes */
-      /* gbl_sha256 is single-shot; allocate a combined buffer */
-      uint64_t total = (uint64_t)salt_len + read_size;
-      if (total > 128 * 1024 * 1024ULL) {
-        char part_name[256];
-        snprintf(part_name, sizeof(part_name), "%.*s", (int)name_len, (const char *)name);
-        fprintf(stderr, "list-hash: %s: image_size %" PRIu64 " exceeds 128 MiB cap; skipping digest\n",
-                part_name, image_size);
+      /* Streaming SHA-256(salt || content). */
+      gbl_sha256_ctx sha_ctx;
+      gbl_sha256_init(&sha_ctx);
+      if (salt_len > 0)
+        gbl_sha256_update(&sha_ctx, salt, salt_len);
+
+      uint8_t chunk_buf[1 << 20]; /* 1 MiB read buffer */
+      uint64_t remaining = read_size;
+      int read_ok = 1;
+      while (remaining > 0) {
+        size_t want = (remaining > sizeof(chunk_buf))
+                      ? sizeof(chunk_buf) : (size_t)remaining;
+        ssize_t n = read(part_fd, chunk_buf, want);
+        if (n <= 0) { read_ok = 0; break; }
+        gbl_sha256_update(&sha_ctx, chunk_buf, (size_t)n);
+        remaining -= (size_t)n;
       }
-      if (total <= 128 * 1024 * 1024ULL) { /* sanity: <= 128 MiB */
-        uint8_t *combined = malloc((size_t)total);
-        if (combined) {
-          if (salt_len > 0)
-            memcpy(combined, salt, salt_len);
-          memcpy(combined + salt_len, part_buf, (size_t)read_size);
-          uint8_t got[32];
-          gbl_sha256(combined, (size_t)total, got);
-          free(combined);
-          if (digest_len == 32 && memcmp(got, digest, 32) == 0) {
-            digest_status = "ok";
-            verdict = "match";
-          } else {
-            digest_status = "mismatch";
-            verdict = "mismatch";
-          }
+
+      if (read_ok) {
+        uint8_t got[32];
+        gbl_sha256_final(&sha_ctx, got);
+        if (digest_len == 32 && memcmp(got, digest, 32) == 0) {
+          digest_status = "ok";
+          verdict = "match";
+        } else {
+          digest_status = "mismatch";
+          verdict = "mismatch";
         }
       }
-      free(part_buf);
+      close(part_fd);
     }
 
     printf("partition=%.*s type=hash declared=%" PRIu64 " digest=%s graft=n/a verdict=%s\n",
@@ -529,14 +588,34 @@ static void lh_cb(GBL_AVB_DESCRIPTOR_TAG tag, const uint8_t *desc,
 
     const char *graft_status = "missing";
     const char *verdict = "mismatch";
-    size_t part_len = 0;
-    uint8_t *part_buf = slurp(path, &part_len);
-    if (part_buf) {
-      if (probe_graft(part_buf, part_len, chain_pk, chain_pk_len)) {
-        graft_status = "ok";
-        verdict = "match";
+    /* probe_graft scans for AVB0 magic in the last 4 MiB of the partition.
+     * The graft vbmeta sits at round_up(custom_content_size, 4K) which is
+     * near the end of any recovery-sized partition, so a tail window is both
+     * sufficient and cheaper than loading the entire partition into memory.
+     * This also allows block devices to be probed without a slurp(). */
+    int graft_fd = -1;
+    int64_t graft_part_sz = bd_open_size(path, &graft_fd);
+    if (graft_part_sz > 0) {
+#define PROBE_TAIL_WINDOW (4 * 1024 * 1024)
+      uint64_t window = (uint64_t)graft_part_sz > PROBE_TAIL_WINDOW
+                        ? PROBE_TAIL_WINDOW : (uint64_t)graft_part_sz;
+      off_t tail_off = (off_t)((uint64_t)graft_part_sz - window);
+      uint8_t *tail_buf = malloc((size_t)window);
+      if (tail_buf) {
+        int tail_ok = 0;
+        if (lseek(graft_fd, tail_off, SEEK_SET) == tail_off) {
+          ssize_t got = read(graft_fd, tail_buf, (size_t)window);
+          if (got > 0 && probe_graft(tail_buf, (size_t)got, chain_pk, chain_pk_len)) {
+            graft_status = "ok";
+            verdict = "match";
+            tail_ok = 1;
+          }
+          (void)tail_ok;
+        }
+        free(tail_buf);
+#undef PROBE_TAIL_WINDOW
       }
-      free(part_buf);
+      close(graft_fd);
     }
 
     printf("partition=%.*s type=chain declared=- digest=n/a graft=%s verdict=%s\n",

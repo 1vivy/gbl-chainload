@@ -64,6 +64,13 @@ run_one() {
 
   exec 9>&-
 
+  # Assert the sub-shell exited cleanly.
+  [ "$rc" = 0 ] || {
+    echo "FAIL [$scenario]: diag exited rc=$rc"
+    cat "$envdir/stdout.txt"
+    return 1
+  }
+
   # Locate the bundle directory.
   local bundle
   bundle=$(ls -d "$BUNDLE_ROOT"/gbl-chainload-diag-* 2>/dev/null | grep -v '\.tar\.gz' | head -1 || true)

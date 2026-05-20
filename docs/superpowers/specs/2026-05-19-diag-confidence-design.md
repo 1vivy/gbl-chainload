@@ -2,7 +2,7 @@
 
 **Spec date:** 2026-05-19
 **Branch:** `diag-confidence` (worktree at `../gbl-chainload-diag-confidence`)
-**Status:** design — not implemented
+**Status:** implemented in PR #32
 
 ## 1. Problem
 

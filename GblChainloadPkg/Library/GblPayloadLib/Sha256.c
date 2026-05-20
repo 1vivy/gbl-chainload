@@ -39,12 +39,9 @@ static const uint32_t k[64] = {
   0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2
 };
 
-typedef struct {
-  uint8_t  data[64];
-  uint32_t datalen;
-  uint64_t bitlen;
-  uint32_t state[8];
-} sha256_ctx_t;
+/* The public incremental type (gbl_sha256_ctx) is declared in Internal/Sha256.h.
+ * Use it directly here so the layout is identical — no separate sha256_ctx_t. */
+typedef gbl_sha256_ctx sha256_ctx_t;
 
 static void sha256_transform(sha256_ctx_t *ctx, const uint8_t *data) {
   uint32_t a,b,c,d,e,f,g,h,t1,t2,m[64];
@@ -65,7 +62,7 @@ static void sha256_transform(sha256_ctx_t *ctx, const uint8_t *data) {
   ctx->state[4]+=e; ctx->state[5]+=f; ctx->state[6]+=g; ctx->state[7]+=h;
 }
 
-static void sha256_init(sha256_ctx_t *ctx) {
+void sha256_init(sha256_ctx_t *ctx) {
   ctx->datalen = 0; ctx->bitlen = 0;
   ctx->state[0]=0x6a09e667; ctx->state[1]=0xbb67ae85;
   ctx->state[2]=0x3c6ef372; ctx->state[3]=0xa54ff53a;
@@ -73,7 +70,7 @@ static void sha256_init(sha256_ctx_t *ctx) {
   ctx->state[6]=0x1f83d9ab; ctx->state[7]=0x5be0cd19;
 }
 
-static void sha256_update(sha256_ctx_t *ctx, const uint8_t *data, size_t len) {
+void sha256_update(sha256_ctx_t *ctx, const uint8_t *data, size_t len) {
   for (size_t i = 0; i < len; ++i) {
     ctx->data[ctx->datalen++] = data[i];
     if (ctx->datalen == 64) {
@@ -84,7 +81,7 @@ static void sha256_update(sha256_ctx_t *ctx, const uint8_t *data, size_t len) {
   }
 }
 
-static void sha256_final(sha256_ctx_t *ctx, uint8_t hash[32]) {
+void sha256_final(sha256_ctx_t *ctx, uint8_t hash[32]) {
   uint32_t i = ctx->datalen;
   if (ctx->datalen < 56) {
     ctx->data[i++] = 0x80;
@@ -123,3 +120,11 @@ void gbl_sha256(const uint8_t *buf, size_t len, uint8_t out[32]) {
   sha256_update(&ctx, buf, len);
   sha256_final(&ctx, out);
 }
+
+/* Public incremental API — thin wrappers over the internal functions so
+ * callers in vbmeta-graft and other host tools can stream large inputs. */
+void gbl_sha256_init(gbl_sha256_ctx *ctx)   { sha256_init(ctx); }
+void gbl_sha256_update(gbl_sha256_ctx *ctx, const uint8_t *data, size_t len)
+                                             { sha256_update(ctx, data, len); }
+void gbl_sha256_final(gbl_sha256_ctx *ctx, uint8_t out[32])
+                                             { sha256_final(ctx, out); }
