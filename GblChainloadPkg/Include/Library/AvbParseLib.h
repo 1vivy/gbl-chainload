@@ -6,6 +6,14 @@
 #include <Uefi.h>
 #endif
 
+/* Self-contained shim: callers that supply their own UEFI type stand-ins
+   (e.g., the host test harness) shouldn't have to remember to define
+   OPTIONAL separately. Uefi.h already defines it; the guard prevents
+   redefinition there. */
+#ifndef OPTIONAL
+#define OPTIONAL
+#endif
+
 #define GBL_AVB_FOOTER_MAGIC        "AVBf"
 #define GBL_AVB_VBMETA_MAGIC        "AVB0"
 #define GBL_AVB_FOOTER_SIZE         64
