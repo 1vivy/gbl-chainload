@@ -27,6 +27,7 @@ tests/*/test_*
 tests/host/helpers/*
 !tests/host/helpers/*.c
 !tests/host/helpers/*.h
+!tests/host/helpers/*.sh
 !tests/host/helpers/Makefile
 tests/host/.last/
 
