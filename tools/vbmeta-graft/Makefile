@@ -1,11 +1,13 @@
 # tools/vbmeta-graft/Makefile
 PROJ    := $(realpath ../..)
 AVB     := $(PROJ)/GblChainloadPkg/Library/AvbParseLib
-INCS    := -I$(AVB)/Internal -I$(PROJ)/GblChainloadPkg/Include/Library
+GPL     := $(PROJ)/GblChainloadPkg/Library/GblPayloadLib
+INCS    := -I$(AVB)/Internal -I$(PROJ)/GblChainloadPkg/Include/Library \
+           -I$(GPL)/Internal -DGBL_HOST_BUILD=1
 CFLAGS  ?= -O1 -g -Wall -Wextra -std=c11
 CFLAGS  += -D__HOST_BUILD__ $(INCS)
 
-SRCS := vbmeta-graft.c $(AVB)/AvbParse.c
+SRCS := vbmeta-graft.c $(AVB)/AvbParse.c $(GPL)/Sha256.c
 
 all: vbmeta-graft
 

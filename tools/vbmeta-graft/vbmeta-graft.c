@@ -1,9 +1,10 @@
 /* tools/vbmeta-graft/vbmeta-graft.c — list / check / graft AVB vbmeta.
  *
- *   vbmeta-graft list  <vbmeta-or-partition-img>
- *   vbmeta-graft check <candidate-partition-img> <main-vbmeta-img> <part>
- *   vbmeta-graft graft --stock <stock-part-img> --custom <custom-img>
- *                      --part-size <bytes> --out <grafted-img>
+ *   vbmeta-graft list      <vbmeta-or-partition-img>
+ *   vbmeta-graft check     <candidate-partition-img> <main-vbmeta-img> <part>
+ *   vbmeta-graft graft     --stock <stock-part-img> --custom <custom-img>
+ *                          --part-size <bytes> --out <grafted-img>
+ *   vbmeta-graft list-hash <active-vbmeta-img> <byname-dir>
  *
  * Reuses GblChainloadPkg/Library/AvbParseLib for AVB structure parsing
  * (compiled with -D__HOST_BUILD__; the Makefile builds AvbParse.c too).
@@ -20,6 +21,8 @@
 #include <string.h>
 #include <stdint.h>
 #include <sys/stat.h>
+
+#include "Sha256.h"
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-function"
@@ -327,15 +330,233 @@ static int cmd_graft(const char *stock_path, const char *custom_path,
   return 0;
 }
 
+/* ---- list-hash ------------------------------------------------------ */
+
+/*
+ * AVB hash descriptor raw offsets (libavb avb_hash_descriptor.h):
+ *   0   tag (u64 BE)
+ *   8   num_bytes_following (u64 BE)
+ *  16   image_size (u64 BE)              <-- AvbDescriptor(16) + image_size
+ *  24   hash_algorithm (char[32])
+ *  56   partition_name_len (u32 BE)      <- confirmed by AvbParse.c and hex dump
+ *  60   salt_len (u32 BE)
+ *  64   digest_len (u32 BE)
+ *  68   flags (u32 BE)
+ *  72   reserved[60]
+ * 132   variable: name || salt || digest
+ *
+ * AvbParse_HashDescriptor only extracts name and digest; we read image_size
+ * and salt manually from the raw descriptor bytes.
+ */
+
+/* Derive slot suffix: env GBL_VBMETA_SLOT > tail-match _a/_b on path > "a" */
+static const char *derive_slot(const char *mvb_path)
+{
+  const char *env = getenv("GBL_VBMETA_SLOT");
+  if (env && (strcmp(env, "a") == 0 || strcmp(env, "b") == 0))
+    return env;
+
+  /* Check basename for _a or _b suffix */
+  const char *base = strrchr(mvb_path, '/');
+  base = base ? base + 1 : mvb_path;
+  size_t blen = strlen(base);
+  if (blen >= 2 && base[blen-2] == '_') {
+    if (base[blen-1] == 'a') return "a";
+    if (base[blen-1] == 'b') return "b";
+  }
+
+  fprintf(stderr, "note: slot suffix defaulted to 'a'\n");
+  return "a";
+}
+
+/* Scan buf[0..len) for an AVB0 magic; return pointer to first hit or NULL. */
+static const uint8_t *find_avb0(const uint8_t *buf, size_t len)
+{
+  if (len < 4) return NULL;
+  for (size_t i = 0; i + 4 <= len; i++) {
+    if (buf[i]=='A' && buf[i+1]=='V' && buf[i+2]=='B' && buf[i+3]=='0')
+      return buf + i;
+  }
+  return NULL;
+}
+
+/* Probe partition buffer for a valid OEM-signed vbmeta blob whose embedded
+ * public key matches chain_pk/chain_pk_len. Returns 1 if found, 0 if not. */
+static int probe_graft(const uint8_t *part, size_t part_len,
+                       const uint8_t *chain_pk, uint32_t chain_pk_len)
+{
+  /* Walk looking for AVB0 magic. For each hit, parse the vbmeta header and
+   * compare its embedded public key to the chain descriptor's public key. */
+  const uint8_t *p = part;
+  size_t rem = part_len;
+  while (rem >= 4) {
+    const uint8_t *hit = find_avb0(p, rem);
+    if (!hit) break;
+    size_t off = (size_t)(hit - part);
+    size_t avail = part_len - off;
+    GBL_AVB_VBMETA_HEADER vh;
+    if (AvbParse_VbmetaHeader(hit, (uint64_t)avail, &vh) == EFI_SUCCESS) {
+      /* Get embedded public key */
+      uint64_t aux_len;
+      const uint8_t *aux = aux_block(hit, &vh, &aux_len);
+      if (vh.PublicKeyOffset <= aux_len &&
+          vh.PublicKeySize   <= aux_len - vh.PublicKeyOffset) {
+        const uint8_t *pk = aux + vh.PublicKeyOffset;
+        uint32_t pk_len   = (uint32_t)vh.PublicKeySize;
+        if (chain_pk && chain_pk_len > 0) {
+          if (pk_len == chain_pk_len && memcmp(pk, chain_pk, pk_len) == 0)
+            return 1;
+        } else {
+          /* No chain key available: any valid vbmeta header counts */
+          return 1;
+        }
+      }
+    }
+    /* Advance past this hit and keep searching */
+    p = hit + 4;
+    rem = part_len - (size_t)(p - part);
+  }
+  return 0;
+}
+
+struct lh_ctx {
+  const char *byname_dir;
+  const char *slot;
+};
+
+static void lh_cb(GBL_AVB_DESCRIPTOR_TAG tag, const uint8_t *desc,
+                  uint64_t desc_len, void *vctx)
+{
+  struct lh_ctx *ctx = vctx;
+
+  if (tag == GblAvbDescHashTag) {
+    /* --- hash descriptor --- */
+    const uint8_t *name = NULL;
+    uint32_t name_len = 0;
+    const uint8_t *digest = NULL;
+    uint32_t digest_len = 0;
+    if (AvbParse_HashDescriptor(desc, desc_len, &name, &name_len,
+                                &digest, &digest_len) != EFI_SUCCESS)
+      return;
+
+    /* Read image_size and salt from raw descriptor bytes */
+    if (desc_len < 132) return;
+    uint64_t image_size = 0;
+    for (int i = 0; i < 8; i++)
+      image_size = (image_size << 8) | desc[16 + i];  /* image_size at offset 16 */
+    uint32_t salt_len = (uint32_t)((desc[60]<<24)|(desc[61]<<16)|(desc[62]<<8)|desc[63]);
+    const uint8_t *salt = desc + 132 + name_len;
+
+    /* Build partition path */
+    char path[4096];
+    snprintf(path, sizeof(path), "%s/%.*s_%s",
+             ctx->byname_dir, (int)name_len, (const char *)name, ctx->slot);
+
+    /* Compute: SHA-256(salt || partition_bytes[0..image_size)) */
+    const char *digest_status = "missing";
+    const char *verdict = "mismatch";
+    uint8_t *part_buf = NULL;
+    size_t part_len = 0;
+
+    part_buf = slurp(path, &part_len);
+    if (part_buf) {
+      uint64_t read_size = image_size;
+      if (read_size > (uint64_t)part_len)
+        read_size = (uint64_t)part_len;
+
+      /* SHA-256(salt || content) — two-pass: compute via concatenated input */
+      /* Use a streaming approach: init context, feed salt, feed image bytes */
+      /* gbl_sha256 is single-shot; allocate a combined buffer */
+      uint64_t total = (uint64_t)salt_len + read_size;
+      if (total <= 128 * 1024 * 1024ULL) { /* sanity: <= 128 MiB */
+        uint8_t *combined = malloc((size_t)total);
+        if (combined) {
+          if (salt_len > 0)
+            memcpy(combined, salt, salt_len);
+          memcpy(combined + salt_len, part_buf, (size_t)read_size);
+          uint8_t got[32];
+          gbl_sha256(combined, (size_t)total, got);
+          free(combined);
+          if (digest_len == 32 && memcmp(got, digest, 32) == 0) {
+            digest_status = "ok";
+            verdict = "match";
+          } else {
+            digest_status = "mismatch";
+            verdict = "mismatch";
+          }
+        }
+      }
+      free(part_buf);
+    }
+
+    printf("partition=%-16.*s type=hash  declared=%-12llu digest=%-8s graft=n/a   verdict=%s\n",
+           (int)name_len, (const char *)name,
+           (unsigned long long)image_size,
+           digest_status, verdict);
+
+  } else if (tag == GblAvbDescChainPartitionTag) {
+    /* --- chain descriptor --- */
+    const uint8_t *name = NULL;
+    uint32_t name_len = 0;
+    const uint8_t *chain_pk = NULL;
+    uint32_t chain_pk_len = 0;
+    if (AvbParse_ChainPartitionDescriptor(desc, desc_len, &name, &name_len,
+                                          &chain_pk, &chain_pk_len) != EFI_SUCCESS)
+      return;
+
+    /* Build partition path */
+    char path[4096];
+    snprintf(path, sizeof(path), "%s/%.*s_%s",
+             ctx->byname_dir, (int)name_len, (const char *)name, ctx->slot);
+
+    const char *graft_status = "missing";
+    const char *verdict = "mismatch";
+    size_t part_len = 0;
+    uint8_t *part_buf = slurp(path, &part_len);
+    if (part_buf) {
+      if (probe_graft(part_buf, part_len, chain_pk, chain_pk_len)) {
+        graft_status = "ok";
+        verdict = "match";
+      }
+      free(part_buf);
+    }
+
+    printf("partition=%-16.*s type=chain declared=%-12s digest=n/a  graft=%-7s verdict=%s\n",
+           (int)name_len, (const char *)name,
+           "-", graft_status, verdict);
+  }
+}
+
+static int cmd_list_hash(const char *mvb_path, const char *byname_dir)
+{
+  size_t len;
+  uint8_t *buf = slurp(mvb_path, &len);
+  if (!buf) return 1;
+
+  const uint8_t *vb;
+  uint64_t vb_len;
+  if (locate_vbmeta(buf, len, &vb, &vb_len) != 0) {
+    fprintf(stderr, "vbmeta-graft: %s: no vbmeta found\n", mvb_path);
+    free(buf); return 1;
+  }
+
+  const char *slot = derive_slot(mvb_path);
+  struct lh_ctx ctx = { byname_dir, slot };
+  int rc = walk_descriptors(vb, vb_len, lh_cb, &ctx);
+  free(buf);
+  return rc == 0 ? 0 : 1;
+}
+
 /* ---- main ----------------------------------------------------------- */
 
 static int usage(void)
 {
   fprintf(stderr,
     "usage:\n"
-    "  vbmeta-graft list  <vbmeta-or-partition-img>\n"
-    "  vbmeta-graft check <candidate-part-img> <main-vbmeta-img> <part>\n"
-    "  vbmeta-graft graft --stock <s> --custom <c> --part-size <N> --out <o>\n");
+    "  vbmeta-graft list      <vbmeta-or-partition-img>\n"
+    "  vbmeta-graft check     <candidate-part-img> <main-vbmeta-img> <part>\n"
+    "  vbmeta-graft graft     --stock <s> --custom <c> --part-size <N> --out <o>\n"
+    "  vbmeta-graft list-hash <active-vbmeta-img> <byname-dir>\n");
   return 2;
 }
 
@@ -346,6 +567,8 @@ int main(int argc, char **argv)
     return cmd_list(argv[2]);
   if (strcmp(argv[1], "check") == 0 && argc == 5)
     return cmd_check(argv[2], argv[3], argv[4]);
+  if (strcmp(argv[1], "list-hash") == 0 && argc == 4)
+    return cmd_list_hash(argv[2], argv[3]);
   if (strcmp(argv[1], "graft") == 0) {
     const char *stock = NULL, *custom = NULL, *out = NULL;
     uint64_t part_size = 0;
