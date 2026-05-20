@@ -7,11 +7,12 @@
 #include <Uefi.h>
 #include "HookCommon.h"
 
-/* SCM policy: TZ_BLOW_SW_FUSE_ID drop. */
+/* SCM policy: TZ_BLOW_SW_FUSE_ID and anti-rollback SmcId drops. */
 
-/** If SmcId is the soft-fuse-blow SIP, returns TRUE and writes EFI_SUCCESS
-    into FakeStatus; caller short-circuits without forwarding the SMC.
-    Returns FALSE for any other SmcId — caller proceeds normally. **/
+/** If SmcId is one of the universally-dropped SIPs (soft-fuse-blow or
+    either TZ anti-rollback version-set call), returns TRUE and writes
+    EFI_SUCCESS into FakeStatus; caller short-circuits without forwarding
+    the SMC.  Returns FALSE for any other SmcId — caller proceeds normally. **/
 BOOLEAN
 UniversalPolicy_ShouldDropScmSip (
   IN  UINT32       SmcId,

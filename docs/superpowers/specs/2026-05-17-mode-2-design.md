@@ -185,10 +185,11 @@ recovery-graft ZIP, layered on top of the cache-ABL work.
   an ABL code patch (`kDiceModeDebug` → `kDiceModeMaintenance` at both sites),
   which would live in the host `abl-patcher`. Left out of v1; the exact patch is
   recorded here so it can be added if attestation needs it.
-- **Anti-rollback / version-set SCM SmcIds — deferred audit.** The canoe
-  reference `scm_hook.h` flags that ABL fires SCM calls beyond
-  `TZ_BLOW_SW_FUSE` that mutate TZ-side persistent state. Enumerating them is a
-  recorded follow-up research task, not a v1 deliverable.
+- **Anti-rollback / version-set SCM SmcIds — resolved.** `TZ_UPDATE_ROLLBACK_VERSION_ID`
+  (0x0200011E) and `TZ_UPDATE_ROLLBACK_VERSION_IF_AB_PARTITION_FEATURE_ENABLED_ID`
+  (0x32000110) are dropped universally in `UniversalBaseline.c`, pinning the
+  RPMB-stored rollback floor and preventing the factory-reset funnel when
+  reflashing older OS images.
 - **No autonomous non-HLOS flashing.** The EFISP write stays a user-driven ZIP
   step, consistent with the project safety boundary.
 
@@ -227,7 +228,7 @@ Swept from `QcomModulePkg` (`KeymasterClient.c`, `AvbPopulateBccParams.c`,
 | SPSS → SPU | `ShareKeyMintInfo` | rewrite RoT/BootState/Vbh mirror (hook) |
 | SCM → TZ | `TZ_BLOW_SW_FUSE 0x02000801` | drop — universal baseline already does |
 | | `TZ_INFO_GET_SECURE_STATE 0x02000604` | observe only |
-| | anti-rollback / version-set SmcIds | deferred audit (§7) |
+| | `TZ_UPDATE_ROLLBACK_VERSION_ID 0x0200011E`, `TZ_UPDATE_ROLLBACK_VERSION_IF_AB_PARTITION_FEATURE_ENABLED_ID 0x32000110` | drop — universal baseline (UniversalBaseline.c) |
 | ABL internal code | DICE `Mode` (`AvbPopulateBccParams.c`, 2 sites) | deferred (§7) |
 
 All other `IsUnlocked()`-gated divergences either feed a buffer the QSEE/SPSS

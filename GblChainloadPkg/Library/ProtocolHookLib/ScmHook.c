@@ -266,18 +266,18 @@ DecodeMinkIpcInvoke (
  *   — NOTE: task doc used 0x02000402 but header says FUSE=8 → 0x02000804
  * TZ_INFO_GET_FEATURE_VERSION_ID= SMC(SIP=2, INFO=6, 3)   = 0x02000603
  * TZ_UPDATE_ROLLBACK_VERSION_ID = SMC(SIP=2, BOOT=1, 0x1E)= 0x0200011E
- *   — DROP CANDIDATE for re-flashability (gbl_root KM_BLOCK_TZ_ROLLBACK)
+ *   — DROPPED universally (UniversalBaseline.c)
  * TZ_UPDATE_ROLLBACK_VERSION_IF_A_B_PARTITION_FEATURE_ENABLED_ID
  *                               = SMC(QSEE_OS=50,APP_MGR=1,0x10)= 0x32000110
- *   — DROP CANDIDATE same reason
+ *   — DROPPED universally (UniversalBaseline.c)
  * -------------------------------------------------------------------- */
 
 #define SCM_SIP_TZ_INFO_GET_SECURE_STATE    0x02000604u
 #define SCM_SIP_TZ_BLOW_SW_FUSE_ID         0x02000801u  /* dropped universally — see UniversalBaseline.c */
 #define SCM_SIP_TZ_IS_SW_FUSE_BLOWN_ID     0x02000804u
 #define SCM_SIP_TZ_INFO_GET_FEATURE_VER    0x02000603u
-#define SCM_SIP_TZ_UPDATE_ROLLBACK_VER     0x0200011Eu  /* DROP CANDIDATE */
-#define SCM_SIP_TZ_UPDATE_ROLLBACK_VER_AB  0x32000110u  /* DROP CANDIDATE */
+#define SCM_SIP_TZ_UPDATE_ROLLBACK_VER     0x0200011Eu  /* DROPPED (universal) — see UniversalBaseline.c */
+#define SCM_SIP_TZ_UPDATE_ROLLBACK_VER_AB  0x32000110u  /* DROPPED (universal) — see UniversalBaseline.c */
 
 /* Fuse-state bit indices in status_0 returned by TZ_INFO_GET_SECURE_STATE
  * (matches avb_util.c #defines and gbl_root scm_hook.h:44-48). */
@@ -360,19 +360,20 @@ DecodeSipSmcId (
 
     case SCM_SIP_TZ_UPDATE_ROLLBACK_VER:
       /* Anti-rollback index bump (legacy path, MajorVersion<=5).
-       * DROP CANDIDATE for re-flashability — see gbl_root
-       * KM_BLOCK_TZ_ROLLBACK scaffold in scm_hook.h:55-72. */
+       * Dropped by UniversalPolicy_ShouldDropScmSip before reaching TZ —
+       * this case is retained for completeness but will not fire. */
       GBL_INFO ("scm-sip | smcid=0x%08x(TZ_UPDATE_ROLLBACK_VERSION_ID)"
-                " | p0=0x%llx | DROP-CANDIDATE(NOT-DROPPED) | st=%r\n",
+                " | p0=0x%llx | DROPPED (universal) | st=%r\n",
                 SmcId, P0, Status);
       return TRUE;
 
     case SCM_SIP_TZ_UPDATE_ROLLBACK_VER_AB:
       /* Anti-rollback bump (newer A/B-aware path, MajorVersion>5).
-       * DROP CANDIDATE same reason as above. */
+       * Dropped by UniversalPolicy_ShouldDropScmSip before reaching TZ —
+       * this case is retained for completeness but will not fire. */
       GBL_INFO ("scm-sip | smcid=0x%08x"
                 "(TZ_UPDATE_ROLLBACK_VERSION_IF_AB_PARTITION_FEATURE_ENABLED_ID)"
-                " | p0=0x%llx | DROP-CANDIDATE(NOT-DROPPED) | st=%r\n",
+                " | p0=0x%llx | DROPPED (universal) | st=%r\n",
                 SmcId, P0, Status);
       return TRUE;
 
