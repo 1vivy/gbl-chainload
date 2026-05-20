@@ -185,11 +185,7 @@ recovery-graft ZIP, layered on top of the cache-ABL work.
   an ABL code patch (`kDiceModeDebug` → `kDiceModeMaintenance` at both sites),
   which would live in the host `abl-patcher`. Left out of v1; the exact patch is
   recorded here so it can be added if attestation needs it.
-- **Anti-rollback / version-set SCM SmcIds — resolved.** `TZ_UPDATE_ROLLBACK_VERSION_ID`
-  (0x0200011E) and `TZ_UPDATE_ROLLBACK_VERSION_IF_AB_PARTITION_FEATURE_ENABLED_ID`
-  (0x32000110) are dropped universally in `UniversalBaseline.c`, pinning the
-  RPMB-stored rollback floor and preventing the factory-reset funnel when
-  reflashing older OS images.
+- **Anti-rollback / version-set SCM SmcIds — closed.** Dropped universally by `UniversalBaseline.c`; see [`2026-05-20-universal-tz-rollback-drop-design.md`](2026-05-20-universal-tz-rollback-drop-design.md).
 - **No autonomous non-HLOS flashing.** The EFISP write stays a user-driven ZIP
   step, consistent with the project safety boundary.
 
