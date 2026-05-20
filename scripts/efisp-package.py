@@ -20,6 +20,8 @@ import subprocess
 import sys
 import tempfile
 
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
 TOOLS = ("fv-unwrap", "abl-patcher", "gbl-pack", "mode2-profile")
 
 
@@ -28,34 +30,40 @@ def die(msg):
     sys.exit(1)
 
 
-def platform_dist_dir():
-    """The dist/ subdir holding this platform's built tools, or None."""
-    sub = {"win32": "windows", "darwin": "macos"}.get(sys.platform)
-    if not sub:
-        return None    # a Linux host build lives in tools/<t>/, not dist/
-    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    return os.path.join(root, "dist", sub)
+def _read_version() -> str:
+    for candidate in (SCRIPT_DIR, os.path.dirname(SCRIPT_DIR)):
+        p = os.path.join(candidate, "VERSION")
+        if os.path.isfile(p):
+            with open(p) as f:
+                return f.read().strip()
+    return "unknown"
 
 
-def find_tool(name, tools_dir):
-    """Locate a tool binary: --tools-dir, the platform dist/ dir, the
-    script's own dir, then PATH."""
-    exe = name + (".exe" if os.name == "nt" else "")
-    candidates = []
-    if tools_dir:
-        candidates.append(os.path.join(tools_dir, exe))
-    pdd = platform_dist_dir()
-    if pdd:
-        candidates.append(os.path.join(pdd, exe))
-    candidates.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), exe))
-    for c in candidates:
-        if os.path.isfile(c) and os.access(c, os.X_OK):
-            return c
-    found = shutil.which(exe)
-    if found:
-        return found
-    die(f"tool '{name}' not found "
-        f"(looked in --tools-dir, dist/<platform>/, the script dir, PATH)")
+def _resolve_tool(name: str, override) -> str:
+    if override:
+        p = os.path.join(override, name)
+        if not os.path.isfile(p):
+            die(f"--bin-dir does not contain '{name}': {p}")
+        return p
+    p = os.path.join(SCRIPT_DIR, "bin", name)
+    if os.path.isfile(p):
+        return p
+    # In-repo cross-build discovery: dist/<platform>/<tool>
+    import platform as _plat
+    sys_name = _plat.system().lower()
+    plat_dir = {"linux": "linux", "darwin": "macos", "windows": "windows"}.get(sys_name)
+    if plat_dir:
+        # Walk up from SCRIPT_DIR looking for repo root with dist/<plat>/
+        d = SCRIPT_DIR
+        for _ in range(4):  # at most 4 levels up
+            cand = os.path.join(d, "dist", plat_dir, name)
+            if os.path.isfile(cand):
+                return cand
+            d = os.path.dirname(d)
+    p = shutil.which(name)
+    if not p:
+        die(f"tool '{name}' not found in --bin-dir or {SCRIPT_DIR}/bin or $PATH")
+    return p
 
 
 def run(argv, label):
@@ -71,15 +79,30 @@ def main():
     ap = argparse.ArgumentParser(
         prog="efisp-package.py",
         description="Build a ready-to-flash EFISP payload off-device.")
-    ap.add_argument("--abl", required=True, help="dumped ABL partition image")
-    ap.add_argument("--mode", required=True, choices=("0", "1", "2"))
-    ap.add_argument("--efi", required=True, help="base mode-N.efi")
+    ap.add_argument("--abl", help="dumped ABL partition image")
+    ap.add_argument("--mode", choices=("0", "1", "2"))
+    ap.add_argument("--efi", help="base mode-N.efi")
     ap.add_argument("--stock-vbmeta", help="stock vbmeta image (mode 2 only)")
     ap.add_argument("--oem", help="OEM id for abl-patcher --oem (mode 2 only)")
-    ap.add_argument("--tools-dir", help="directory holding the host-side tool binaries")
     ap.add_argument("--out", help="output path "
                     "(default: dist/efisp-payload/<abl>-mode<N>.efi)")
+    ap.add_argument("--version", action="store_true",
+                    help="print the gbl-chainload version and exit")
+    ap.add_argument("--bin-dir", "--tools-dir", dest="bin_dir",
+                    help="directory containing the host-tool binaries "
+                         "(default: ./bin next to this script, then "
+                         "dist/<platform>/ in-repo, then $PATH). "
+                         "--tools-dir is a backwards-compatible alias.")
     args = ap.parse_args()
+
+    if args.version:
+        print(_read_version())
+        sys.exit(0)
+
+    # required for normal operation (loosened above to allow --version)
+    for req in ("abl", "mode", "efi"):
+        if not getattr(args, req):
+            die(f"--{req} is required")
 
     # --- pre-flight: every gate fires before any tool runs ---
     for f in (args.abl, args.efi):
@@ -94,10 +117,10 @@ def main():
         if args.stock_vbmeta or args.oem:
             die("--stock-vbmeta / --oem are only valid for --mode 2")
 
-    fv     = find_tool("fv-unwrap", args.tools_dir)
-    patch  = find_tool("abl-patcher", args.tools_dir)
-    pack   = find_tool("gbl-pack", args.tools_dir)
-    m2p    = find_tool("mode2-profile", args.tools_dir) if args.mode == "2" else None
+    fv     = _resolve_tool("fv-unwrap", args.bin_dir)
+    patch  = _resolve_tool("abl-patcher", args.bin_dir)
+    pack   = _resolve_tool("gbl-pack", args.bin_dir)
+    m2p    = _resolve_tool("mode2-profile", args.bin_dir) if args.mode == "2" else None
 
     out = args.out or os.path.join(
         "dist", "efisp-payload",
