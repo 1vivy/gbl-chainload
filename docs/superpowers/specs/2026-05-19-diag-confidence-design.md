@@ -29,8 +29,10 @@ In:
   `logfs` partition.
 - A four-tier confidence verdict printed on-screen.
 - A per-partition graft-required verdict.
-- A `/sdcard/gbl-chainload-diag-<ts>/` directory plus a sibling
-  `.tar.gz` archive.
+- A single `/sdcard/gbl-chainload-diag-<ts>.tar.gz` archive (the
+  working dir was originally co-located on `/sdcard/`; per the
+  2026-05-20 amendment in §11, it now lives transiently on `/tmp/`
+  and is removed once the tarball is sealed).
 
 Out:
 
@@ -180,11 +182,17 @@ info; the `(mode unknown — assumed mode-1)` suffix is the disclaimer.
 
 ## 5. Bundle layout
 
-Directory `/sdcard/gbl-chainload-diag-<ts>/` left in place after the
-run; sibling `/sdcard/gbl-chainload-diag-<ts>.tar.gz` is the same
-contents archived with busybox `tar` + `gzip` (both reliably present
-in TWRP/OrangeFox; literal `.zip` would require bundling a static
-`zip` binary and is not worth it).
+> Updated 2026-05-20 (§11): the staging directory was originally
+> persisted at `/sdcard/gbl-chainload-diag-<ts>/` alongside the
+> tarball. It now lives at `$BUNDLE_WORKDIR/gbl-chainload-diag-<ts>/`
+> (default `/tmp/` — recovery tmpfs, lost on reboot) and is removed
+> once the `.tar.gz` is sealed; the only persistent artifact on
+> `$BUNDLE_ROOT` (default `/sdcard/`) is the tarball.
+
+A single `/sdcard/gbl-chainload-diag-<ts>.tar.gz`, archived with
+busybox `tar` + `gzip` (both reliably present in TWRP/OrangeFox;
+literal `.zip` would require bundling a static `zip` binary and is
+not worth it). Layout once extracted:
 
 ```
 gbl-chainload-diag-<ts>/
@@ -237,9 +245,10 @@ Grows from ~60 to ~200 lines, broken into helpers that each:
 
 Functions:
 
-- `prepare_bundle` — make `/sdcard/gbl-chainload-diag-<ts>/`, set
-  `$BUNDLE` env. Redefine `ui_print` locally to tee to
-  `$BUNDLE/report.txt`.
+- `prepare_bundle` — make `$BUNDLE_WORKDIR/gbl-chainload-diag-<ts>/`
+  (default `/tmp/…`; see §11 amendment) and set the `$BUNDLE_DIR`
+  env. Redefine `ui_print` locally to tee to
+  `$BUNDLE_DIR/report.txt`.
 - `collect_env` — write `env.txt`, `getprop.boot.txt`.
 - `collect_efisp` — `dd` EFISP to `$BUNDLE/efisp.img`. Quick PE check
   (`MZ` first 2 bytes). Run `gblp1-inspect` against the image, capture
