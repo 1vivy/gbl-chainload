@@ -54,11 +54,18 @@ AvbParse_VbmetaHeader (IN CONST UINT8 *Vbmeta, IN UINT64 VbmetaSize, OUT GBL_AVB
   HeaderOut->RollbackIndexLocation        = AvbReadU32Be (Vbmeta + 124);
   for (int i = 0; i < 48; ++i) HeaderOut->ReleaseString[i] = (CHAR8)Vbmeta[128 + i];
 
-  /* Sanity: header + auth + aux <= VbmetaSize. */
-  UINT64 Total = (UINT64)GBL_AVB_VBMETA_HEADER_SIZE
-                + HeaderOut->AuthenticationDataBlockSize
-                + HeaderOut->AuxiliaryDataBlockSize;
-  if (Total > VbmetaSize) return EFI_INVALID_PARAMETER;
+  /* Overflow-safe sanity: header + auth + aux <= VbmetaSize.
+     A naive `Total = header + auth + aux; if (Total > VbmetaSize)` is unsound:
+     a crafted vbmeta with huge auth/aux can wrap `Total` to a small value and
+     pass the check. Validate each addend against the remaining budget via
+     subtraction so no operand can overflow UINT64. */
+  if (HeaderOut->AuthenticationDataBlockSize
+      > VbmetaSize - GBL_AVB_VBMETA_HEADER_SIZE)
+    return EFI_INVALID_PARAMETER;
+  if (HeaderOut->AuxiliaryDataBlockSize
+      > VbmetaSize - GBL_AVB_VBMETA_HEADER_SIZE
+                   - HeaderOut->AuthenticationDataBlockSize)
+    return EFI_INVALID_PARAMETER;
 
   return EFI_SUCCESS;
 }

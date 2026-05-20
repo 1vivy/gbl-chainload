@@ -341,6 +341,33 @@ static void test_parse_hash_descriptor_truncated_body (void) {
   printf ("ok test_parse_hash_descriptor_truncated_body\n");
 }
 
+static void test_header_overflow_auth_plus_aux (void) {
+  /* Crafted-vbmeta defense: auth_size = aux_size = 2^63. Their sum modulo 2^64
+     is 0, so (256 + auth + aux) wraps to 256 — a naive `Total > VbmetaSize`
+     check would silently accept any reasonably-sized buffer. The library must
+     reject via overflow-safe arithmetic. */
+  UINT8 region[2048];
+  memset (region, 0, sizeof (region));
+  make_vbmeta_header (region, 0x8000000000000000ULL, 0x8000000000000000ULL,
+                      1, 0, 0, 0);
+  GBL_AVB_VBMETA_HEADER hdr = {0};
+  EFI_STATUS s = AvbParse_VbmetaHeader (region, sizeof (region), &hdr);
+  assert (s == EFI_INVALID_PARAMETER);
+  printf ("ok test_header_overflow_auth_plus_aux\n");
+}
+
+static void test_header_overflow_aux_huge (void) {
+  /* auth_size fits, aux_size near UINT64_MAX. Naive code would compute
+     (256 + small + huge) without overflow-safe checks and could pass. */
+  UINT8 region[2048];
+  memset (region, 0, sizeof (region));
+  make_vbmeta_header (region, 256, 0xFFFFFFFFFFFFFE00ULL, 1, 0, 0, 0);
+  GBL_AVB_VBMETA_HEADER hdr = {0};
+  EFI_STATUS s = AvbParse_VbmetaHeader (region, sizeof (region), &hdr);
+  assert (s == EFI_INVALID_PARAMETER);
+  printf ("ok test_header_overflow_aux_huge\n");
+}
+
 static void test_parse_hash_descriptor_with_optional_outs (void) {
   UINT8 desc[256];
   memset (desc, 0, sizeof (desc));
@@ -404,6 +431,8 @@ int main (void) {
   test_descriptor_iter_truncated_trailer ();
   test_descriptor_iter_nbf_exceeds_aux ();
   test_parse_hash_descriptor_truncated_body ();
+  test_header_overflow_auth_plus_aux ();
+  test_header_overflow_aux_huge ();
   test_parse_hash_descriptor_with_optional_outs ();
   printf ("ALL PASS\n");
   return 0;
