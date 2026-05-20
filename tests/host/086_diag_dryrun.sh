@@ -130,18 +130,28 @@ run_one() {
     return 1
   fi
 
-  # Verify the 2026-05-20 UI amendment: no `logfs history` line, and
-  # graft/fakelock use "none" (not the legacy "NO"). These are cheap
-  # guards against accidental regression of the operator-facing shape.
+  # Verify the 2026-05-20 UI amendment: no `logfs history` line; the old
+  # two-line `graft needed`/`fakelock req` shape was replaced by a single
+  # mode-aware `action req` line (post-2026-05-20 v2 correction); legacy
+  # "NO" / "YES" labels are gone.
   if grep -q '^[[:space:]]*logfs history' "$bundle/report.txt"; then
     echo "FAIL [$scenario]: report.txt still contains a logfs history UI line"
     grep '^[[:space:]]*logfs history' "$bundle/report.txt"
     return 1
   fi
-  if grep -qE 'graft needed[[:space:]]*:[[:space:]]*NO|fakelock req[[:space:]]*:[[:space:]]*NO' \
-       "$bundle/report.txt"; then
-    echo "FAIL [$scenario]: graft/fakelock UI uses legacy 'NO' label (expected 'none')"
+  if grep -qE '^[[:space:]]*(graft needed|fakelock req)[[:space:]]*:' "$bundle/report.txt"; then
+    echo "FAIL [$scenario]: report.txt still uses legacy graft needed/fakelock req lines"
     grep -E 'graft needed|fakelock req' "$bundle/report.txt"
+    return 1
+  fi
+  if ! grep -qE '^[[:space:]]*action req[[:space:]]*:' "$bundle/report.txt"; then
+    echo "FAIL [$scenario]: report.txt missing the action req line"
+    cat "$bundle/report.txt"
+    return 1
+  fi
+  if grep -qE 'action req[[:space:]]*:[[:space:]]*(YES|NO)\b' "$bundle/report.txt"; then
+    echo "FAIL [$scenario]: action req uses legacy YES/NO labels (expected 'none' or partition list)"
+    grep -E 'action req' "$bundle/report.txt"
     return 1
   fi
 

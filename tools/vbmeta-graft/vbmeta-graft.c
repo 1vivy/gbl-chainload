@@ -416,62 +416,132 @@ static const char *derive_slot(const char *mvb_path)
   return "a";
 }
 
-/* Scan buf[0..len) for an AVB0 magic; return pointer to first hit or NULL. */
-static const uint8_t *find_avb0(const uint8_t *buf, size_t len)
-{
-  if (len < 4) return NULL;
-  for (size_t i = 0; i + 4 <= len; i++) {
-    if (buf[i]=='A' && buf[i+1]=='V' && buf[i+2]=='B' && buf[i+3]=='0')
-      return buf + i;
-  }
-  return NULL;
-}
+/* (find_avb0 / probe_graft tail-scan path retired 2026-05-20 — see
+ * probe_partition_for_graft below for the AvbFooter-walking replacement.) */
 
-/* Probe partition buffer for a valid OEM-keyed vbmeta blob whose embedded
- * public key matches chain_pk/chain_pk_len. Returns 1 if found, 0 if not.
+/* Probe a partition file for an OEM-signed-vbmeta graft. Walks the way
+ * libavb does: read the AvbFooter from the last 64 bytes, follow it to
+ * the vbmeta blob at footer.VbmetaOffset, parse the header, then check
+ * the embedded public key matches the parent's chain descriptor.
  *
- * NOTE — "OEM-keyed" means the public key bytes embedded in the vbmeta aux
- * block match the bytes named in the main vbmeta's chain descriptor.  This
- * is a key-identity check, NOT a signature verification — the threat model
- * (spec §3) is operator self-diagnosis of a just-installed payload, not a
- * cryptographic attestation.  Full sig-verify would require the OEM private
- * key and would substantially expand the AVB code surface for no practical
- * benefit to the intended use case. */
-static int probe_graft(const uint8_t *part, size_t part_len,
-                       const uint8_t *chain_pk, uint32_t chain_pk_len)
+ * Returns:
+ *   GRAFT_OK            — footer present, vbmeta parseable, key matches
+ *                         (AOSP first-stage init libavb will accept it).
+ *   GRAFT_KEY_MISMATCH  — footer present, vbmeta parseable, but the
+ *                         embedded key does not match the chain
+ *                         descriptor's key. AVB sig-verify would fail.
+ *   GRAFT_NO_VBMETA     — no AvbFooter at end-of-partition (= libavb's
+ *                         `ok_not_signed` path, the mode-1 boot-blocker
+ *                         per docs/project/vbmeta-graft-vs-construct.md §2b).
+ *
+ * NOTE — this is a key-identity check, NOT a signature verification.
+ * Full sig-verify would need the OEM private key (impossible by
+ * construction) or a libavb-equivalent RSA path. The threat model is
+ * operator self-diagnosis of an install, not cryptographic attestation;
+ * the chain-descriptor pubkey match is what `init` will check anyway
+ * before it trusts the embedded signature, so a key mismatch here is
+ * already definitive evidence init would reject it.
+ *
+ * Why this replaces the old tail-window AVB0 scan: a stock-recovery
+ * graft sits at round_up(custom_content_size, 4K) — for a small custom
+ * recovery in a 100 MiB partition, that offset is ~37 MiB, well outside
+ * any tail window. The AvbFooter at partition_end-64 always points at
+ * the real vbmeta location, no matter how far back it is, so walking
+ * the footer is both correct and cheap (one 64-byte read + one
+ * vbmeta-sized read, regardless of partition size). See
+ * docs/project/vbmeta-graft-vs-construct.md §1 / §2 for the byte layout
+ * and the two-layer verify flow this is mimicking. */
+enum graft_probe_result {
+  GRAFT_OK = 0,
+  GRAFT_KEY_MISMATCH = 1,
+  GRAFT_NO_VBMETA = 2,
+};
+
+static enum graft_probe_result
+probe_partition_for_graft(const char *path,
+                          const uint8_t *chain_pk, uint32_t chain_pk_len)
 {
-  /* Walk looking for AVB0 magic. For each hit, parse the vbmeta header and
-   * compare its embedded public key to the chain descriptor's public key. */
-  const uint8_t *p = part;
-  size_t rem = part_len;
-  while (rem >= 4) {
-    const uint8_t *hit = find_avb0(p, rem);
-    if (!hit) break;
-    size_t off = (size_t)(hit - part);
-    size_t avail = part_len - off;
-    GBL_AVB_VBMETA_HEADER vh;
-    if (AvbParse_VbmetaHeader(hit, (uint64_t)avail, &vh) == EFI_SUCCESS) {
-      /* Get embedded public key */
-      uint64_t aux_len;
-      const uint8_t *aux = aux_block(hit, &vh, &aux_len);
-      if (vh.PublicKeyOffset <= aux_len &&
-          vh.PublicKeySize   <= aux_len - vh.PublicKeyOffset) {
-        const uint8_t *pk = aux + vh.PublicKeyOffset;
-        uint32_t pk_len   = (uint32_t)vh.PublicKeySize;
-        if (chain_pk && chain_pk_len > 0) {
-          if (pk_len == chain_pk_len && memcmp(pk, chain_pk, pk_len) == 0)
-            return 1;
-        } else {
-          /* No chain key available: any valid vbmeta header counts */
-          return 1;
-        }
-      }
-    }
-    /* Advance past this hit and keep searching */
-    p = hit + 4;
-    rem = part_len - (size_t)(p - part);
+  enum graft_probe_result result = GRAFT_NO_VBMETA;
+  int fd = -1;
+  int64_t part_sz = bd_open_size(path, &fd);
+  if (part_sz <= 0 || fd < 0) {
+    if (fd >= 0) close(fd);
+    return GRAFT_NO_VBMETA;
   }
-  return 0;
+  if ((uint64_t)part_sz < GBL_AVB_FOOTER_SIZE) { close(fd); return GRAFT_NO_VBMETA; }
+
+  /* 1. Read the last 64 bytes and decode the AvbFooter.
+   *
+   * NB: we deliberately don't call AvbParse_Footer here. That helper
+   * assumes its (Partition, PartitionSize) pair describes the *whole*
+   * partition (it dereferences `Partition + PartitionSize - 64` and
+   * also bounds-checks `VbmetaOffset + VbmetaSize <= PartitionSize`).
+   * Slurping a multi-MiB block device just to satisfy that contract is
+   * wasteful when all we need is 32 bytes of trailer fields. Hand-roll
+   * the same 4-magic + 5-field decode against the 64-byte buffer
+   * directly, then bounds-check against the real `part_sz`. */
+  uint8_t footer_buf[GBL_AVB_FOOTER_SIZE];
+  off_t footer_off = (off_t)((uint64_t)part_sz - GBL_AVB_FOOTER_SIZE);
+  if (lseek(fd, footer_off, SEEK_SET) != footer_off) { close(fd); return GRAFT_NO_VBMETA; }
+  if (read(fd, footer_buf, GBL_AVB_FOOTER_SIZE) != (ssize_t)GBL_AVB_FOOTER_SIZE) {
+    close(fd); return GRAFT_NO_VBMETA;
+  }
+  if (memcmp(footer_buf, GBL_AVB_FOOTER_MAGIC, 4) != 0) {
+    close(fd); return GRAFT_NO_VBMETA;
+  }
+  GBL_AVB_FOOTER footer;
+  footer.FooterMajorVersion = AvbReadU32Be(footer_buf + 4);
+  footer.FooterMinorVersion = AvbReadU32Be(footer_buf + 8);
+  footer.OriginalImageSize  = AvbReadU64Be(footer_buf + 12);
+  footer.VbmetaOffset       = AvbReadU64Be(footer_buf + 20);
+  footer.VbmetaSize         = AvbReadU64Be(footer_buf + 28);
+  if (footer.VbmetaSize == 0 ||
+      footer.VbmetaOffset >= (uint64_t)part_sz ||
+      footer.VbmetaSize > (uint64_t)part_sz - footer.VbmetaOffset) {
+    close(fd); return GRAFT_NO_VBMETA;
+  }
+
+  /* 2. Read the vbmeta blob the footer points to. */
+  uint8_t *vb = malloc((size_t)footer.VbmetaSize);
+  if (!vb) { close(fd); return GRAFT_NO_VBMETA; }
+  if (lseek(fd, (off_t)footer.VbmetaOffset, SEEK_SET) != (off_t)footer.VbmetaOffset) {
+    free(vb); close(fd); return GRAFT_NO_VBMETA;
+  }
+  if (read(fd, vb, (size_t)footer.VbmetaSize) != (ssize_t)footer.VbmetaSize) {
+    free(vb); close(fd); return GRAFT_NO_VBMETA;
+  }
+  close(fd);
+
+  /* 3. Parse the vbmeta header. If this fails, the bytes the footer
+   *    points to are not a vbmeta — init would treat the partition as
+   *    `ok_not_signed`. */
+  GBL_AVB_VBMETA_HEADER vh;
+  if (AvbParse_VbmetaHeader(vb, footer.VbmetaSize, &vh) != EFI_SUCCESS) {
+    free(vb); return GRAFT_NO_VBMETA;
+  }
+
+  /* 4. Compare embedded pubkey to the chain descriptor's pubkey. If
+   *    chain_pk is unavailable (caller passed NULL/0), any parseable
+   *    vbmeta is a hit — useful for plain `vbmeta list` style usage. */
+  uint64_t aux_len;
+  const uint8_t *aux = aux_block(vb, &vh, &aux_len);
+  if (vh.PublicKeyOffset > aux_len ||
+      vh.PublicKeySize   > aux_len - vh.PublicKeyOffset) {
+    free(vb); return GRAFT_NO_VBMETA;        /* malformed → treat as no vbmeta */
+  }
+  const uint8_t *pk = aux + vh.PublicKeyOffset;
+  uint32_t       pk_len = (uint32_t)vh.PublicKeySize;
+  if (chain_pk && chain_pk_len > 0) {
+    if (pk_len == chain_pk_len && memcmp(pk, chain_pk, pk_len) == 0) {
+      result = GRAFT_OK;
+    } else {
+      result = GRAFT_KEY_MISMATCH;
+    }
+  } else {
+    result = GRAFT_OK;
+  }
+  free(vb);
+  return result;
 }
 
 struct lh_ctx {
@@ -569,36 +639,27 @@ static void lh_cb(GBL_AVB_DESCRIPTOR_TAG tag, const uint8_t *desc,
     snprintf(path, sizeof(path), "%s/%.*s_%s",
              ctx->byname_dir, (int)name_len, (const char *)name, ctx->slot);
 
+    /* Walk the partition's AvbFooter → embedded vbmeta. The buckets:
+     *   GRAFT_OK            → init's libavb will accept it; verdict=match
+     *   GRAFT_KEY_MISMATCH  → vbmeta exists but signed by a non-OEM key;
+     *                         init's sig-verify would fail → graft needed
+     *   GRAFT_NO_VBMETA     → init returns `ok_not_signed`; only mode-2
+     *                         (orange-state) tolerates it. */
     const char *graft_status = "missing";
-    const char *verdict = "mismatch";
-    /* probe_graft scans for AVB0 magic in the last 4 MiB of the partition.
-     * The graft vbmeta sits at round_up(custom_content_size, 4K) which is
-     * near the end of any recovery-sized partition, so a tail window is both
-     * sufficient and cheaper than loading the entire partition into memory.
-     * This also allows block devices to be probed without a slurp(). */
-    int graft_fd = -1;
-    int64_t graft_part_sz = bd_open_size(path, &graft_fd);
-    if (graft_part_sz > 0) {
-#define PROBE_TAIL_WINDOW (4 * 1024 * 1024)
-      uint64_t window = (uint64_t)graft_part_sz > PROBE_TAIL_WINDOW
-                        ? PROBE_TAIL_WINDOW : (uint64_t)graft_part_sz;
-      off_t tail_off = (off_t)((uint64_t)graft_part_sz - window);
-      uint8_t *tail_buf = malloc((size_t)window);
-      if (tail_buf) {
-        int tail_ok = 0;
-        if (lseek(graft_fd, tail_off, SEEK_SET) == tail_off) {
-          ssize_t got = read(graft_fd, tail_buf, (size_t)window);
-          if (got > 0 && probe_graft(tail_buf, (size_t)got, chain_pk, chain_pk_len)) {
-            graft_status = "ok";
-            verdict = "match";
-            tail_ok = 1;
-          }
-          (void)tail_ok;
-        }
-        free(tail_buf);
-#undef PROBE_TAIL_WINDOW
-      }
-      close(graft_fd);
+    const char *verdict      = "mismatch";
+    switch (probe_partition_for_graft(path, chain_pk, chain_pk_len)) {
+      case GRAFT_OK:
+        graft_status = "ok";
+        verdict      = "match";
+        break;
+      case GRAFT_KEY_MISMATCH:
+        graft_status = "key_mismatch";
+        verdict      = "mismatch";
+        break;
+      case GRAFT_NO_VBMETA:
+        graft_status = "no_vbmeta";
+        verdict      = "mismatch";
+        break;
     }
 
     printf("partition=%.*s type=chain declared=- digest=n/a graft=%s verdict=%s\n",
