@@ -10,6 +10,10 @@
 #include "vendor/tomlc99/toml.h"
 #include "../shared/gbl_mode2_profile.h"
 #include "Internal/Sha256.h"
+/* AvbBigEndian.h must come before AvbParseLib.h — it defines UEFI type shims
+   (UINT8/UINT32/UINT64/EFI_STATUS etc.) for __HOST_BUILD__. */
+#include "AvbBigEndian.h"
+#include "AvbParseLib.h"
 
 static void wle16(uint8_t *p, uint16_t v){p[0]=v;p[1]=v>>8;}
 static void wle32(uint8_t *p, uint32_t v){p[0]=v;p[1]=v>>8;p[2]=v>>16;p[3]=v>>24;}
@@ -95,30 +99,6 @@ static int do_compile(const char *in, const char *out) {
     return 0;
 }
 
-/* ---- AVB vbmeta header field byte offsets (big-endian, from avbtool.py
-   AvbVBMetaHeader format string — cross-verified against the 256-byte struct)
-   magic@0(4), req_maj@4(4), req_min@8(4),
-   auth_size@12(8), aux_size@20(8), alg_type@28(4),
-   hash_off@32(8), hash_size@40(8), sig_off@48(8), sig_size@56(8),
-   pk_off@64(8),  pk_size@72(8), pkm_off@80(8), pkm_size@88(8),
-   desc_off@96(8), desc_size@104(8), rollback@112(8),
-   flags@120(4), rollback_loc@124(4), release@128(48), padding(80) = 256 */
-
-#define AVB_HDR_SIZE         256u
-#define AVB_AUTH_SIZE_OFF     12u
-#define AVB_AUX_SIZE_OFF      20u
-#define AVB_PK_OFF_OFF        64u
-#define AVB_PK_SIZE_OFF       72u
-#define AVB_DESC_OFF_OFF      96u
-#define AVB_DESC_SIZE_OFF    104u
-
-static uint64_t rbe64(const uint8_t *p) {
-    return ((uint64_t)p[0]<<56)|((uint64_t)p[1]<<48)|
-           ((uint64_t)p[2]<<40)|((uint64_t)p[3]<<32)|
-           ((uint64_t)p[4]<<24)|((uint64_t)p[5]<<16)|
-           ((uint64_t)p[6]<< 8)| (uint64_t)p[7];
-}
-
 static void hex64(const uint8_t digest[32], char out[65]) {
     static const char h[] = "0123456789abcdef";
     for (int i = 0; i < 32; i++) {
@@ -151,7 +131,7 @@ int derive_main(int argc, char **argv) {
     long fsz = ftell(fv);
     if (fsz < 0) { fprintf(stderr,"error: ftell: %s\n",strerror(errno)); fclose(fv); return 1; }
     rewind(fv);
-    if ((size_t)fsz < AVB_HDR_SIZE) {
+    if ((size_t)fsz < GBL_AVB_VBMETA_HEADER_SIZE) {
         fprintf(stderr, "error: %s: too small to be a vbmeta image\n",
                 vbmeta_path);
         fclose(fv); return 1;
@@ -163,39 +143,34 @@ int derive_main(int argc, char **argv) {
     }
     fclose(fv);
 
-    /* --- verify magic --- */
-    if (memcmp(img, "AVB0", 4) != 0) {
-        fprintf(stderr,"error: %s: not a vbmeta image (bad magic)\n",
+    /* --- parse vbmeta header via AvbParseLib --- */
+    GBL_AVB_VBMETA_HEADER hdr;
+    EFI_STATUS s = AvbParse_VbmetaHeader (img, (UINT64)fsz, &hdr);
+    if (s == EFI_NOT_FOUND) {
+        fprintf(stderr, "error: %s: not a vbmeta image (bad magic)\n",
                 vbmeta_path);
         free(img); return 1;
     }
+    if (s != EFI_SUCCESS) {
+        fprintf(stderr, "error: %s: malformed vbmeta header\n", vbmeta_path);
+        free(img); return 1;
+    }
 
-    /* --- parse header --- */
-    uint64_t auth_size  = rbe64(img + AVB_AUTH_SIZE_OFF);
-    uint64_t aux_size   = rbe64(img + AVB_AUX_SIZE_OFF);
-    uint64_t pk_off     = rbe64(img + AVB_PK_OFF_OFF);   /* within aux */
-    uint64_t pk_size    = rbe64(img + AVB_PK_SIZE_OFF);
-    uint64_t desc_off   = rbe64(img + AVB_DESC_OFF_OFF); /* within aux */
-    uint64_t desc_size  = rbe64(img + AVB_DESC_SIZE_OFF);
+    uint64_t auth_size  = hdr.AuthenticationDataBlockSize;
+    uint64_t aux_size   = hdr.AuxiliaryDataBlockSize;
+    uint64_t pk_off     = hdr.PublicKeyOffset;
+    uint64_t pk_size    = hdr.PublicKeySize;
+    uint64_t desc_off   = hdr.DescriptorsOffset;
+    uint64_t desc_size  = hdr.DescriptorsSize;
 
     if (pk_size == 0) {
-        fprintf(stderr,"error: %s: vbmeta has no public key (unsigned?)\n",
+        fprintf(stderr, "error: %s: vbmeta has no public key (unsigned?)\n",
                 vbmeta_path);
         free(img); return 1;
     }
-
-    /* Fix 1: overflow-safe bounds checks before any addition */
-    if (auth_size > (uint64_t)fsz - AVB_HDR_SIZE) {
-        fprintf(stderr,"error: %s: auth block extends past file\n",
-                vbmeta_path);
-        free(img); return 1;
-    }
-    uint64_t aux_off = AVB_HDR_SIZE + auth_size;
-    if (aux_size > (uint64_t)fsz - aux_off) {
-        fprintf(stderr,"error: %s: aux block extends past file\n",
-                vbmeta_path);
-        free(img); return 1;
-    }
+    /* AvbParse_VbmetaHeader already enforced header + auth + aux <= file size,
+       so aux_off computation below cannot overflow. */
+    uint64_t aux_off = (uint64_t)GBL_AVB_VBMETA_HEADER_SIZE + auth_size;
     if (pk_off > aux_size || pk_size > aux_size - pk_off) {
         fprintf(stderr,"error: %s: public key extends past aux block\n",
                 vbmeta_path);
@@ -222,10 +197,9 @@ int derive_main(int argc, char **argv) {
     }
     gbl_sha256(pubkey, (size_t)pk_size, pubkey_digest);
 
-    /* vbh = SHA256(image[0 .. 256 + auth_size + aux_size])
-       No overflow possible: auth_size and aux_size were already validated to
-       fit within fsz - AVB_HDR_SIZE and fsz - aux_off respectively, so
-       aux_off + aux_size <= fsz, and vbmeta_size == aux_off + aux_size. */
+    /* vbh = SHA256(image[0 .. GBL_AVB_VBMETA_HEADER_SIZE + auth_size + aux_size])
+       No overflow possible: AvbParse_VbmetaHeader already validated that
+       header + auth + aux <= file size, so aux_off + aux_size <= fsz. */
     uint64_t vbmeta_size = aux_off + aux_size;
     if (vbmeta_size > (uint64_t)fsz) {
         fprintf(stderr,"error: %s: vbmeta declares %llu bytes but file is only %ld\n",
@@ -239,57 +213,52 @@ int derive_main(int argc, char **argv) {
     gbl_sha256(img, (size_t)fsz, src_sha_bytes);
     char src_sha[65]; hex64(src_sha_bytes, src_sha);
 
-    /* --- walk property descriptors --- */
-    const uint8_t *desc_data = img + aux_off + desc_off;
+    /* --- walk property descriptors via AvbParseLib --- */
+    const uint8_t *aux_block = img + aux_off;
     uint64_t os_ver_encoded = 0, spl_encoded = 0;
     char os_ver_str[128] = {0}, spl_str[128] = {0};
-    int found_os  = 0, found_spl = 0;
+    int found_os = 0, found_spl = 0;
 
-    uint64_t doff = 0;
-    while (doff + 16 <= desc_size) {
-        const uint8_t *d = desc_data + doff;
-        uint64_t tag = rbe64(d);
-        uint64_t nb  = rbe64(d + 8);  /* num_bytes_following (already padded) */
+    UINT64 cursor = desc_off;
+    UINT64 walk_end = desc_off + desc_size;
+    while (cursor < walk_end) {
+        GBL_AVB_DESCRIPTOR_TAG tag;
+        const UINT8 *desc;
+        UINT64 desc_len;
+        EFI_STATUS ds = AvbParse_NextDescriptor (aux_block, walk_end,
+                                                 &cursor, &tag, &desc, &desc_len);
+        if (ds == EFI_END_OF_MEDIA) break;
+        if (ds != EFI_SUCCESS) break; /* malformed — stop walking, do not abort */
+        if (tag != GblAvbDescPropertyTag) continue;
 
-        /* check we don't read past desc_data */
-        if (nb > desc_size - doff - 16) break;
+        /* Property descriptor body layout (libavb): after the 16-byte header,
+           key_size(u64 BE) at +16, val_size(u64 BE) at +24, then key\0val\0. */
+        if (desc_len < 32) continue;
+        uint64_t klen = AvbReadU64Be (desc + 16);
+        uint64_t vlen = AvbReadU64Be (desc + 24);
+        /* Overflow-safe bounds checks. */
+        if (klen > desc_len - 32 || vlen > desc_len - 32 - klen) continue;
+        if (klen + 1 + vlen + 1 > desc_len - 32) continue;
 
-        if (tag == 0) {
-            /* property descriptor — body starts at d+16
-               body layout: key_size(u64 BE), val_size(u64 BE), key\0val\0 */
-            if (nb < 16) { doff += 16 + nb; continue; }
-            uint64_t klen = rbe64(d + 16);
-            uint64_t vlen = rbe64(d + 24);
-            /* key starts at d+32, followed by \0, then value, then \0.
-               Total descriptor span is 16+nb bytes (tag+nb header = 16, body = nb). */
-            /* Fix 4: pre-check individual lengths before combining to prevent wrap */
-            if (klen > nb || vlen > nb - klen) {
-                doff += 16 + nb; continue;
-            }
-            if (klen + 1 + vlen + 1 > nb - 16u) {
-                doff += 16 + nb; continue;
-            }
-            const char *key = (const char *)(d + 32);
-            const char *val = (const char *)(d + 32 + klen + 1);
+        const char *key = (const char *)(desc + 32);
+        const char *val = (const char *)(desc + 32 + klen + 1);
 
-            if (klen == strlen("com.android.build.boot.os_version") &&
-                memcmp(key, "com.android.build.boot.os_version", klen) == 0) {
-                size_t vsz = vlen < sizeof(os_ver_str)-1 ? (size_t)vlen
-                                                          : sizeof(os_ver_str)-1;
-                memcpy(os_ver_str, val, vsz);
-                os_ver_str[vsz] = '\0';
-                found_os = 1;
-            }
-            if (klen == strlen("com.android.build.boot.security_patch") &&
-                memcmp(key, "com.android.build.boot.security_patch", klen) == 0) {
-                size_t vsz = vlen < sizeof(spl_str)-1 ? (size_t)vlen
-                                                       : sizeof(spl_str)-1;
-                memcpy(spl_str, val, vsz);
-                spl_str[vsz] = '\0';
-                found_spl = 1;
-            }
+        if (klen == strlen("com.android.build.boot.os_version") &&
+            memcmp(key, "com.android.build.boot.os_version", klen) == 0) {
+            size_t vsz = vlen < sizeof(os_ver_str)-1 ? (size_t)vlen
+                                                       : sizeof(os_ver_str)-1;
+            memcpy(os_ver_str, val, vsz);
+            os_ver_str[vsz] = '\0';
+            found_os = 1;
         }
-        doff += 16 + nb;
+        if (klen == strlen("com.android.build.boot.security_patch") &&
+            memcmp(key, "com.android.build.boot.security_patch", klen) == 0) {
+            size_t vsz = vlen < sizeof(spl_str)-1 ? (size_t)vlen
+                                                    : sizeof(spl_str)-1;
+            memcpy(spl_str, val, vsz);
+            spl_str[vsz] = '\0';
+            found_spl = 1;
+        }
     }
 
     if (!found_os) {
