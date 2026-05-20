@@ -78,3 +78,12 @@ mode2-profile-macos-arm64: $(SRCS) $(HDRS)
 	zig cc -target aarch64-macos $(XCFLAGS) -c -o avbparse-macarm64.o $(AVB)/AvbParse.c
 	zig cc -target aarch64-macos $(XCFLAGS) -o $@ \
 	    m2p-macarm64.o toml-macarm64.o sha256-macarm64.o avbparse-macarm64.o
+
+# Project version (single source of truth: top-level VERSION file).
+GBL_TOOL_VERSION := $(shell tr -d '[:space:]' < $(dir $(lastword $(MAKEFILE_LIST)))../../VERSION)
+ifeq ($(GBL_TOOL_VERSION),)
+$(error VERSION file is empty or missing)
+endif
+CFLAGS  += -DGBL_TOOL_VERSION='"$(GBL_TOOL_VERSION)"'
+XCFLAGS += -DGBL_TOOL_VERSION='"$(GBL_TOOL_VERSION)"'
+NDK_CFLAGS += -DGBL_TOOL_VERSION='"$(GBL_TOOL_VERSION)"'

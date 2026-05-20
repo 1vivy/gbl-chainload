@@ -43,3 +43,12 @@ vbmeta-graft-macos-x64: $(SRCS)
 
 vbmeta-graft-macos-arm64: $(SRCS)
 	zig cc -target aarch64-macos $(XCFLAGS) $^ -o $@
+
+# Project version (single source of truth: top-level VERSION file).
+GBL_TOOL_VERSION := $(shell tr -d '[:space:]' < $(dir $(lastword $(MAKEFILE_LIST)))../../VERSION)
+ifeq ($(GBL_TOOL_VERSION),)
+$(error VERSION file is empty or missing)
+endif
+CFLAGS  += -DGBL_TOOL_VERSION='"$(GBL_TOOL_VERSION)"'
+XCFLAGS += -DGBL_TOOL_VERSION='"$(GBL_TOOL_VERSION)"'
+NDK_CFLAGS += -DGBL_TOOL_VERSION='"$(GBL_TOOL_VERSION)"'

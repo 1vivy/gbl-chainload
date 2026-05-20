@@ -71,6 +71,10 @@ static void restore_backup(const char *dst, const char *backup) {
 }
 
 int main(int argc, char **argv) {
+    if (argc >= 2 && strcmp(argv[1], "--version") == 0) {
+        printf("gbl-commit %s\n", GBL_TOOL_VERSION);
+        return 0;
+    }
     const char *src = NULL, *dst = NULL, *backup = NULL;
     int verify = 0;
     for (int i = 1; i < argc; i++) {
@@ -82,8 +86,9 @@ int main(int argc, char **argv) {
     }
     if (!src || !dst) {
         fprintf(stderr,
+            "gbl-commit %s\n"
             "usage: gbl-commit --src FILE --dst PATH "
-            "[--backup BACKUP_PATH] [--verify]\n");
+            "[--backup BACKUP_PATH] [--verify]\n", GBL_TOOL_VERSION);
         return 2;
     }
 

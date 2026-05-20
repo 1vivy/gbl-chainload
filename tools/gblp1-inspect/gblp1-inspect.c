@@ -119,7 +119,15 @@ static int find_container(const uint8_t *buf, size_t len,
 }
 
 int main(int argc, char **argv) {
-    if (argc != 2) { fprintf(stderr, "usage: gblp1-inspect <image>\n"); return 2; }
+    if (argc >= 2 && strcmp(argv[1], "--version") == 0) {
+        printf("gblp1-inspect %s\n", GBL_TOOL_VERSION);
+        return 0;
+    }
+    if (argc != 2) {
+        fprintf(stderr, "gblp1-inspect %s\nusage: gblp1-inspect <image>\n",
+                GBL_TOOL_VERSION);
+        return 2;
+    }
     uint8_t *buf = NULL; size_t blen = 0;
     if (slurp(argv[1], &buf, &blen)) return 1;
 

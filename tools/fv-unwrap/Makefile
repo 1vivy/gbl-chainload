@@ -49,3 +49,12 @@ fv-unwrap-macos-arm64: fv-unwrap.c $(LIBLZMA_MACOS_ARM64)/lib/liblzma.a
 	zig cc -target aarch64-macos $(XCFLAGS) \
 	    -I$(LIBLZMA_MACOS_ARM64)/include -o $@ \
 	    fv-unwrap.c $(LIBLZMA_MACOS_ARM64)/lib/liblzma.a
+
+# Project version (single source of truth: top-level VERSION file).
+GBL_TOOL_VERSION := $(shell tr -d '[:space:]' < $(dir $(lastword $(MAKEFILE_LIST)))../../VERSION)
+ifeq ($(GBL_TOOL_VERSION),)
+$(error VERSION file is empty or missing)
+endif
+CFLAGS  += -DGBL_TOOL_VERSION='"$(GBL_TOOL_VERSION)"'
+XCFLAGS += -DGBL_TOOL_VERSION='"$(GBL_TOOL_VERSION)"'
+NDK_CFLAGS += -DGBL_TOOL_VERSION='"$(GBL_TOOL_VERSION)"'

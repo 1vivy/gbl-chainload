@@ -632,16 +632,22 @@ static int cmd_list_hash(const char *mvb_path, const char *byname_dir)
 static int usage(void)
 {
   fprintf(stderr,
+    "vbmeta-graft %s\n"
     "usage:\n"
     "  vbmeta-graft list      <vbmeta-or-partition-img>\n"
     "  vbmeta-graft check     <candidate-part-img> <main-vbmeta-img> <part>\n"
     "  vbmeta-graft graft     --stock <s> --custom <c> --part-size <N> --out <o>\n"
-    "  vbmeta-graft list-hash <active-vbmeta-img> <byname-dir>\n");
+    "  vbmeta-graft list-hash <active-vbmeta-img> <byname-dir>\n",
+    GBL_TOOL_VERSION);
   return 2;
 }
 
 int main(int argc, char **argv)
 {
+  if (argc >= 2 && strcmp(argv[1], "--version") == 0) {
+    printf("vbmeta-graft %s\n", GBL_TOOL_VERSION);
+    return 0;
+  }
   if (argc < 2) return usage();
   if (strcmp(argv[1], "list") == 0 && argc == 3)
     return cmd_list(argv[2]);

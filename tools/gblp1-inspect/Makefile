@@ -26,3 +26,12 @@ gblp1-inspect-android: $(SRCS) $(HDRS)
 
 clean:
 	rm -f gblp1-inspect gblp1-inspect-android
+
+# Project version (single source of truth: top-level VERSION file).
+GBL_TOOL_VERSION := $(shell tr -d '[:space:]' < $(dir $(lastword $(MAKEFILE_LIST)))../../VERSION)
+ifeq ($(GBL_TOOL_VERSION),)
+$(error VERSION file is empty or missing)
+endif
+CFLAGS  += -DGBL_TOOL_VERSION='"$(GBL_TOOL_VERSION)"'
+XCFLAGS += -DGBL_TOOL_VERSION='"$(GBL_TOOL_VERSION)"'
+NDK_CFLAGS += -DGBL_TOOL_VERSION='"$(GBL_TOOL_VERSION)"'

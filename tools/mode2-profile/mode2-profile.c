@@ -377,12 +377,18 @@ int derive_main(int argc, char **argv) {
 }
 
 int main(int argc, char **argv) {
+    if (argc >= 2 && !strcmp(argv[1], "--version")) {
+        printf("mode2-profile %s\n", GBL_TOOL_VERSION);
+        return 0;
+    }
     if (argc >= 5 && !strcmp(argv[1],"compile") && !strcmp(argv[3],"-o"))
         return do_compile(argv[2], argv[4]);
     if (argc >= 2 && !strcmp(argv[1],"derive"))
         return derive_main(argc, argv);
     fprintf(stderr,
+      "mode2-profile %s\n"
       "usage: mode2-profile compile <in.toml> -o <out.bin>\n"
-      "       mode2-profile derive  <vbmeta.img> -o <out.toml>\n");
+      "       mode2-profile derive  <vbmeta.img> -o <out.toml>\n",
+      GBL_TOOL_VERSION);
     return 2;
 }

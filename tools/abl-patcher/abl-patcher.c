@@ -11,6 +11,7 @@
 
 static int Usage (CONST char *argv0) {
   fprintf (stderr,
+    "%s %s\n"
     "Usage: %s --in <abl.bin> [--out <patched.bin>]\n"
     "       %s --check-anchors-only --in <abl.bin>\n"
     "       %s --oem <id> [--no-mode1] --in <abl.bin> [--out <patched.bin>]\n"
@@ -19,11 +20,15 @@ static int Usage (CONST char *argv0) {
     "                     Default: GBL_OEM_NONE (no OEM group; universal + mode_1).\n"
     "  --no-mode1         Exclude mode_1 patches (use for mode-2 profile ZIP).\n"
     "                     Default: mode_1 patches included.\n",
-    argv0, argv0, argv0);
+    argv0, GBL_TOOL_VERSION, argv0, argv0, argv0);
   return 2;
 }
 
 int main (int argc, char **argv) {
+  if (argc >= 2 && strcmp (argv[1], "--version") == 0) {
+    printf ("abl-patcher %s\n", GBL_TOOL_VERSION);
+    return 0;
+  }
   CONST char *In         = NULL;
   CONST char *Out        = NULL;
   CONST char *OemStr     = NULL;

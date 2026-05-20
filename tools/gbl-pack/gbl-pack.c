@@ -27,6 +27,10 @@ static int slurp(const char *path, uint8_t **out, size_t *out_size)
 
 int main(int argc, char **argv)
 {
+    if (argc >= 2 && strcmp(argv[1], "--version") == 0) {
+        printf("gbl-pack %s\n", GBL_TOOL_VERSION);
+        return 0;
+    }
     const char *cached = NULL, *source = NULL, *extracted = NULL,
                *out = NULL, *profile = NULL;
     for (int i = 1; i < argc; i++) {
@@ -39,9 +43,10 @@ int main(int argc, char **argv)
     }
     if (!out || (!cached && !profile)) {
         fprintf(stderr,
+            "gbl-pack %s\n"
             "usage: gbl-pack --out OUT "
             "[--cached-abl PE --source RAW --extracted PE] "
-            "[--mode2-profile BIN]\n");
+            "[--mode2-profile BIN]\n", GBL_TOOL_VERSION);
         return 2;
     }
     if (cached && (!source || !extracted)) {
@@ -61,7 +66,7 @@ int main(int argc, char **argv)
             return 1;
     }
 
-    in.packer_version = "gbl-pack 1.0.0";
+    in.packer_version = "gbl-pack " GBL_TOOL_VERSION;
     char ts[32];
     time_t now = time(NULL);
     struct tm tm;

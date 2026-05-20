@@ -241,8 +241,13 @@ static PeBlob extract_from_partition (const uint8_t *buf, size_t size)
 
 int main (int argc, char **argv)
 {
+  if (argc >= 2 && strcmp (argv[1], "--version") == 0) {
+    printf ("fv-unwrap %s\n", GBL_TOOL_VERSION);
+    return 0;
+  }
   if (argc != 3) {
-    fprintf (stderr, "Usage: %s <partition.bin> <output.efi>\n", argv[0]);
+    fprintf (stderr, "%s %s\nUsage: %s <partition.bin> <output.efi>\n",
+             argv[0], GBL_TOOL_VERSION, argv[0]);
     return 2;
   }
 
