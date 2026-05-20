@@ -57,6 +57,17 @@ rm -rf "$STAGE/update-tools.sh" "$STAGE/README.md"
 # .omc, ...) - the cp above pulls in the submodule's nested state.
 find "$STAGE" -mindepth 1 -name '.*' -prune -exec rm -rf {} +
 
+# --- substitute project VERSION placeholder in update-binary ---
+GBL_VERSION="$(tr -d '[:space:]' < "$ROOT/VERSION")"
+[ -n "$GBL_VERSION" ] || { echo "error: empty VERSION at $ROOT/VERSION" >&2; exit 1; }
+sed -i "s|__GBL_VERSION__|${GBL_VERSION}|g" \
+    "$STAGE/META-INF/com/google/android/update-binary"
+# Belt-and-braces: refuse to ship a ZIP that still contains the placeholder.
+if grep -q '__GBL_VERSION__' "$STAGE/META-INF/com/google/android/update-binary"; then
+  echo "error: placeholder __GBL_VERSION__ still in update-binary after substitution" >&2
+  exit 1
+fi
+
 echo "$MODE" > "$STAGE/modes/SELECTED"
 
 # read the selected mode's declared artifact needs (MODE_TOOLS / MODE_EFI for
