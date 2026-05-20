@@ -19,8 +19,10 @@
   would still recurse. Shared `gScmGuard` collapses every nested SCM
   dispatch into a silent pass-through until the outer call returns.
 
-  UniversalBaseline.c may drop selected SIP calls (notably TZ_BLOW_SW_FUSE)
-  before they reach firmware. Other traffic is observation/pass-through.
+  UniversalBaseline.c drops three SIP calls universally before they reach
+  firmware: TZ_BLOW_SW_FUSE_ID, TZ_UPDATE_ROLLBACK_VERSION_ID, and
+  TZ_UPDATE_ROLLBACK_VERSION_IF_A_B_PARTITION_FEATURE_ENABLED_ID.
+  Other traffic is observation/pass-through.
 **/
 
 #include <Uefi.h>
@@ -261,7 +263,7 @@ DecodeMinkIpcInvoke (
  *
  * TZ_INFO_GET_SECURE_STATE      = SMC(SIP=2, INFO=6, 4)   = 0x02000604
  * TZ_BLOW_SW_FUSE_ID            = SMC(SIP=2, FUSE=8, 1)   = 0x02000801
- *   — DROP CANDIDATE (log only here; see gbl_root scm_hook.h:84-96)
+ *   — dropped universally (see UniversalBaseline.c)
  * TZ_IS_SW_FUSE_BLOWN_ID        = SMC(SIP=2, FUSE=8, 4)   = 0x02000804
  *   — NOTE: task doc used 0x02000402 but header says FUSE=8 → 0x02000804
  * TZ_INFO_GET_FEATURE_VERSION_ID= SMC(SIP=2, INFO=6, 3)   = 0x02000603
