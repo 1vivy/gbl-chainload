@@ -4,8 +4,18 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-# Ensure payload.bin is available (needed by diag_fake_byname.sh).
-[ -f tests/host/.last/060/payload.bin ] || bash tests/host/060_pack_roundtrip.sh
+# 060 + zip/base/mode-1.efi feed the diag_fake_byname helper. 060 SKIPs when
+# the upstream PE fixture is absent (gitignored — e.g. on CI), so propagate
+# the SKIP rather than ERRORing downstream.
+if [ ! -f tests/host/.last/060/payload.bin ]; then
+  bash tests/host/060_pack_roundtrip.sh
+  [ -f tests/host/.last/060/payload.bin ] || {
+    echo "SKIP: 086 — upstream payload.bin absent (PE fixture missing)"; exit 0;
+  }
+fi
+[ -f zip/base/mode-1.efi ] || {
+  echo "SKIP: 086 — zip/base/mode-1.efi absent"; exit 0;
+}
 
 # Build native tools (used via PATH inside diag.sh).
 make -s -C tools/gblp1-inspect
