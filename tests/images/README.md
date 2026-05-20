@@ -29,3 +29,13 @@ WIP).
 | `test_patch10` (libavb force-AVB-success) | `*.efi` (any Qcom libavb PE) | string-anchored function entry/exit rewrite; needs extracted PEs |
 | `042` mandatory anchor-uniqueness | `*.efi` only | strict |
 | `042` informational anchor-uniqueness | `*.bin`, `*.img` | non-fatal until extractor lands |
+| `060`/`061`/`062`/`064`/`067`/`069`/`081`/`083`/`084` | `pe/infiniti-EU-16.0.5.703.efi` | unwrapped stock infiniti PE |
+| `074`/`085` | `grafted-recovery.img` (LFS) | stock-vbmeta-grafted custom recovery |
+| `079`/`082` | `vbmeta-infiniti-IN-16.0.7.201.img` | stock IN 16.0.7.201 vbmeta |
+
+## Storage notes
+
+`grafted-recovery.img` is 100 MiB and lives on Git LFS (see `.gitattributes`).
+A fresh clone needs `git lfs pull` (or `git lfs install` + `git lfs fetch`) to
+materialize it; without it, tests 074 and 085 SKIP. CI's `actions/checkout`
+uses `lfs: true` to fetch automatically.

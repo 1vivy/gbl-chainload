@@ -7,7 +7,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-PE=images/pe/infiniti-EU-16.0.5.703.efi
+PE=tests/images/pe/infiniti-EU-16.0.5.703.efi
 [ -f "$PE" ] || { echo "SKIP: $PE missing"; exit 0; }
 
 make -s -C tools/abl-patcher

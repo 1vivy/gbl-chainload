@@ -10,7 +10,7 @@ rm -rf "$OUT"; mkdir -p "$OUT"
 VG=tools/vbmeta-graft/vbmeta-graft
 
 # grafted-recovery.img is a footer'd partition with a real embedded vbmeta.
-FX=images/grafted-recovery.img
+FX=tests/images/grafted-recovery.img
 [ -f "$FX" ] || { echo "SKIP: $FX absent"; exit 0; }
 
 # --- list: enumerates the embedded vbmeta's descriptors ---------------

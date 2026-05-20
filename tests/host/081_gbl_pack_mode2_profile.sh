@@ -47,7 +47,7 @@ PY
 # Combined path: cached_abl + source_meta + mode2_profile (ec=3).
 # The PE fixture may not be present on all build hosts; skip only this
 # sub-case if it is missing — the rest of 081 has already passed above.
-PE=images/pe/infiniti-EU-16.0.5.703.efi
+PE=tests/images/pe/infiniti-EU-16.0.5.703.efi
 if [ ! -f "$PE" ]; then
   echo "SKIP: $PE missing — combined ec=3 sub-case skipped (rest of 081 passed)"
 else

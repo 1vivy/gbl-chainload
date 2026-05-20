@@ -3,7 +3,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-VBMETA=images/vbmeta-infiniti-IN-16.0.7.201.img
+VBMETA=tests/images/vbmeta-infiniti-IN-16.0.7.201.img
 AVBTOOL="${AVBTOOL:-$HOME/avbtool.py}"
 
 [ -f "$VBMETA" ]  || { echo "SKIP: 079 — $VBMETA missing"; exit 0; }

@@ -5,7 +5,7 @@ cd "$(dirname "$0")/../.."
 
 make -s -C tools/vbmeta-graft
 
-FX=images/grafted-recovery.img
+FX=tests/images/grafted-recovery.img
 [ -f "$FX" ] || { echo "SKIP: $FX absent"; exit 0; }
 
 OUT=tests/host/.last/085

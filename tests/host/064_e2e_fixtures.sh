@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/host/064_e2e_fixtures.sh — pack each images/pe/*.efi fixture (after
+# tests/host/064_e2e_fixtures.sh — pack each tests/images/pe/*.efi fixture (after
 # abl-patcher pre-patch) and verify it parses cleanly.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
@@ -12,8 +12,8 @@ OUT=tests/host/.last/064
 mkdir -p "$OUT"
 
 shopt -s nullglob
-fixtures=(images/pe/*.efi)
-[ ${#fixtures[@]} -gt 0 ] || { echo "SKIP: no images/pe/*.efi fixtures"; exit 0; }
+fixtures=(tests/images/pe/*.efi)
+[ ${#fixtures[@]} -gt 0 ] || { echo "SKIP: no tests/images/pe/*.efi fixtures"; exit 0; }
 
 for pe in "${fixtures[@]}"; do
   name=$(basename "$pe" .efi)

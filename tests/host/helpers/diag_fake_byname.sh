@@ -43,7 +43,7 @@ fi
 [ -f "$PATCHED_PE" ] || { echo "ERROR: no patched.efi found" >&2; exit 1; }
 
 # Original PE for ABL slots that SHOULD retain the loader path.
-ORIG_PE="$REPO/images/pe/infiniti-EU-16.0.5.703.efi"
+ORIG_PE="$REPO/tests/images/pe/infiniti-EU-16.0.5.703.efi"
 [ -f "$ORIG_PE" ] || { echo "ERROR: original PE $ORIG_PE not found" >&2; exit 1; }
 
 # 1. EFISP fixture.
