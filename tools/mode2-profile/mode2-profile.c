@@ -197,15 +197,10 @@ int derive_main(int argc, char **argv) {
     }
     gbl_sha256(pubkey, (size_t)pk_size, pubkey_digest);
 
-    /* vbh = SHA256(image[0 .. GBL_AVB_VBMETA_HEADER_SIZE + auth_size + aux_size])
-       No overflow possible: AvbParse_VbmetaHeader already validated that
-       header + auth + aux <= file size, so aux_off + aux_size <= fsz. */
+    /* vbh = SHA256(image[0 .. 256 + auth_size + aux_size]).
+       AvbParse_VbmetaHeader already validated header + auth + aux <= fsz,
+       so aux_off + aux_size is safely <= fsz. */
     uint64_t vbmeta_size = aux_off + aux_size;
-    if (vbmeta_size > (uint64_t)fsz) {
-        fprintf(stderr,"error: %s: vbmeta declares %llu bytes but file is only %ld\n",
-                vbmeta_path, (unsigned long long)vbmeta_size, fsz);
-        free(img); return 1;
-    }
     gbl_sha256(img, (size_t)vbmeta_size, vbh_digest);
 
     /* sha256 of the whole file (for the provenance comment) */

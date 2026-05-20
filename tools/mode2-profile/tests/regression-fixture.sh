@@ -3,6 +3,8 @@
 # the captured golden TOML for tests/images/vbmeta-infiniti-IN-16.0.7.201.img.
 # This locks down the host-tool migration to AvbParseLib (Task 3 of the AVB
 # parser consolidation plan).
+# To recapture the golden after fixture update, from repo root:
+#   tools/mode2-profile/mode2-profile derive tests/images/vbmeta-infiniti-IN-16.0.7.201.img -o tools/mode2-profile/tests/baseline.toml.golden
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 TOOL_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
