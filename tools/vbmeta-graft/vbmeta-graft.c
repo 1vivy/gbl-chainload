@@ -20,6 +20,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <inttypes.h>
 #include <sys/stat.h>
 
 #include "Sha256.h"
@@ -439,12 +440,23 @@ static void lh_cb(GBL_AVB_DESCRIPTOR_TAG tag, const uint8_t *desc,
                                 &digest, &digest_len) != EFI_SUCCESS)
       return;
 
-    /* Read image_size and salt from raw descriptor bytes */
-    if (desc_len < 132) return;
-    uint64_t image_size = 0;
-    for (int i = 0; i < 8; i++)
-      image_size = (image_size << 8) | desc[16 + i];  /* image_size at offset 16 */
-    uint32_t salt_len = (uint32_t)((desc[60]<<24)|(desc[61]<<16)|(desc[62]<<8)|desc[63]);
+    /* Read image_size and salt from raw descriptor bytes.
+     * AvbParse_HashDescriptor already validated DescriptorLen >= 132 and
+     * 132 + name_len + salt_len + digest_len <= desc_len, so offsets up to
+     * 132 + name_len + salt_len are safe after the additional check below. */
+    uint64_t image_size = AvbReadU64Be(desc + 16); /* image_size at offset 16 */
+    uint32_t salt_len   = AvbReadU32Be(desc + 60); /* salt_len at offset 60 */
+
+    /* Bounds-check: 132 + name_len + salt_len must be within desc_len.
+     * AvbParse_HashDescriptor checked name+salt+digest combined; a crafted
+     * descriptor could still place salt_len past desc_len if digest_len is
+     * underreported by a non-standard vbmeta. */
+    if ((uint64_t)132 + name_len + salt_len > desc_len) {
+      /* malformed descriptor — treat as digest missing */
+      printf("partition=%.*s type=hash declared=0 digest=missing graft=n/a verdict=mismatch\n",
+             (int)name_len, (const char *)name);
+      return;
+    }
     const uint8_t *salt = desc + 132 + name_len;
 
     /* Build partition path */
@@ -468,6 +480,12 @@ static void lh_cb(GBL_AVB_DESCRIPTOR_TAG tag, const uint8_t *desc,
       /* Use a streaming approach: init context, feed salt, feed image bytes */
       /* gbl_sha256 is single-shot; allocate a combined buffer */
       uint64_t total = (uint64_t)salt_len + read_size;
+      if (total > 128 * 1024 * 1024ULL) {
+        char part_name[256];
+        snprintf(part_name, sizeof(part_name), "%.*s", (int)name_len, (const char *)name);
+        fprintf(stderr, "list-hash: %s: image_size %" PRIu64 " exceeds 128 MiB cap; skipping digest\n",
+                part_name, image_size);
+      }
       if (total <= 128 * 1024 * 1024ULL) { /* sanity: <= 128 MiB */
         uint8_t *combined = malloc((size_t)total);
         if (combined) {
@@ -489,9 +507,9 @@ static void lh_cb(GBL_AVB_DESCRIPTOR_TAG tag, const uint8_t *desc,
       free(part_buf);
     }
 
-    printf("partition=%-16.*s type=hash  declared=%-12llu digest=%-8s graft=n/a   verdict=%s\n",
+    printf("partition=%.*s type=hash declared=%" PRIu64 " digest=%s graft=n/a verdict=%s\n",
            (int)name_len, (const char *)name,
-           (unsigned long long)image_size,
+           image_size,
            digest_status, verdict);
 
   } else if (tag == GblAvbDescChainPartitionTag) {
@@ -521,9 +539,9 @@ static void lh_cb(GBL_AVB_DESCRIPTOR_TAG tag, const uint8_t *desc,
       free(part_buf);
     }
 
-    printf("partition=%-16.*s type=chain declared=%-12s digest=n/a  graft=%-7s verdict=%s\n",
+    printf("partition=%.*s type=chain declared=- digest=n/a graft=%s verdict=%s\n",
            (int)name_len, (const char *)name,
-           "-", graft_status, verdict);
+           graft_status, verdict);
   }
 }
 
