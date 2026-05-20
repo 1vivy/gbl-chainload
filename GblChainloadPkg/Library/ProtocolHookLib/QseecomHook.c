@@ -356,13 +356,20 @@ KmDecodeKnownCmd (
        * --debug captures, not just --verbose.
        *
        * The seed is sensitive secret material (same class as UDS/FRS) —
-       * NEVER log the raw bytes. We emit a 4-byte hex prefix only, which
-       * is enough to confirm seed identity / stability across boots
-       * without disclosing the secret. */
-      HexN (SendBuf + 4, (SendLen >= 4) ? 4 : 0, 4, Hex, sizeof (Hex));
+       * NEVER log raw seed bytes. We emit a CRC-32 of the full seed
+       * payload as a non-reversible cross-boot correlation witness: the
+       * value matches iff the bytes match, but cannot be inverted to
+       * recover any seed material (CRC-32 maps N*8 bits -> 32 bits,
+       * lossy). CRC-32 is sufficient for correlation here; cryptographic
+       * collision resistance is not a requirement. */
+      UINT32 SeedCrc = 0;
+      if (SendBuf != NULL && SendLen > 4) {
+        /* CalculateCrc32 takes VOID*; cast away const (the call is read-only). */
+        SeedCrc = CalculateCrc32 ((VOID *)(SendBuf + 4), (UINTN)(SendLen - 4));
+      }
       GBL_INFO ("qsee-km | cmd=0x%08x(FBE_SET_SEED) | h=%u | sl=%u | "
-                "seedPfx=%a | st=%r | DO-NOT-MUTATE\n",
-                CmdId, Handle, SendLen, Hex, Status);
+                "seedCrc=0x%08x | st=%r | DO-NOT-MUTATE\n",
+                CmdId, Handle, SendLen, SeedCrc, Status);
       break;
     }
 

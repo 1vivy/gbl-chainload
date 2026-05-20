@@ -72,8 +72,8 @@ The breakage is the **Root-of-Trust / boot-state change**, not the seed:
   unwrap the FBE class keys; `init`/`vold` failure to mount CE/DE storage
   escalates to Rescue Party → recovery → `/data` reformat.
 
-This matches the sibling-repo RE observation
-(`~/gbl_root_canoe/.re-notes/sessions/2026-04-26-keymaster-protocol-hook-v6.md`):
+This matches the sibling-repo RE observation (internal notes, not
+checked in):
 > "switching Keymaster to GREEN/locked can make wrapped storage keys fail
 > to unwrap … the observed recovery/reformat behavior is plausibly not
 > because AVB verification itself failed … but because Keymaster's
@@ -93,14 +93,14 @@ is not the trigger; high that the RoT/boot-state mutation is.
   under the device's real (unlocked/ORANGE) RoT.
 - 0x218 is best treated as a **correlation witness**, not a suspect: log it
   to confirm the seed is identical across a clean boot and a fakelock
-  boot. If `seedPfx` ever differs between modes, the assumption above is
+  boot. If `seedCrc` ever differs between modes, the assumption above is
   wrong and 0x218 must be re-examined.
 
 ## Recommended next step
 
 1. Capture a `--debug` boot log on the test device with the new
    `GBL_INFO` 0x218 line present, in mode-0 (passthrough) and mode-1
-   (fakelock). Confirm `seedPfx` is byte-identical across both — this
+   (fakelock). Confirm `seedCrc` is byte-identical across both — this
    validates "seed is stable, not the cause."
 2. Focus the FBE fix on the RoT/boot-state path, not the seed. Options,
    roughly in order of preference:
@@ -121,8 +121,11 @@ is not the trigger; high that the RoT/boot-state mutation is.
 `GblChainloadPkg/Library/ProtocolHookLib/QseecomHook.c`, `KmDecodeKnownCmd`
 case `0x218`: promoted from `VERBOSE` (compile-stripped from prod/`--debug`)
 to `GBL_INFO` (visible in prod-via-UefiLog and `--debug`). The seed is
-secret material — only a **4-byte hex prefix** (`seedPfx`) is logged, for
-cross-boot correlation; raw seed bytes are never emitted. Not mode-gated.
+secret material — only a **CRC-32 of the seed payload** (`seedCrc`) is
+logged, for cross-boot correlation; raw seed bytes are never emitted.
+CRC-32 is sufficient here (correlation, not collision resistance) and
+maps the seed lossily to 32 bits so it cannot be inverted to recover
+seed material. Not mode-gated.
 
 ## Sources
 
@@ -138,5 +141,3 @@ cross-boot correlation; raw seed bytes are never emitted. Not mode-gated.
   https://source.android.com/docs/security/features/keystore/implementer-ref
 - Qualcomm — File Based Encryption (Snapdragon) whitepaper:
   https://www.qualcomm.com/media/documents/files/file-based-encryption.pdf
-- Sibling RE notes —
-  `~/gbl_root_canoe/.re-notes/sessions/2026-04-26-keymaster-protocol-hook-v6.md`
