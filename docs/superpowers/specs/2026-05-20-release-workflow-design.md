@@ -29,10 +29,14 @@ Both supported, single workflow file.
 
 - **`push` of `v*` tag** — production path. Version is derived from the
   tag with the leading `v` stripped (`v2.2.0` → `2.2.0`).
-- **`workflow_dispatch`** — dry-run / off-cycle path. Accepts a
-  `version` input string. Does **not** create a tag. The resulting
-  release draft is attached to the workflow's commit SHA via
-  `target_commitish`.
+- **`workflow_dispatch`** — primary release-cut path. Accepts a
+  `version` input string. `gh release create` will create the
+  `v<version>` tag if it doesn't already exist (it's required to
+  attach the draft); `--target <sha>` pins the tag to the workflow's
+  commit SHA. (Earlier spec language claimed dispatch wouldn't create
+  a tag — that was overspecified. A release without a tag isn't
+  coherent, and the operational cost of a `dispatch-<ver>` cleanup
+  namespace was higher than the benefit.)
 
 The dispatch input must match the form `X.Y.Z` (regex enforced in the
 first job); anything else fails fast.
@@ -136,8 +140,8 @@ Computes a top-level `SHA256SUMS` over all eight files. Posts a **draft**
 GitHub Release using `gh release create`:
 
 - For tag trigger: attached to the pushed tag.
-- For dispatch trigger: attached to `target_commitish=<sha>`, no tag
-  created.
+- For dispatch trigger: `--target <sha>` pins the tag to the workflow
+  SHA; the tag itself is created by `gh release create` if absent.
 - `--draft` always.
 - `--notes-file release-notes.md`, built in-job by:
   1. Extract `## v<ver>` section from `CHANGELOG.md` (awk between
@@ -298,8 +302,9 @@ runs. There is no "empty draft, fill in later" path.
   bumps it by hand as part of the release ritual.
 - Cosign / GPG / Sigstore signing. `SHA256SUMS` only.
 - Homebrew, scoop, winget, PPA, AUR, Flatpak metadata.
-- A separate `dispatch-<ver>` git tag for dry-runs (dispatch uses
-  `target_commitish` only — no tags created).
+- A separate `dispatch-<ver>` git tag namespace for dry-runs. Dispatch
+  shares the production `v<ver>` tag — `gh release create` creates it
+  if absent, pinned to the workflow SHA via `--target`.
 - Re-signing the patched ABL or vendor partition.
 - Linux arm64 host-tool build (skipped per earlier scope decision).
 

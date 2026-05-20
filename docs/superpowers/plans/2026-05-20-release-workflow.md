@@ -807,7 +807,7 @@ the README each host-tool zip ships with."
 - [ ] `build-host-tools` invokes `scripts/build-cross-tools.sh all`, then assembles three per-platform zips with the layout from spec §3.3.
 - [ ] `build-zips` invokes `scripts/build-recovery-zip.sh --mode <m>` for all five modes and renames artifacts to carry `v<ver>`.
 - [ ] `release` computes a top-level `SHA256SUMS`, builds release-notes.md (CHANGELOG prologue + `---` + auto PR list from `gh api /releases/generate-notes`), and runs a single `gh release create --draft --notes-file release-notes.md` with all nine assets.
-- [ ] On `workflow_dispatch`, no tag is created; the draft is attached via `target_commitish`.
+- [ ] On `workflow_dispatch`, the draft is attached to `--target <sha>`; `gh release create` creates the `v<ver>` tag if absent (release without a tag isn't coherent).
 
 **Verify:**
 
