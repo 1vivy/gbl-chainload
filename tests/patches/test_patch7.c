@@ -6,6 +6,7 @@
    absent (SKIP path).  */
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <assert.h>
 
 #include "../../GblChainloadPkg/Include/Library/PatchDesc.h"
@@ -67,8 +68,8 @@ main (void)
   for (UINTN k = 0; k < kOemOneplusPatchesCount; ++k) {
     if (kOemOneplusPatches[k].Name != NULL
         && kOemOneplusPatches[k].Apply != NULL
-        && 0 == __builtin_strcmp ((const char *)kOemOneplusPatches[k].Name,
-                                  "patch7-orange-screen")) {
+        && 0 == strcmp ((const char *)kOemOneplusPatches[k].Name,
+                        "patch7-orange-screen")) {
       found_patch7 = 1;
       break;
     }

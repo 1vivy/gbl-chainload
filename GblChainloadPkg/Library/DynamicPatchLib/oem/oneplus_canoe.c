@@ -6,9 +6,11 @@
   the block when the device is locked.  Rewriting that CBZ as an unconditional B
   always skips the block, regardless of lock state.
 
-  Anchor: the 4 CSEL/AND bytes at the equivalent of infiniti:0x78EC, which
-  immediately precede the CBZ.  The anchor is unique in the executable section
-  and does not include the CBZ word itself, so patching is idempotent.
+  Anchor (see Signatures.h): a 24-byte, 6-instruction run ending in the CSEL
+  at the equivalent of infiniti:0x78EC (anchor range 0x78D8-0x78EF).  The CBZ
+  rewrite site sits at AnchorOff + 0x18.  The anchor is unique in the
+  executable section and excludes the CBZ word itself, so patching is
+  idempotent.
 
   Faithful port of gbl_root_canoe tools/patchlib.h:patch_orange_state_screen.
   Non-mandatory — cosmetic only; PATCH_MISS on non-matching ABLs is a clean

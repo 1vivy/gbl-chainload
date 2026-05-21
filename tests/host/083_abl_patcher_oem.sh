@@ -38,12 +38,15 @@ if grep -qF 'patch6-lock-state-fastboot-gate' "$OUT/m2.log"; then
     cat "$OUT/m2.log"
     exit 1
 fi
-if ! grep -qF 'patch7-orange-screen' "$OUT/m2.log"; then
-    echo "FAIL: oem patch7 absent from --oem oneplus run"
+# DynamicPatch logs every patch as "DynamicPatch: <name> [<scope>, <opt>] -> <outcome>"
+# regardless of OK/MISS/AMBIGUOUS, so grep the OK outcome on the same line to
+# verify patch7 actually APPLIED (not merely that it was attempted).
+if ! grep -qE 'patch7-orange-screen .* -> OK' "$OUT/m2.log"; then
+    echo "FAIL: oem patch7 not applied (-> OK) in --oem oneplus run"
     cat "$OUT/m2.log"
     exit 1
 fi
-echo "  ok: --oem oneplus --no-mode1 excludes mode_1 patches, includes oem patch7"
+echo "  ok: --oem oneplus --no-mode1 excludes mode_1 patches, applies oem patch7"
 
 # ---- Test 2: default (mode-1) invocation -------------------------------------
 # mode_1 patches MUST appear.
