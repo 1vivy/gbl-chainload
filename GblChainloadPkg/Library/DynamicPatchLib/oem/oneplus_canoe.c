@@ -6,11 +6,12 @@
   the block when the device is locked.  Rewriting that CBZ as an unconditional B
   always skips the block, regardless of lock state.
 
-  Anchor (see Signatures.h): a 24-byte, 6-instruction run ending in the CSEL
-  at the equivalent of infiniti:0x78EC (anchor range 0x78D8-0x78EF).  The CBZ
-  rewrite site sits at AnchorOff + 0x18.  The anchor is unique in the
-  executable section and excludes the CBZ word itself, so patching is
-  idempotent.
+  Anchor (see Signatures.h): the orange-state CBZ (0x3400046A) is byte-identical
+  across OTA builds, so the anchor starts AT the CBZ and discriminates with the
+  masked 5-second-delay setup that follows it (the canoe delay_anchor).  Rewrite
+  site = AnchorOff (delta 0).  Verified unique in both the EU-16.0.5.703 PE
+  (CBZ @0x78F0) and the IN-16.0.7.201 PE (CBZ @0x76D8); patching is idempotent
+  because the rewrite leaves the masked delay-setup tail unchanged.
 
   Faithful port of gbl_root_canoe tools/patchlib.h:patch_orange_state_screen.
   Non-mandatory — cosmetic only; PATCH_MISS on non-matching ABLs is a clean
@@ -38,13 +39,23 @@ ApplyOrangeScreen (
   SCAN_RESULT R;
 
   R = ScanForBoundedSection (Buf, Size, /*ExecOnly=*/TRUE,
-                             kPatch7AnchorPattern, NULL,
+                             kPatch7AnchorPattern, kPatch7AnchorMask,
                              kPatch7AnchorPatternLen, &AnchorOff);
   if (R == SCAN_NOT_FOUND) return PATCH_MISS;
   if (R == SCAN_AMBIGUOUS)  return PATCH_AMBIGUOUS;
   if (R != SCAN_FOUND)      return PATCH_MISS;
 
-  WriteInstrU32 (Buf, AnchorOff + kPatch7RewriteDelta, kPatch7BUnconditionalInsn);
+  /* The CBZ word itself is wildcarded in the anchor (uniqueness comes from the
+     trailing delay-setup), so guard the rewrite site:
+       - already our B    -> idempotent success, nothing to do
+       - a CBZ (0x34xxxxxx) -> rewrite to the unconditional B
+       - anything else    -> refuse (anchor matched an unexpected site) */
+  UINT32 Site = AnchorOff + kPatch7RewriteDelta;
+  UINT32 Word = ReadInstrU32 (Buf, Site);
+  if (Word == kPatch7BUnconditionalInsn) return PATCH_OK;
+  if ((Word & 0xFF000000U) != 0x34000000U) return PATCH_MISS;
+
+  WriteInstrU32 (Buf, Site, kPatch7BUnconditionalInsn);
   return PATCH_OK;
 }
 

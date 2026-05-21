@@ -23,7 +23,7 @@ extern CONST UINTN       kOemOneplusPatchesCount;
 
 /* Patch7's anchor/offset is specific to the extracted infiniti PE. The
    test runs only when that exact fixture is present; otherwise SKIP. */
-#define INFINITI_FIXTURE TEST_FIXTURES_DIR "/LinuxLoader_infiniti.efi"
+#define INFINITI_FIXTURE TEST_FIXTURES_DIR "/pe/infiniti-EU-16.0.5.703.efi"
 
 /* File offset of the CBZ instruction in the infiniti binary. */
 #define PATCH7_CBZ_OFF  0x78F0U
@@ -86,12 +86,14 @@ main (void)
   }
 
   /* --- 1. Anchor uniqueness ------------------------------------------------ */
+  /* The anchor now starts AT the CBZ (rewrite delta 0) and uses a mask, so it
+     matches at PATCH7_CBZ_OFF on the EU fixture. */
   UINT32      anchor_off = 0;
   SCAN_RESULT r = ScanFor (buf, size,
-                           kPatch7AnchorPattern, NULL,
+                           kPatch7AnchorPattern, kPatch7AnchorMask,
                            kPatch7AnchorPatternLen, &anchor_off);
   assert (r == SCAN_FOUND && "patch7 anchor not unique");
-  assert (anchor_off == 0x78D8U && "anchor found at unexpected offset");
+  assert (anchor_off == PATCH7_CBZ_OFF && "anchor found at unexpected offset");
   printf ("ok patch7 anchor uniqueness (off=0x%x)\n", anchor_off);
 
   /* --- 2. Pre-patch: rewrite site contains original CBZ -------------------- */
