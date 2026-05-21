@@ -58,6 +58,10 @@ for n in 0 1 2; do
     || { echo "FAIL: staged $MODE scripts fail shellcheck"; exit 1; }
 
   if [ "$n" = 1 ]; then
+    grep -R -q '/sdcard/gbl-chainload/graft-candidate' "$OUT/$MODE/modes" \
+      || { echo "FAIL: mode-1 ZIP missing graft-candidate path"; exit 1; }
+    grep -R -q '/sdcard/gbl-chainload/graft-target' "$OUT/$MODE/modes" \
+      || { echo "FAIL: mode-1 ZIP missing graft-target path"; exit 1; }
     prewrite_line=$(grep -n 'mode_preinstall_write' "$OUT/$MODE/modes/install-common.sh" | tail -1 | cut -d: -f1)
     efisp_line=$(grep -n 'commit_efisp$' "$OUT/$MODE/modes/install-common.sh" | tail -1 | cut -d: -f1)
     [ "$prewrite_line" -lt "$efisp_line" ] \
