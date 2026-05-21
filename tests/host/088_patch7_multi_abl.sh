@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # tests/host/088_patch7_multi_abl.sh — patch7 (orange-screen) cross-build gate.
 #
-# patch7's anchor is the orange-state CBZ (0x3400046A) plus the masked
-# 5-second-delay setup that follows it.  This proved necessary because the
-# original EU-16.0.5.703 fixed anchor missed IN-16.0.7.201 (an extra STR
-# shifts the CBZ from CSEL+4 to CSEL+8).  This test locks in the cross-build
-# guarantee: patch7 must APPLY (-> OK) and be idempotent on every oplus-family
-# ABL fixture, and must NOT false-positive on a non-oplus (Xiaomi) ABL.
+# patch7 is string-anchored: it scans the orange-state warning text, resolves
+# its unique ADRP+ADD, and rewrites the nearest preceding CBZ Wn.  This proved
+# necessary because the original EU-16.0.5.703 fixed byte anchor missed
+# IN-16.0.7.201 (an extra STR shifts the CBZ from CSEL+4 to CSEL+8).  This test
+# locks in the cross-build guarantee: patch7 must APPLY (-> OK) and be
+# idempotent on every oplus-family ABL fixture, and must NOT false-positive on
+# a non-oplus (Xiaomi) ABL.
 #
 # Uses the tracked tests/images/ ABL fixtures, so it runs in CI (not SKIP).
 set -euo pipefail

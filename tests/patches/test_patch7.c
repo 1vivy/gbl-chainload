@@ -1,7 +1,8 @@
 /* Host test for patch7 (orange-screen) against the infiniti fixture.
-   Verifies BOTH the patch's byte-level logic (anchor uniqueness, CBZ→B
-   rewrite, target preservation, idempotency) AND its registration in the
-   active OEM aggregator table `kOemOneplusPatches[]`.  The membership
+   Verifies the string-anchored locate-and-rewrite (warning-string uniqueness,
+   ADRP resolution, CBZ→B rewrite, target preservation, idempotency, and a
+   clean MISS when the warning string is absent) AND patch7's registration in
+   the active OEM aggregator table `kOemOneplusPatches[]`.  The membership
    check runs first so it executes even when the infiniti fixture is
    absent (SKIP path).  */
 #include <stdio.h>
@@ -11,6 +12,7 @@
 
 #include "../../GblChainloadPkg/Include/Library/PatchDesc.h"
 #include "../../GblChainloadPkg/Include/Library/ScanLib.h"
+#include "../../GblChainloadPkg/Library/DynamicPatchLib/Internal/Arm64Decode.h"
 #include "../../GblChainloadPkg/Library/DynamicPatchLib/oem/Signatures.h"
 
 extern PATCH_OUTCOME ApplyOrangeScreen (UINT8 *Buf, UINT32 Size);
@@ -91,16 +93,21 @@ main (void)
   assert (buf_orig);
   memcpy (buf_orig, buf, size);
 
-  /* --- 1. Anchor uniqueness ------------------------------------------------ */
-  /* The anchor now starts AT the CBZ (rewrite delta 0) and uses a mask, so it
-     matches at PATCH7_CBZ_OFF on the EU fixture. */
-  UINT32      anchor_off = 0;
-  SCAN_RESULT r = ScanFor (buf, size,
-                           kPatch7AnchorPattern, kPatch7AnchorMask,
-                           kPatch7AnchorPatternLen, &anchor_off);
-  assert (r == SCAN_FOUND && "patch7 anchor not unique");
-  assert (anchor_off == PATCH7_CBZ_OFF && "anchor found at unexpected offset");
-  printf ("ok patch7 anchor uniqueness (off=0x%x)\n", anchor_off);
+  /* --- 1. String anchor resolves uniquely to the guard CBZ ----------------- */
+  /* The warning string is present exactly once, its ADRP+ADD load is unique,
+     and the guard CBZ sits within the backward-scan window before that ADRP. */
+  UINT32      str_off = 0, adrp_off = 0;
+  SCAN_RESULT r = ScanFor (buf, size, (const UINT8 *)kPatch7WarnStr, NULL,
+                           sizeof (kPatch7WarnStr) - 1, &str_off);
+  assert (r == SCAN_FOUND && "patch7 warning string not unique");
+  r = Arm64FindAdrpAddTargeting (buf, size, str_off, /*RestrictToExec=*/TRUE,
+                                 &adrp_off);
+  assert (r == SCAN_FOUND && "patch7 warning-string ADRP+ADD not unique");
+  assert (adrp_off > PATCH7_CBZ_OFF
+          && adrp_off - PATCH7_CBZ_OFF <= kPatch7BackScanWindow
+          && "guard CBZ not within backward-scan window of the ADRP");
+  printf ("ok patch7 string anchor (str=0x%x adrp=0x%x cbz=0x%x)\n",
+          str_off, adrp_off, PATCH7_CBZ_OFF);
 
   /* --- 2. Pre-patch: rewrite site contains original CBZ -------------------- */
   UINT32 cbz = read_u32_le (buf, PATCH7_CBZ_OFF);
@@ -141,37 +148,26 @@ main (void)
   assert (read_u32_le (buf, PATCH7_CBZ_OFF) == kPatch7BUnconditionalInsn);
   printf ("ok patch7 idempotency\n");
 
-  /* --- 7. Tier isolation: each anchor independently locates the CBZ -------- */
-  /* 7a. String path alone: corrupt the fallback delay-setup tail, confirm the
-         warning-string anchor still rewrites the CBZ. */
+  /* --- 7. No warning string -> clean MISS, no spurious rewrite ------------- */
+  /* The anchor is the warning text; without it patch7 must not touch the
+     binary (non-mandatory: a missing string means no orange screen to
+     silence, e.g. a non-oplus ABL). */
   {
     UINT8 *b = (UINT8 *)malloc (size);
     assert (b);
     memcpy (b, buf_orig, size);
-    /* clobber the masked delay-setup bytes at CBZ+4 .. CBZ+0xF */
-    for (UINT32 i = PATCH7_CBZ_OFF + 4; i < PATCH7_CBZ_OFF + 0x10; ++i) b[i] = 0x1F;
-    assert (ApplyOrangeScreen (b, size) == PATCH_OK && "string-anchor path failed");
-    assert (read_u32_le (b, PATCH7_CBZ_OFF) == kPatch7BUnconditionalInsn);
-    free (b);
-    printf ("ok patch7 string-anchor path (fallback tail corrupted)\n");
-  }
-  /* 7b. Fallback path alone: corrupt the warning string, confirm the
-         delay_anchor instruction pattern still rewrites the CBZ. */
-  {
-    UINT8 *b = (UINT8 *)malloc (size);
-    assert (b);
-    memcpy (b, buf_orig, size);
-    /* find + clobber the first byte of the warning string */
     for (UINT32 i = 0; i + sizeof (kPatch7WarnStr) - 1 < size; ++i) {
       if (0 == memcmp (b + i, kPatch7WarnStr, sizeof (kPatch7WarnStr) - 1)) {
-        b[i] = 0x00;
+        b[i] = 0x00;   /* break the warning string */
         break;
       }
     }
-    assert (ApplyOrangeScreen (b, size) == PATCH_OK && "fallback path failed");
-    assert (read_u32_le (b, PATCH7_CBZ_OFF) == kPatch7BUnconditionalInsn);
+    assert (ApplyOrangeScreen (b, size) == PATCH_MISS
+            && "patch7 must MISS when the warning string is absent");
+    assert (read_u32_le (b, PATCH7_CBZ_OFF) == cbz
+            && "patch7 must not rewrite the CBZ on a MISS");
     free (b);
-    printf ("ok patch7 fallback path (warning string corrupted)\n");
+    printf ("ok patch7 clean MISS without warning string\n");
   }
 
   free (buf);
