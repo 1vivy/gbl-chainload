@@ -31,9 +31,9 @@ if grep -R -qE 'timeout |/sdcard/gbl_|/sdcard/stock_recovery\.img|/sdcard/efisp\
      "$OUT/x/core" "$OUT/x/modes" "$OUT/x/META-INF"; then
   echo "FAIL: graft ZIP contains timeout prompts or legacy sdcard paths"; exit 1
 fi
-grep -R -q '/sdcard/gbl-chainload/graft-candidate' "$OUT/x/modes" \
+grep -R -q 'GBL_STATE_DIR/graft-candidate' "$OUT/x/modes" \
   || { echo "FAIL: graft ZIP missing graft-candidate path"; exit 1; }
-grep -R -q '/sdcard/gbl-chainload/graft-target' "$OUT/x/modes" \
+grep -R -q 'GBL_STATE_DIR/graft-target' "$OUT/x/modes" \
   || { echo "FAIL: graft ZIP missing graft-target path"; exit 1; }
 shellcheck -s sh "$OUT/x/modes/graft.sh" "$OUT/x/modes/graft-common.sh" \
   || { echo "FAIL: staged graft.sh fails shellcheck"; exit 1; }

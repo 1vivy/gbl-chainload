@@ -55,15 +55,21 @@ for n in 0 1 2; do
   fi
   grep -R -q 'latest_abl.img' "$OUT/$MODE/core" "$OUT/$MODE/modes" \
     || { echo "FAIL: $ZIP missing latest ABL cache backup path"; exit 1; }
+  if [ "$n" = 2 ]; then
+    grep -R -q 'GBL_STATE_DIR/mode-2/stock_vbmeta.img' "$OUT/$MODE/modes" \
+      || { echo "FAIL: mode-2 ZIP missing namespaced stock vbmeta path"; exit 1; }
+    grep -R -q 'GBL_STATE_DIR/mode-2/profile.toml' "$OUT/$MODE/modes" \
+      || { echo "FAIL: mode-2 ZIP missing namespaced profile TOML path"; exit 1; }
+  fi
   shell_targets=("$OUT/$MODE/modes/$MODE.sh" "$OUT/$MODE/modes/install-common.sh")
   [ "$n" = 1 ] && shell_targets+=("$OUT/$MODE/modes/graft-common.sh")
   shellcheck -s sh "${shell_targets[@]}" \
     || { echo "FAIL: staged $MODE scripts fail shellcheck"; exit 1; }
 
   if [ "$n" = 1 ]; then
-    grep -R -q '/sdcard/gbl-chainload/graft-candidate' "$OUT/$MODE/modes" \
+    grep -R -q 'GBL_STATE_DIR/graft-candidate' "$OUT/$MODE/modes" \
       || { echo "FAIL: mode-1 ZIP missing graft-candidate path"; exit 1; }
-    grep -R -q '/sdcard/gbl-chainload/graft-target' "$OUT/$MODE/modes" \
+    grep -R -q 'GBL_STATE_DIR/graft-target' "$OUT/$MODE/modes" \
       || { echo "FAIL: mode-1 ZIP missing graft-target path"; exit 1; }
     prewrite_line=$(grep -n 'mode_preinstall_write' "$OUT/$MODE/modes/install-common.sh" | tail -1 | cut -d: -f1)
     efisp_line=$(grep -n 'commit_efisp$' "$OUT/$MODE/modes/install-common.sh" | tail -1 | cut -d: -f1)
