@@ -29,8 +29,10 @@ In:
   `logfs` partition.
 - A four-tier confidence verdict printed on-screen.
 - A per-partition graft-required verdict.
-- A `/sdcard/gbl-chainload-diag-<ts>/` directory plus a sibling
-  `.tar.gz` archive.
+- A single `/sdcard/gbl-chainload-diag-<ts>.tar.gz` archive (the
+  working dir was originally co-located on `/sdcard/`; per the
+  2026-05-20 amendment in §11, it now lives transiently on `/tmp/`
+  and is removed once the tarball is sealed).
 
 Out:
 
@@ -58,17 +60,25 @@ EFISP rewrite.
 
 A terse summary printed via `ui_print`. All detail goes to the bundle.
 
+> **Amended 2026-05-20** — see §11 for rationale. Working dir now lives
+> in `/tmp/` (recovery tmpfs) and is deleted once the tarball is in
+> place; only the `.tar.gz` persists on `/sdcard/`. The `logfs history`
+> UI line is gone; `logfs.img` is still in the bundle. EFISP now breaks
+> out its GBLP1 entries on sub-lines. The old `graft needed` / `fakelock
+> req` pair was collapsed (v2 correction in §11) into a single
+> mode-aware `action req` line answering the operator's actual question:
+> "is anything about this install going to stop normal boot?". New shape:
+
 ```
 diag: pre-reboot install confidence
-  EFISP        : mode-1 base + GBLP1 v1 ok (3 entries, all sha-verified)
-  loader-ABL   : abl_a retains loader path ; abl_b does NOT — WON'T LOAD EFISP
-  graft needed : NO   (no chained-partition mismatches without a valid graft)
-  fakelock req : NO   (no direct-hash mismatches in main vbmeta)
-  logfs history: 4 prior gbl-chainload boots (newest: GblChainload_Boot42.txt)
+  EFISP        : mode-1 + GBLP1 v1 ok
+                 - cached patched ABL: attached
+                 - source metadata: attached
+  loader-ABL   : abl_a retains loader path ; abl_b retains loader path
+  action req   : none
   confidence   : HIGH — safe to reboot into chainload
 
-  bundle saved : /sdcard/gbl-chainload-diag-20260519-203015.tar.gz
-                 directory:  /sdcard/gbl-chainload-diag-20260519-203015/
+  bundle saved : /sdcard/gbl-chainload-diag-20260520-203015.tar.gz
 ```
 
 Note on terminology: the on-disk ABL is **always** OEM-signed
@@ -94,29 +104,95 @@ verifier.
 | LOW    | EFISP holds a PE but GBLP1 is missing, the header CRC fails, or any entry's SHA-256 mismatches.                                                     |
 | NONE   | EFISP does not start with `MZ`, or is empty/unreadable.                                                                                             |
 
-The `loader-ABL` and `logfs history` lines are informational and do
-not alter the tier by themselves except as above.
+The `loader-ABL` line is informational and does not alter the tier by
+itself except as above. (The original `logfs history` UI line was
+removed in the 2026-05-20 amendment — see §11; `logfs.img` is still
+captured into the bundle.)
 
-### 4.2 Graft-required verdict
+### 4.2 `action req` verdict (mode-aware)
 
-Independent of the confidence tier. For each chained-partition
-descriptor in the active vbmeta:
+> Heavily rewritten in the 2026-05-20 v2 correction (§11). The previous
+> `graft needed` / `fakelock req` pair was collapsed into a single
+> mode-aware `action req` line keyed on `BASE_EFI_MODE`, and the
+> underlying chain-partition check was rewritten to walk the AvbFooter
+> instead of scanning a tail window for OEM-key-matched AVB0 magic.
+> Raw per-partition rows still live in `graft-verdict.txt`.
 
-- Compute SHA-256 of `<partition>_<slot>` on disk (with the descriptor's
-  salt applied as `libavb` does).
-- Compare to the descriptor's `digest` field.
-- Output `match` / `mismatch — graft required` /
-  `mismatch — stock candidate at /sdcard/stock_<part>.img`.
+The check, per descriptor in the active vbmeta, mirrors what
+AOSP first-stage init's libavb actually does (see
+`docs/project/vbmeta-graft-vs-construct.md` §2b):
 
-Final line: `graft needed : <YES list | NO>`.
+- **Chain descriptor.** Open the chained partition, read the
+  `AvbFooter` from the last 64 bytes, follow `VbmetaOffset` to the
+  embedded vbmeta blob, parse the header, and compare the embedded
+  public key to the chain descriptor's pubkey. Three possible outcomes:
+  - `graft=ok` — init's libavb will accept it.
+  - `graft=key_mismatch` — vbmeta exists but the key won't verify
+    against the parent chain descriptor → init's sig-verify rejects.
+  - `graft=no_vbmeta` — no `AvbFooter` (or footer points at
+    non-vbmeta bytes) → init returns `ok_not_signed`.
+- **Hash descriptor.** Compute `SHA-256(salt || partition_bytes[0..image_size))`
+  and compare to the descriptor's `digest` field. Two outcomes:
+  `digest=ok` or `digest=mismatch`.
+
+Then bucketed per the **per-mode boot-blocker matrix**, derived from
+the actual AVB verify flow:
+
+| Bucket → mode    | `mode-0` / `mode-2` | `mode-1` |
+|------------------|---------------------|----------|
+| Chain `graft=ok` | fine                | fine     |
+| Chain `graft=key_mismatch` | tolerated (orange-state) | **blocker** |
+| Chain `graft=no_vbmeta`    | tolerated (orange-state) | **blocker** (init `ok_not_signed`) |
+| Hash `digest=ok`           | fine                | fine     |
+| Hash `digest=mismatch`     | tolerated (orange-state) | tolerated (`patch10` + init's locked-state skim) |
+
+Rationale by mode:
+
+- **mode-0 and mode-2** both keep ABL honest about the real unlocked
+  state, so libavb's `allow_verification_error=true` lets AVB return
+  orange-state on any mismatch and ABL boots regardless. mode-0 stops
+  there (debug-observation build; no KM rewrite, so attestation will
+  be red); mode-2 additionally rewrites the KM/SPSS RoT payload at
+  the TA boundary for a coherent green attestation downstream.
+  Neither has any AVB-related boot blocker — both collapse to a
+  single "always `none`" UI bucket from diag's point of view.
+- **mode-1** has a libavb patch (`patch10`) that forces ABL-side
+  AVB to return success. But AOSP first-stage init runs a fresh
+  unpatched libavb instance and re-verifies the on-disk vbmeta;
+  `patch10` does not reach it. Therefore chain partitions must have
+  an OEM-signed vbmeta blob on disk (the graft), or init aborts.
+  Content-hash mismatches inside that vbmeta are tolerated because
+  the green/locked DeviceInfo that mode-1 fakes makes init treat
+  the descriptor walk as a skim (see
+  `docs/project/vbmeta-graft-vs-construct.md` §2b).
+
+UI rendering of the `action req` line:
+
+| `BASE_EFI_MODE`   | When clean                            | When dirty                                         |
+|-------------------|---------------------------------------|----------------------------------------------------|
+| `mode-0`          | `none`                                | `none` (always — orange-state tolerates)           |
+| `mode-2`          | `none`                                | `none` (always — orange-state tolerates)           |
+| `mode-1`          | `none`                                | `graft <chain-broken list>`                        |
+| unknown           | `none (mode unknown — assumed mode-1)`| `graft <chain> (mode unknown — assumed mode-1)`    |
+| no active vbmeta  | `unknown (no active vbmeta)`          | same                                               |
+
+Unknown framing intentionally adopts mode-1 semantics (the most common
+pre-`zip/bin/MANIFEST`-fix install) so the operator gets actionable
+info; the `(mode unknown — assumed mode-1)` suffix is the disclaimer.
 
 ## 5. Bundle layout
 
-Directory `/sdcard/gbl-chainload-diag-<ts>/` left in place after the
-run; sibling `/sdcard/gbl-chainload-diag-<ts>.tar.gz` is the same
-contents archived with busybox `tar` + `gzip` (both reliably present
-in TWRP/OrangeFox; literal `.zip` would require bundling a static
-`zip` binary and is not worth it).
+> Updated 2026-05-20 (§11): the staging directory was originally
+> persisted at `/sdcard/gbl-chainload-diag-<ts>/` alongside the
+> tarball. It now lives at `$BUNDLE_WORKDIR/gbl-chainload-diag-<ts>/`
+> (default `/tmp/` — recovery tmpfs, lost on reboot) and is removed
+> once the `.tar.gz` is sealed; the only persistent artifact on
+> `$BUNDLE_ROOT` (default `/sdcard/`) is the tarball.
+
+A single `/sdcard/gbl-chainload-diag-<ts>.tar.gz`, archived with
+busybox `tar` + `gzip` (both reliably present in TWRP/OrangeFox;
+literal `.zip` would require bundling a static `zip` binary and is
+not worth it). Layout once extracted:
 
 ```
 gbl-chainload-diag-<ts>/
@@ -169,9 +245,10 @@ Grows from ~60 to ~200 lines, broken into helpers that each:
 
 Functions:
 
-- `prepare_bundle` — make `/sdcard/gbl-chainload-diag-<ts>/`, set
-  `$BUNDLE` env. Redefine `ui_print` locally to tee to
-  `$BUNDLE/report.txt`.
+- `prepare_bundle` — make `$BUNDLE_WORKDIR/gbl-chainload-diag-<ts>/`
+  (default `/tmp/…`; see §11 amendment) and set the `$BUNDLE_DIR`
+  env. Redefine `ui_print` locally to tee to
+  `$BUNDLE_DIR/report.txt`.
 - `collect_env` — write `env.txt`, `getprop.boot.txt`.
 - `collect_efisp` — `dd` EFISP to `$BUNDLE/efisp.img`. Quick PE check
   (`MZ` first 2 bytes). Run `gblp1-inspect` against the image, capture
@@ -388,3 +465,123 @@ post-merge sanity flash is reasonable but not gated by this spec.
 - PR target: `main`.
 - All host tests must be green before opening the PR.
 - No device test required to land.
+
+## 11. Amendment 2026-05-20 — UI cleanup
+
+After the first real on-device run of the diag mode (mode-2 ZIP on
+infiniti, 2026-05-20 15:00 UTC), the operator's feedback identified
+four issues with the original on-screen output:
+
+1. **Storage hygiene.** The working bundle dir was being left on
+   `/sdcard/` alongside the `.tar.gz`. The dir is duplicate data —
+   the tar is the artifact. The dir now lives at
+   `$BUNDLE_WORKDIR/gbl-chainload-diag-<ts>` (default `/tmp/`,
+   recovery tmpfs) and is `rm -rf`'d once the tarball is in place.
+   Only the `.tar.gz` lands on `$BUNDLE_ROOT` (default `/sdcard/`).
+   `finalize_bundle` only skips the cleanup if `tar` itself failed
+   outright; on the gzip-absent fallback it still removes the dir
+   (the plain `.tar` has the data).
+
+2. **`logfs history` UI line was noise.** Operators consult the
+   uefilog rotation files off-device; the on-screen "N prior boots"
+   tally is not actionable pre-reboot. The line is removed; the raw
+   `logfs.img` is still in the bundle.
+
+3. **GBLP1 entries collapsed onto one line.** The EFISP headline
+   used to read `EFISP : mode-X + GBLP1 v1 ok (3 entries, all
+   sha-verified)`. The operator wants to see *which* entries are
+   present at a glance. The headline now breaks each entry out on a
+   sub-line keyed off the type-name in `gblp1-inspect`'s output:
+   `CACHED_ABL → cached patched ABL`, `SOURCE_META → source
+   metadata`, `MODE2_PROFILE → mode-2 profile`.
+
+4. **`graft needed : YES` was misleading on mode-2.** On a
+   Magisk-patched mode-2 device, boot/dtbo/recovery legitimately
+   have no OEM-keyed vbmeta footer, but the operator's actual boot
+   path works fine because mode-2 keeps ABL honest (orange state)
+   and AVB tolerates the missing chain-vbmetas under that path.
+   The original "needs graft / needs fakelock" verdicts answered
+   "what would *unaided* stock boot need" — which is not useful
+   to an operator who has just installed mode-2. The verdict is now
+   mode-aware (see §4.2 table); the raw rows are still in
+   `graft-verdict.txt` for anyone who wants the full data. The
+   literal value "NO" is renamed to "none" for legibility, and
+   reserved for "clean"; "unknown" continues to mean "no active
+   vbmeta was readable".
+
+Implementation: `zip/modes/diag.sh` and the host dryrun test
+(`tests/host/086_diag_dryrun.sh`) only. No tool changes — the
+underlying `vbmeta-graft list-hash` output format is unchanged;
+the script just buckets and renders it differently.
+
+### 11.1 v2 correction — same day, operator's second pass
+
+The first on-device run with the v1 changes revealed the bucketing
+described above had the mode-1 capability matrix backwards. The
+operator (mode-1 + Magisk-patched boot + stock-vbmeta-grafted custom
+recovery) saw `graft needed : boot dtbo recovery` and pushed back: on
+their device, recovery has been grafted from stock, boot/dtbo are
+stock-equivalent, and the device boots fine. The diag was wrong on
+two axes.
+
+**Axis 1 — capability matrix.** v1 limited mode-aware suppression to
+mode-2 on the assumption that mode-1's fakelock targets only
+DeviceInfo and is "downstream of AVB hash verification". That's only
+half right. Mode-1 also ships `patch10` (a libavb-side patch — see
+`docs/project/re-findings.md`) that forces ABL-stage AVB to return
+success regardless of what the on-disk vbmeta says. The boot-blocker
+under mode-1 is **not** descriptor mismatches; it's AOSP first-stage
+init's **userspace re-verify** of on-disk vbmeta — which `patch10`
+cannot reach (see `docs/project/vbmeta-graft-vs-construct.md` §2b).
+That re-verify is satisfied by an **OEM-signed vbmeta blob** being
+present on the partition (the graft); content-hash mismatches are
+tolerated by init's locked-state skim, but `ok_not_signed` (no vbmeta
+at all) or a sig mismatch aborts boot.
+
+The corrected per-mode boot-blocker matrix lives in §4.2.
+
+**Axis 2 — the chain-graft check itself was buggy.** `probe_graft` in
+`vbmeta-graft list-hash` scanned only the **last 4 MiB** of the
+partition for AVB0 magic. A stock-vbmeta graft for custom recovery
+sits at `round_up(custom_content_size, 4K)` — for ~60 MiB of custom
+recovery in a 100 MiB partition, that's ~37 MiB, well outside any
+tail window. The graft was there; the probe couldn't see it.
+
+Fix: replace `probe_graft` with `probe_partition_for_graft`, which
+does what libavb actually does — reads the `AvbFooter` from the last
+64 bytes, follows `VbmetaOffset` to the embedded vbmeta blob, parses
+the header, compares the pubkey to the chain descriptor's key.
+Three buckets: `graft=ok | key_mismatch | no_vbmeta`. Verified against
+the `tests/images/grafted-recovery.img` fixture: now correctly
+reports `graft=ok verdict=match` where v1 reported `graft=missing`.
+
+**UI consequence — collapse to one `action req` line.** With the
+matrix corrected, the old "graft needed" / "fakelock req" naming was
+misleading on mode-1 (where "fakelock" is what mode-1 *does*, not
+what's required of the operator) and noisy on mode-2 (always two
+`none`s). The two lines collapsed into a single `action req` whose
+content is keyed off the mode — `none` for mode-2 always, `graft
+<list>` for mode-1 when init would reject the chain, `graft …; hash …`
+for mode-0 when anything mismatches at all. The §4.2 table is the
+authoritative reference.
+
+Implementation touches:
+
+- `tools/vbmeta-graft/vbmeta-graft.c` — new
+  `probe_partition_for_graft`; the legacy buffer-taking `probe_graft`
+  and `find_avb0` retired. New `graft=` values emitted by the
+  `list-hash` chain rows: `ok | key_mismatch | no_vbmeta`.
+- `zip/modes/diag.sh` — single `action req` line; bucketing keys off
+  `type=chain` + new `graft=` values for chain rows, and `type=hash`
+  + `digest=mismatch` for hash rows.
+- `tests/host/086_diag_dryrun.sh` — guards updated for the new line
+  shape, with negative guards for legacy `graft needed` / `fakelock
+  req` strings to prevent silent re-introduction.
+- Regression tests `074_vbmeta_graft.sh` and
+  `085_vbmeta_descriptor_hash.sh` still pass on the corrected tool.
+
+Open follow-up (out of scope for this PR): on-device validation that
+the new `action req` line matches reality on a mode-1 + grafted
+recovery setup. The host fixture exercises the footer-walk against
+the grafted-recovery image and confirms `graft=ok`, but the
+on-device report shape needs an operator pass.

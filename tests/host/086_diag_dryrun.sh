@@ -34,7 +34,9 @@ run_one() {
   # Fake recovery environment variables.
   export WORKDIR="$envdir/zip"
   export BYNAME="$envdir/byname"
-  export BUNDLE_ROOT="$envdir/sdcard"
+  export BUNDLE_ROOT="$envdir/sdcard"      # tar.gz lands here (= /sdcard on device)
+  export BUNDLE_WORKDIR="$envdir/work"     # staging dir (= /tmp on device)
+  mkdir -p "$BUNDLE_WORKDIR"
   export SLOT=a
   export INACTIVE=b
   export OTA_POSTINSTALL=false
@@ -71,16 +73,41 @@ run_one() {
     return 1
   }
 
-  # Locate the bundle directory.
-  local bundle
-  bundle=$(ls -d "$BUNDLE_ROOT"/gbl-chainload-diag-* 2>/dev/null | grep -v '\.tar\.gz' | head -1 || true)
-  if [ -z "$bundle" ]; then
-    echo "FAIL [$scenario]: no bundle directory created"
+  # Working dir was at $BUNDLE_WORKDIR/gbl-chainload-diag-<ts>; diag.sh
+  # removes it after a successful tar. The persistent artifact is the
+  # tar.gz on $BUNDLE_ROOT — that's our source of truth for assertions.
+  local tgz
+  tgz=$(ls "$BUNDLE_ROOT"/gbl-chainload-diag-*.tar.gz 2>/dev/null | head -1 || true)
+  if [ -z "$tgz" ] || [ ! -f "$tgz" ]; then
+    echo "FAIL [$scenario]: no tar.gz produced at $BUNDLE_ROOT/"
     cat "$envdir/stdout.txt"
     return 1
   fi
 
-  # Assert every required file is present.
+  # Verify the working dir was cleaned up — leaving it behind would
+  # waste tmpfs/sdcard on a real device.
+  if ls -d "$BUNDLE_WORKDIR"/gbl-chainload-diag-* >/dev/null 2>&1; then
+    echo "FAIL [$scenario]: working dir not removed after tar:"
+    ls -d "$BUNDLE_WORKDIR"/gbl-chainload-diag-*
+    return 1
+  fi
+
+  # Extract the tarball into a scratch dir and verify its contents.
+  local extract="$envdir/extracted"
+  rm -rf "$extract"; mkdir -p "$extract"
+  if ! tar -xzf "$tgz" -C "$extract" 2>/dev/null; then
+    echo "FAIL [$scenario]: tar -xzf failed on $tgz"
+    return 1
+  fi
+  local bundle
+  bundle=$(ls -d "$extract"/gbl-chainload-diag-* 2>/dev/null | head -1 || true)
+  if [ -z "$bundle" ]; then
+    echo "FAIL [$scenario]: tarball didn't unpack to a gbl-chainload-diag-* dir"
+    tar -tzf "$tgz" | head -5
+    return 1
+  fi
+
+  # Assert every required file is present in the unpacked bundle.
   local missing=0
   for f in report.txt env.txt getprop.boot.txt efisp.img abl_a.img abl_b.img \
             vbmeta_a.img vbmeta_b.img logfs.img \
@@ -93,28 +120,6 @@ run_one() {
   done
   [ "$missing" = 0 ] || { cat "$envdir/stdout.txt"; return 1; }
 
-  # Assert sibling tar.gz exists.
-  if [ ! -f "$bundle.tar.gz" ]; then
-    echo "FAIL [$scenario]: sibling tar.gz missing ($bundle.tar.gz)"
-    cat "$envdir/stdout.txt"
-    return 1
-  fi
-
-  # Assert tar.gz lists every bundled file.
-  local tgz_ok=1
-  local tgz_listing
-  tgz_listing=$(tar -tzf "$bundle.tar.gz" 2>/dev/null)
-  for f in report.txt env.txt getprop.boot.txt efisp.img abl_a.img abl_b.img \
-            vbmeta_a.img vbmeta_b.img logfs.img \
-            gblp1-inspect.txt loader-abl.txt vbmeta-descriptors.txt \
-            graft-verdict.txt; do
-    if ! echo "$tgz_listing" | grep -qF "/$f"; then
-      echo "FAIL [$scenario]: tar.gz does not list: $f"
-      tgz_ok=0
-    fi
-  done
-  [ "$tgz_ok" = 1 ] || return 1
-
   # Assert the expected confidence tier headline appears in report.txt.
   if ! grep -q "confidence   : $expect" "$bundle/report.txt"; then
     echo "FAIL [$scenario]: expected tier '$expect' not in report.txt"
@@ -122,6 +127,31 @@ run_one() {
     cat "$bundle/report.txt"
     echo "--- stdout.txt ---"
     cat "$envdir/stdout.txt"
+    return 1
+  fi
+
+  # Verify the 2026-05-20 UI amendment: no `logfs history` line; the old
+  # two-line `graft needed`/`fakelock req` shape was replaced by a single
+  # mode-aware `action req` line (post-2026-05-20 v2 correction); legacy
+  # "NO" / "YES" labels are gone.
+  if grep -q '^[[:space:]]*logfs history' "$bundle/report.txt"; then
+    echo "FAIL [$scenario]: report.txt still contains a logfs history UI line"
+    grep '^[[:space:]]*logfs history' "$bundle/report.txt"
+    return 1
+  fi
+  if grep -qE '^[[:space:]]*(graft needed|fakelock req)[[:space:]]*:' "$bundle/report.txt"; then
+    echo "FAIL [$scenario]: report.txt still uses legacy graft needed/fakelock req lines"
+    grep -E 'graft needed|fakelock req' "$bundle/report.txt"
+    return 1
+  fi
+  if ! grep -qE '^[[:space:]]*action req[[:space:]]*:' "$bundle/report.txt"; then
+    echo "FAIL [$scenario]: report.txt missing the action req line"
+    cat "$bundle/report.txt"
+    return 1
+  fi
+  if grep -qE 'action req[[:space:]]*:[[:space:]]*(YES|NO)\b' "$bundle/report.txt"; then
+    echo "FAIL [$scenario]: action req uses legacy YES/NO labels (expected 'none' or partition list)"
+    grep -E 'action req' "$bundle/report.txt"
     return 1
   fi
 

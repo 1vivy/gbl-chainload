@@ -27,6 +27,7 @@ test_patch7: test_patch7.c \
              $(DPL)/Internal/ScanLib.c \
              $(DPL)/Internal/PeSections.c \
              $(DPL)/Internal/Encode.c \
+             $(DPL)/Internal/Arm64Decode.c \
              $(DPL)/oem/oneplus_canoe.c
 	$(CC) $(CFLAGS) $(INCLUDES) $^ -o $@
 
