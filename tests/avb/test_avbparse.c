@@ -418,7 +418,114 @@ static void test_parse_hash_descriptor_with_optional_outs (void) {
   printf ("ok test_parse_hash_descriptor_with_optional_outs (NULL passthrough)\n");
 }
 
+/* --- AvbParse_FooterFromTail: decode a 64-byte footer from a partition tail
+   window, bounds-checking VbmetaOffset/Size against the real partition size
+   rather than the (smaller) tail buffer. Mirrors vbmeta-graft's hand-rolled
+   tail decode used by probe_partition_for_graft. --- */
+static void test_footer_from_tail_ok (void) {
+  UINT8 tail[512];
+  memset (tail, 0xAA, sizeof (tail));
+  /* Partition is 1 MiB; vbmeta lives at offset 900000, size 5000 — both well
+     past the 512-byte tail window, so a buffer-relative bounds check would
+     wrongly reject this. */
+  make_footer (tail + 512 - 64, 800000, 900000, 5000);
+  GBL_AVB_FOOTER f = {0};
+  EFI_STATUS s = AvbParse_FooterFromTail (tail, 512, 1048576, &f);
+  assert (s == EFI_SUCCESS);
+  assert (f.VbmetaOffset == 900000);
+  assert (f.VbmetaSize   == 5000);
+  printf ("ok test_footer_from_tail_ok\n");
+}
+
+static void test_footer_from_tail_no_magic (void) {
+  UINT8 tail[128];
+  memset (tail, 0, sizeof (tail));
+  GBL_AVB_FOOTER f = {0};
+  EFI_STATUS s = AvbParse_FooterFromTail (tail, 128, 1048576, &f);
+  assert (s == EFI_NOT_FOUND);
+  printf ("ok test_footer_from_tail_no_magic\n");
+}
+
+static void test_footer_from_tail_bad_bounds (void) {
+  UINT8 tail[128];
+  memset (tail, 0, sizeof (tail));
+  /* VbmetaOffset + VbmetaSize (1048000 + 5000) overruns the 1 MiB partition. */
+  make_footer (tail + 128 - 64, 100, 1048000, 5000);
+  GBL_AVB_FOOTER f = {0};
+  EFI_STATUS s = AvbParse_FooterFromTail (tail, 128, 1048576, &f);
+  assert (s == EFI_INVALID_PARAMETER);
+  printf ("ok test_footer_from_tail_bad_bounds\n");
+}
+
+/* Build a minimal embedded vbmeta blob carrying a public key in its aux block
+   (auth block empty, pubkey at aux offset 0). */
+static UINT64 build_embedded_vbmeta (UINT8 *out, CONST UINT8 *pk, UINT32 pk_len) {
+  memset (out, 0, 256 + pk_len);
+  memcpy (out, "AVB0", 4);
+  put_u32_be (out + 4, 1);
+  put_u32_be (out + 8, 0);
+  put_u64_be (out + 12, 0);        /* authentication_data_block_size */
+  put_u64_be (out + 20, pk_len);   /* auxiliary_data_block_size = pubkey only */
+  put_u32_be (out + 28, 0);        /* algorithm_type */
+  put_u64_be (out + 64, 0);        /* public_key_offset (within aux) */
+  put_u64_be (out + 72, pk_len);   /* public_key_size */
+  memcpy (out + 256, pk, pk_len);  /* aux block (auth=0, so aux starts @ 256) */
+  return 256 + pk_len;
+}
+
+/* --- AvbParse_ChainVerdict: key-identity check (NOT a sig verify) of a
+   chained partition's embedded vbmeta against the chain descriptor's pubkey,
+   matching vbmeta-graft's GRAFT_OK / GRAFT_KEY_MISMATCH / GRAFT_NO_VBMETA. --- */
+static void test_chain_verdict_ok (void) {
+  UINT8 pk[64]; memset (pk, 0x11, 64);
+  UINT8 blob[512];
+  UINT64 n = build_embedded_vbmeta (blob, pk, 64);
+  GBL_AVB_CHAIN_VERDICT v = (GBL_AVB_CHAIN_VERDICT)-1;
+  EFI_STATUS s = AvbParse_ChainVerdict (blob, n, pk, 64, &v);
+  assert (s == EFI_SUCCESS);
+  assert (v == GblAvbChainOk);
+  printf ("ok test_chain_verdict_ok\n");
+}
+
+static void test_chain_verdict_key_mismatch (void) {
+  UINT8 pk[64];    memset (pk, 0x11, 64);
+  UINT8 other[64]; memset (other, 0x22, 64);
+  UINT8 blob[512];
+  UINT64 n = build_embedded_vbmeta (blob, pk, 64);
+  GBL_AVB_CHAIN_VERDICT v = (GBL_AVB_CHAIN_VERDICT)-1;
+  AvbParse_ChainVerdict (blob, n, other, 64, &v);
+  assert (v == GblAvbChainKeyMismatch);
+  printf ("ok test_chain_verdict_key_mismatch\n");
+}
+
+static void test_chain_verdict_no_vbmeta (void) {
+  UINT8 blob[512]; memset (blob, 0x77, sizeof (blob));  /* no "AVB0" magic */
+  UINT8 pk[64];    memset (pk, 0x11, 64);
+  GBL_AVB_CHAIN_VERDICT v = (GBL_AVB_CHAIN_VERDICT)-1;
+  AvbParse_ChainVerdict (blob, sizeof (blob), pk, 64, &v);
+  assert (v == GblAvbChainNoVbmeta);
+  printf ("ok test_chain_verdict_no_vbmeta\n");
+}
+
+static void test_chain_verdict_null_pk (void) {
+  UINT8 pk[64]; memset (pk, 0x11, 64);
+  UINT8 blob[512];
+  UINT64 n = build_embedded_vbmeta (blob, pk, 64);
+  GBL_AVB_CHAIN_VERDICT v = (GBL_AVB_CHAIN_VERDICT)-1;
+  /* No chain pubkey to compare against → any parseable vbmeta is a hit. */
+  AvbParse_ChainVerdict (blob, n, NULL, 0, &v);
+  assert (v == GblAvbChainOk);
+  printf ("ok test_chain_verdict_null_pk\n");
+}
+
 int main (void) {
+  test_footer_from_tail_ok ();
+  test_footer_from_tail_no_magic ();
+  test_footer_from_tail_bad_bounds ();
+  test_chain_verdict_ok ();
+  test_chain_verdict_key_mismatch ();
+  test_chain_verdict_no_vbmeta ();
+  test_chain_verdict_null_pk ();
   test_footer_parse_ok ();
   test_footer_no_magic ();
   test_footer_partition_too_small ();

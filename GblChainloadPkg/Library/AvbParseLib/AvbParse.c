@@ -162,3 +162,83 @@ AvbParse_ChainPartitionDescriptor (IN CONST UINT8 *Descriptor, IN UINT64 Descrip
   *PublicKeyLenOut     = PkLen;
   return EFI_SUCCESS;
 }
+
+EFI_STATUS EFIAPI
+AvbParse_FooterFromTail (IN CONST UINT8 *Tail, IN UINT64 TailLen, IN UINT64 PartitionSize,
+                         OUT GBL_AVB_FOOTER *FooterOut)
+{
+  CONST UINT8 *Footer;
+  if (Tail == NULL || FooterOut == NULL)             return EFI_INVALID_PARAMETER;
+  if (TailLen < GBL_AVB_FOOTER_SIZE)                 return EFI_INVALID_PARAMETER;
+  if (PartitionSize < GBL_AVB_FOOTER_SIZE)           return EFI_INVALID_PARAMETER;
+  Footer = Tail + TailLen - GBL_AVB_FOOTER_SIZE;
+  if (Footer[0] != 'A' || Footer[1] != 'V'
+      || Footer[2] != 'B' || Footer[3] != 'f') {
+    return EFI_NOT_FOUND;
+  }
+  FooterOut->FooterMajorVersion  = AvbReadU32Be (Footer + 4);
+  FooterOut->FooterMinorVersion  = AvbReadU32Be (Footer + 8);
+  FooterOut->OriginalImageSize   = AvbReadU64Be (Footer + 12);
+  FooterOut->VbmetaOffset        = AvbReadU64Be (Footer + 20);
+  FooterOut->VbmetaSize          = AvbReadU64Be (Footer + 28);
+  /* Bounds-check against the real partition size, using subtraction so no
+     operand can overflow UINT64 (mirrors vbmeta-graft's tail decode). */
+  if (FooterOut->VbmetaSize == 0)                          return EFI_INVALID_PARAMETER;
+  if (FooterOut->VbmetaOffset >= PartitionSize)            return EFI_INVALID_PARAMETER;
+  if (FooterOut->VbmetaSize > PartitionSize - FooterOut->VbmetaOffset)
+    return EFI_INVALID_PARAMETER;
+  return EFI_SUCCESS;
+}
+
+EFI_STATUS EFIAPI
+AvbParse_ChainVerdict (IN CONST UINT8 *Vbmeta, IN UINT64 VbmetaSize,
+                       IN CONST UINT8 *ChainPk OPTIONAL, IN UINT32 ChainPkLen,
+                       OUT GBL_AVB_CHAIN_VERDICT *VerdictOut)
+{
+  GBL_AVB_VBMETA_HEADER  Hdr;
+  CONST UINT8           *Aux;
+  CONST UINT8           *Pk;
+  UINT64                 AuxOff, AuxLen;
+  UINT32                 PkLen, i;
+
+  if (VerdictOut == NULL)                             return EFI_INVALID_PARAMETER;
+  *VerdictOut = GblAvbChainNoVbmeta;
+  if (Vbmeta == NULL)                                 return EFI_INVALID_PARAMETER;
+
+  /* Not a vbmeta → init treats the partition as ok_not_signed. */
+  if (AvbParse_VbmetaHeader (Vbmeta, VbmetaSize, &Hdr) != EFI_SUCCESS)
+    return EFI_SUCCESS;
+
+  /* AvbParse_VbmetaHeader already validated header + auth + aux <= VbmetaSize
+     with overflow-safe arithmetic, so AuxOff/AuxLen are in range. */
+  AuxOff = (UINT64)GBL_AVB_VBMETA_HEADER_SIZE + Hdr.AuthenticationDataBlockSize;
+  AuxLen = Hdr.AuxiliaryDataBlockSize;
+  Aux    = Vbmeta + AuxOff;
+
+  /* Embedded pubkey must lie within the aux block. */
+  if (Hdr.PublicKeyOffset > AuxLen
+      || Hdr.PublicKeySize > AuxLen - Hdr.PublicKeyOffset) {
+    return EFI_SUCCESS;  /* malformed → NoVbmeta */
+  }
+  Pk    = Aux + Hdr.PublicKeyOffset;
+  PkLen = (UINT32)Hdr.PublicKeySize;
+
+  /* No chain key to compare → any parseable vbmeta is a hit. */
+  if (ChainPk == NULL || ChainPkLen == 0) {
+    *VerdictOut = GblAvbChainOk;
+    return EFI_SUCCESS;
+  }
+
+  if (PkLen != ChainPkLen) {
+    *VerdictOut = GblAvbChainKeyMismatch;
+    return EFI_SUCCESS;
+  }
+  for (i = 0; i < PkLen; ++i) {
+    if (Pk[i] != ChainPk[i]) {
+      *VerdictOut = GblAvbChainKeyMismatch;
+      return EFI_SUCCESS;
+    }
+  }
+  *VerdictOut = GblAvbChainOk;
+  return EFI_SUCCESS;
+}
