@@ -85,6 +85,12 @@ main (void)
     return 0;
   }
 
+  /* Pristine copy for the tier-isolation checks (section 7), taken before the
+     in-place patch in section 3. */
+  UINT8 *buf_orig = (UINT8 *)malloc (size);
+  assert (buf_orig);
+  memcpy (buf_orig, buf, size);
+
   /* --- 1. Anchor uniqueness ------------------------------------------------ */
   /* The anchor now starts AT the CBZ (rewrite delta 0) and uses a mask, so it
      matches at PATCH7_CBZ_OFF on the EU fixture. */
@@ -135,7 +141,41 @@ main (void)
   assert (read_u32_le (buf, PATCH7_CBZ_OFF) == kPatch7BUnconditionalInsn);
   printf ("ok patch7 idempotency\n");
 
+  /* --- 7. Tier isolation: each anchor independently locates the CBZ -------- */
+  /* 7a. String path alone: corrupt the fallback delay-setup tail, confirm the
+         warning-string anchor still rewrites the CBZ. */
+  {
+    UINT8 *b = (UINT8 *)malloc (size);
+    assert (b);
+    memcpy (b, buf_orig, size);
+    /* clobber the masked delay-setup bytes at CBZ+4 .. CBZ+0xF */
+    for (UINT32 i = PATCH7_CBZ_OFF + 4; i < PATCH7_CBZ_OFF + 0x10; ++i) b[i] = 0x1F;
+    assert (ApplyOrangeScreen (b, size) == PATCH_OK && "string-anchor path failed");
+    assert (read_u32_le (b, PATCH7_CBZ_OFF) == kPatch7BUnconditionalInsn);
+    free (b);
+    printf ("ok patch7 string-anchor path (fallback tail corrupted)\n");
+  }
+  /* 7b. Fallback path alone: corrupt the warning string, confirm the
+         delay_anchor instruction pattern still rewrites the CBZ. */
+  {
+    UINT8 *b = (UINT8 *)malloc (size);
+    assert (b);
+    memcpy (b, buf_orig, size);
+    /* find + clobber the first byte of the warning string */
+    for (UINT32 i = 0; i + sizeof (kPatch7WarnStr) - 1 < size; ++i) {
+      if (0 == memcmp (b + i, kPatch7WarnStr, sizeof (kPatch7WarnStr) - 1)) {
+        b[i] = 0x00;
+        break;
+      }
+    }
+    assert (ApplyOrangeScreen (b, size) == PATCH_OK && "fallback path failed");
+    assert (read_u32_le (b, PATCH7_CBZ_OFF) == kPatch7BUnconditionalInsn);
+    free (b);
+    printf ("ok patch7 fallback path (warning string corrupted)\n");
+  }
+
   free (buf);
+  free (buf_orig);
   printf ("ALL PASS\n");
   return 0;
 }

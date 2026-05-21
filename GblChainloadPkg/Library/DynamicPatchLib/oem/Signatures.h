@@ -33,6 +33,18 @@
  * unchanged), so patching stays idempotent.
  * ---------------------------------------------------------------------------*/
 
+/* Primary anchor: the orange-state warning text.  Invariant across OTA builds
+   and referenced by exactly one ADRP+ADD; the guard CBZ is the nearest CBZ Wn
+   preceding that ADRP (observed at ADRP-0x1C on every oplus build, but located
+   by a bounded backward scan rather than a fixed delta).  Verified unique in
+   the EU-16.0.5.703, IN-16.0.7.201, and fairlady-CN-16.0.7.200 PEs. */
+STATIC CONST CHAR8 kPatch7WarnStr[] = "Your device has been unlocked and can't be trusted";
+
+/* Backward-scan window (bytes) from the warning-string ADRP to the guard CBZ. */
+#define kPatch7BackScanWindow  0x40U
+
+/* Fallback anchor (instruction pattern) for builds where the warning string is
+   absent/relocated or the ADRP resolution is ambiguous. */
 STATIC CONST UINT8 kPatch7AnchorPattern[] = {
   /* +0x00 */ 0x6A, 0x04, 0x00, 0x34,  /* CBZ   W10, +#0x8C  (rewrite site) */
   /* +0x04 */ 0x00, 0x06, 0x80, 0x52,  /* MOV   W?, #0x33   (delay setup)   */
