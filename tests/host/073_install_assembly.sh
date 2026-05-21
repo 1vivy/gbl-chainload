@@ -53,6 +53,8 @@ for n in 0 1 2; do
        "$OUT/$MODE/core" "$OUT/$MODE/modes" "$OUT/$MODE/META-INF"; then
     echo "FAIL: $ZIP contains timeout prompts or legacy sdcard paths"; exit 1
   fi
+  grep -R -q 'latest_abl.img' "$OUT/$MODE/core" "$OUT/$MODE/modes" \
+    || { echo "FAIL: $ZIP missing latest ABL cache backup path"; exit 1; }
   shell_targets=("$OUT/$MODE/modes/$MODE.sh" "$OUT/$MODE/modes/install-common.sh")
   [ "$n" = 1 ] && shell_targets+=("$OUT/$MODE/modes/graft-common.sh")
   shellcheck -s sh "${shell_targets[@]}" \
