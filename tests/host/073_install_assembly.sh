@@ -13,6 +13,7 @@ for n in 0 1 2; do
   bash scripts/build-recovery-zip.sh --mode "$MODE" >/dev/null
   ZIP="dist/gbl-chainload-$MODE.zip"
   [ -f "$ZIP" ] || { echo "FAIL: $ZIP not produced"; exit 1; }
+  unzip -l "$ZIP" > "$OUT/$MODE.list"
 
   common_expected=(META-INF/com/google/android/update-binary \
            META-INF/com/google/android/updater-script \
@@ -27,20 +28,20 @@ for n in 0 1 2; do
     common_expected+=(modes/graft-common.sh bin/vbmeta-graft)
   fi
   for e in "${common_expected[@]}"; do
-    unzip -l "$ZIP" | grep -q "[ /]$e\$" \
+    grep -q "[ /]$e\$" "$OUT/$MODE.list" \
       || { echo "FAIL: $ZIP missing $e"; exit 1; }
   done
 
   unzip -p "$ZIP" modes/SELECTED | grep -qx "$MODE" \
     || { echo "FAIL: $ZIP SELECTED is not '$MODE'"; exit 1; }
   # No diag/graft mode files leak in (install-common.sh is shared and stays).
-  if unzip -l "$ZIP" | grep -qE 'modes/(diag|graft)\.'; then
+  if grep -qE 'modes/(diag|graft)\.' "$OUT/$MODE.list"; then
     echo "FAIL: $ZIP carries diag/graft mode files"; exit 1
   fi
   # No other install mode's .sh/.conf or base EFI.
   for o in 0 1 2; do
     [ "$o" = "$n" ] && continue
-    if unzip -l "$ZIP" | grep -qE "(modes/mode-$o-install\.|base/mode-$o\.efi)"; then
+    if grep -qE "(modes/mode-$o-install\.|base/mode-$o\.efi)" "$OUT/$MODE.list"; then
       echo "FAIL: $ZIP carries mode-$o files"; exit 1
     fi
   done
