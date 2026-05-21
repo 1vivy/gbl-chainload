@@ -14,7 +14,7 @@ for n in 0 1 2; do
   ZIP="dist/gbl-chainload-$MODE.zip"
   [ -f "$ZIP" ] || { echo "FAIL: $ZIP not produced"; exit 1; }
 
-  for e in META-INF/com/google/android/update-binary \
+  common_expected=(META-INF/com/google/android/update-binary \
            META-INF/com/google/android/updater-script \
            core/ui.sh core/env.sh core/ota.sh core/busybox.sh \
            core/partition.sh core/safety.sh core/install_abl.sh \
@@ -22,7 +22,11 @@ for n in 0 1 2; do
            "modes/$MODE.conf" "modes/$MODE.sh" \
            bin/fv-unwrap bin/abl-patcher bin/gbl-pack bin/gbl-commit \
            bin/busybox-arm64 \
-           "base/mode-$n.efi" SHA256SUMS; do
+            "base/mode-$n.efi" SHA256SUMS)
+  if [ "$n" = 1 ]; then
+    common_expected+=(modes/graft-common.sh bin/vbmeta-graft)
+  fi
+  for e in "${common_expected[@]}"; do
     unzip -l "$ZIP" | grep -q "[ /]$e\$" \
       || { echo "FAIL: $ZIP missing $e"; exit 1; }
   done
@@ -44,9 +48,23 @@ for n in 0 1 2; do
   unzip -o "$ZIP" -d "$OUT/$MODE" >/dev/null
   ( cd "$OUT/$MODE" && sha256sum -c --status SHA256SUMS ) \
     || { echo "FAIL: $ZIP SHA256SUMS mismatch"; exit 1; }
-  shellcheck -s sh "$OUT/$MODE/modes/$MODE.sh" \
-                   "$OUT/$MODE/modes/install-common.sh" \
+  if grep -R -qE 'timeout |/sdcard/efisp\.bak|/sdcard/gbl_|/sdcard/stock_recovery\.img' \
+       "$OUT/$MODE/core" "$OUT/$MODE/modes" "$OUT/$MODE/META-INF"; then
+    echo "FAIL: $ZIP contains timeout prompts or legacy sdcard paths"; exit 1
+  fi
+  shell_targets=("$OUT/$MODE/modes/$MODE.sh" "$OUT/$MODE/modes/install-common.sh")
+  [ "$n" = 1 ] && shell_targets+=("$OUT/$MODE/modes/graft-common.sh")
+  shellcheck -s sh "${shell_targets[@]}" \
     || { echo "FAIL: staged $MODE scripts fail shellcheck"; exit 1; }
+
+  if [ "$n" = 1 ]; then
+    prewrite_line=$(grep -n 'mode_preinstall_write' "$OUT/$MODE/modes/install-common.sh" | tail -1 | cut -d: -f1)
+    efisp_line=$(grep -n 'commit_efisp$' "$OUT/$MODE/modes/install-common.sh" | tail -1 | cut -d: -f1)
+    [ "$prewrite_line" -lt "$efisp_line" ] \
+      || { echo "FAIL: mode-1 graft hook does not run before EFISP write"; exit 1; }
+    grep -q 'dd if="$_src" of="$WORKDIR/custom_recovery.img"' "$OUT/$MODE/modes/mode-1-install.sh" \
+      || { echo "FAIL: mode-1 OTA recovery source is not copied to a regular file"; exit 1; }
+  fi
 done
 
 echo "PASS: 073 install assembly"

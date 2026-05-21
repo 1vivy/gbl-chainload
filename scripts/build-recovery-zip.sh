@@ -98,7 +98,7 @@ for f in "$STAGE"/modes/*.conf "$STAGE"/modes/*.sh; do
             *" $m "*) ;;          # a paired mode script - removable
             *)                    # no sibling .conf: a shared mode lib -
                                   # keep only if the selected mode declares it
-              [ "$b" = "$MODE_LIB" ] && continue
+              case " $MODE_LIB " in *" $b "*) continue ;; esac
               ;;
           esac ;;
   esac

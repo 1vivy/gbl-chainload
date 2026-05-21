@@ -12,7 +12,7 @@ ZIP=dist/gbl-chainload-graft.zip
 
 for e in META-INF/com/google/android/update-binary \
          core/ui.sh core/env.sh core/ota.sh core/busybox.sh core/partition.sh core/safety.sh \
-         modes/SELECTED modes/graft.conf modes/graft.sh \
+         modes/SELECTED modes/graft.conf modes/graft.sh modes/graft-common.sh \
          bin/vbmeta-graft bin/gbl-commit bin/busybox-arm64 SHA256SUMS; do
   unzip -l "$ZIP" | grep -q "[ /]$e\$" || { echo "FAIL: $ZIP missing $e"; exit 1; }
 done
@@ -26,7 +26,11 @@ fi
 unzip -o "$ZIP" -d "$OUT/x" >/dev/null
 ( cd "$OUT/x" && sha256sum -c --status SHA256SUMS ) \
   || { echo "FAIL: SHA256SUMS mismatch"; exit 1; }
-shellcheck -s sh "$OUT/x/modes/graft.sh" \
+if grep -R -qE 'timeout |/sdcard/gbl_|/sdcard/stock_recovery\.img|/sdcard/efisp\.bak' \
+     "$OUT/x/core" "$OUT/x/modes" "$OUT/x/META-INF"; then
+  echo "FAIL: graft ZIP contains timeout prompts or legacy sdcard paths"; exit 1
+fi
+shellcheck -s sh "$OUT/x/modes/graft.sh" "$OUT/x/modes/graft-common.sh" \
   || { echo "FAIL: staged graft.sh fails shellcheck"; exit 1; }
 
 echo "PASS: 075 graft assembly"
