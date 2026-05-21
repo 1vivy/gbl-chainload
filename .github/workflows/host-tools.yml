@@ -36,6 +36,11 @@ jobs:
         with:
           name: tools-macos
           path: dist/macos
+      - name: Upload Linux binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: tools-linux
+          path: dist/linux
 
   test-windows:
     needs: cross-build
@@ -50,7 +55,7 @@ jobs:
         run: |
           set -u
           fail=0
-          for t in fv-unwrap abl-patcher gbl-pack gbl-commit vbmeta-graft mode2-profile; do
+          for t in fv-unwrap abl-patcher gbl-pack gbl-commit vbmeta-graft mode2-profile gblp1-inspect; do
             bin="dist/windows/$t.exe"
             out=$("$bin" 2>&1 || true)
             if printf '%s' "$out" | grep -qiE 'usage|--in|derive'; then
@@ -75,8 +80,34 @@ jobs:
         run: |
           set -u
           fail=0
-          for t in fv-unwrap abl-patcher gbl-pack gbl-commit vbmeta-graft mode2-profile; do
+          for t in fv-unwrap abl-patcher gbl-pack gbl-commit vbmeta-graft mode2-profile gblp1-inspect; do
             bin="dist/macos/$t"
+            chmod +x "$bin"
+            out=$("$bin" 2>&1 || true)
+            if printf '%s' "$out" | grep -qiE 'usage|--in|derive'; then
+              echo "ok  $t"
+            else
+              echo "FAIL $t — no usage banner; output was: $out"
+              fail=1
+            fi
+          done
+          exit $fail
+
+  test-linux:
+    needs: cross-build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: tools-linux
+          path: dist/linux
+      - name: Smoke-test each static ELF
+        shell: bash
+        run: |
+          set -u
+          fail=0
+          for t in fv-unwrap abl-patcher gbl-pack gbl-commit vbmeta-graft mode2-profile gblp1-inspect; do
+            bin="dist/linux/$t"
             chmod +x "$bin"
             out=$("$bin" 2>&1 || true)
             if printf '%s' "$out" | grep -qiE 'usage|--in|derive'; then

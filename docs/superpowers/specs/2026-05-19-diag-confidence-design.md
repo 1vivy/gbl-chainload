@@ -412,10 +412,10 @@ descriptor walker; ~60 added lines of C.
 
 Host-side, additive, no device required:
 
-- `tests/host/084_gblp1_inspect.sh` — pack a known overlay via
+- `tests/host/089_gblp1_inspect.sh` — pack a known overlay via
   `gbl-pack`, run `gblp1-inspect`, assert mode/entries/SHAs and exit
   code; corrupt one entry's SHA and assert the failure line.
-- `tests/host/085_vbmeta_descriptor_hash.sh` — using existing
+- `tests/host/090_vbmeta_descriptor_hash.sh` — using existing
   `images/grafted-recovery.img`-style fixtures (or a small synthetic
   pair built inside the test), assert `match` for an in-spec image and
   `mismatch` for a perturbed one.
@@ -578,7 +578,7 @@ Implementation touches:
   shape, with negative guards for legacy `graft needed` / `fakelock
   req` strings to prevent silent re-introduction.
 - Regression tests `074_vbmeta_graft.sh` and
-  `085_vbmeta_descriptor_hash.sh` still pass on the corrected tool.
+  `090_vbmeta_descriptor_hash.sh` still pass on the corrected tool.
 
 Open follow-up (out of scope for this PR): on-device validation that
 the new `action req` line matches reality on a mode-1 + grafted

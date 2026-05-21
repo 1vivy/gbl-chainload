@@ -23,8 +23,8 @@ Parent repo (`gbl-chainload`):
 | `tools/gblp1-inspect/gblp1-inspect.c` | create | CLI + parse logic: locate GBLP1 magic in a buffer, verify header CRC + every entry SHA-256 + footer, print machine-greppable lines |
 | `tools/vbmeta-graft/vbmeta-graft.c` | modify | add `list-hash` subcommand: per-descriptor digest check + graft-natural-offset probe + boot-pass verdict |
 | `scripts/build-recovery-tools.sh` | modify | add `gblp1-inspect` to the cross-build tool list |
-| `tests/host/084_gblp1_inspect.sh` | create | pack a known overlay, run `gblp1-inspect`, assert lines and exit code on good and corrupted inputs |
-| `tests/host/085_vbmeta_descriptor_hash.sh` | create | drive the new `vbmeta-graft list-hash` on `images/grafted-recovery.img` + a perturbed copy, assert verdict columns |
+| `tests/host/089_gblp1_inspect.sh` | create | pack a known overlay, run `gblp1-inspect`, assert lines and exit code on good and corrupted inputs |
+| `tests/host/090_vbmeta_descriptor_hash.sh` | create | drive the new `vbmeta-graft list-hash` on `images/grafted-recovery.img` + a perturbed copy, assert verdict columns |
 | `tests/host/086_diag_dryrun.sh` | create | run `zip/modes/diag.sh` against a synthetic by-name tree, assert bundle layout + headline tier in HIGH / MEDIUM / LOW / NONE scripted scenarios |
 
 Submodule (`zip/`):
@@ -61,7 +61,7 @@ T1 and T2 are independent and can be implemented in either order or in parallel.
 - Create: `tools/gblp1-inspect/Makefile`
 - Create: `tools/gblp1-inspect/gblp1-inspect.c`
 - Modify: `scripts/build-recovery-tools.sh`
-- Create: `tests/host/084_gblp1_inspect.sh`
+- Create: `tests/host/089_gblp1_inspect.sh`
 
 **Acceptance Criteria:**
 - [ ] `make -C tools/gblp1-inspect` produces a host binary that runs.
@@ -72,9 +72,9 @@ T1 and T2 are independent and can be implemented in either order or in parallel.
 - [ ] If any entry's SHA-256 does not match its declared digest, output ends with `result: entry_sha_mismatch` and exit status non-zero.
 - [ ] If the input has no `GBLP1\0\0\0` magic anywhere, output is `result: not_a_gblp1` and exit status non-zero.
 - [ ] `scripts/build-recovery-tools.sh` now includes `gblp1-inspect` in its cross-build loop, and a re-run produces `dist/recovery/gblp1-inspect`.
-- [ ] `bash tests/host/084_gblp1_inspect.sh` prints `PASS: 084 gblp1-inspect`.
+- [ ] `bash tests/host/089_gblp1_inspect.sh` prints `PASS: 084 gblp1-inspect`.
 
-**Verify:** `bash tests/host/084_gblp1_inspect.sh` → final line `PASS: 084 gblp1-inspect`.
+**Verify:** `bash tests/host/089_gblp1_inspect.sh` → final line `PASS: 084 gblp1-inspect`.
 
 **Steps:**
 
@@ -256,11 +256,11 @@ to:
 
 - [ ] **Step 4: Create the host test.**
 
-Create `tests/host/084_gblp1_inspect.sh`:
+Create `tests/host/089_gblp1_inspect.sh`:
 
 ```sh
 #!/usr/bin/env bash
-# tests/host/084_gblp1_inspect.sh — gblp1-inspect round-trip + failure-mode.
+# tests/host/089_gblp1_inspect.sh — gblp1-inspect round-trip + failure-mode.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
@@ -325,7 +325,7 @@ echo "PASS: 084 gblp1-inspect"
 
 ```
 make -C tools/gblp1-inspect
-bash tests/host/084_gblp1_inspect.sh
+bash tests/host/089_gblp1_inspect.sh
 ```
 
 Expected final line: `PASS: 084 gblp1-inspect`.
@@ -333,7 +333,7 @@ Expected final line: `PASS: 084 gblp1-inspect`.
 - [ ] **Step 6: Commit.**
 
 ```
-git add tools/gblp1-inspect/ scripts/build-recovery-tools.sh tests/host/084_gblp1_inspect.sh
+git add tools/gblp1-inspect/ scripts/build-recovery-tools.sh tests/host/089_gblp1_inspect.sh
 git commit -m "tools: gblp1-inspect — GBLP1 container inspector for diag"
 ```
 
@@ -345,7 +345,7 @@ git commit -m "tools: gblp1-inspect — GBLP1 container inspector for diag"
 
 **Files:**
 - Modify: `tools/vbmeta-graft/vbmeta-graft.c`
-- Create: `tests/host/085_vbmeta_descriptor_hash.sh`
+- Create: `tests/host/090_vbmeta_descriptor_hash.sh`
 
 **Acceptance Criteria:**
 - [ ] `vbmeta-graft list-hash <self-consistent-vbmeta> <byname-dir>` on a tree where every chained partition matches its descriptor prints `digest=ok ... verdict=match` for hash descriptors and `verdict=match` (with `graft=ok` or `graft=n/a` as appropriate) for chain descriptors that resolve.
@@ -353,9 +353,9 @@ git commit -m "tools: gblp1-inspect — GBLP1 container inspector for diag"
 - [ ] A chain descriptor whose target has no embedded vbmeta at the natural offset produces `graft=missing verdict=mismatch`.
 - [ ] A chain descriptor whose target carries a stock OEM-signed vbmeta at the natural offset produces `graft=ok verdict=match`.
 - [ ] Existing `list`, `check`, `graft` subcommands continue to behave as before — `bash tests/host/074_vbmeta_graft.sh` still passes.
-- [ ] `bash tests/host/085_vbmeta_descriptor_hash.sh` prints `PASS: 085 vbmeta-graft list-hash`.
+- [ ] `bash tests/host/090_vbmeta_descriptor_hash.sh` prints `PASS: 085 vbmeta-graft list-hash`.
 
-**Verify:** `bash tests/host/074_vbmeta_graft.sh && bash tests/host/085_vbmeta_descriptor_hash.sh` → both end with `PASS: …` lines.
+**Verify:** `bash tests/host/074_vbmeta_graft.sh && bash tests/host/090_vbmeta_descriptor_hash.sh` → both end with `PASS: …` lines.
 
 **Steps:**
 
@@ -413,11 +413,11 @@ Increment `graft_needed` when `verdict=mismatch && graft=missing` on a chain des
 
 - [ ] **Step 4: Create the host test.**
 
-Create `tests/host/085_vbmeta_descriptor_hash.sh`:
+Create `tests/host/090_vbmeta_descriptor_hash.sh`:
 
 ```sh
 #!/usr/bin/env bash
-# tests/host/085_vbmeta_descriptor_hash.sh — vbmeta-graft list-hash.
+# tests/host/090_vbmeta_descriptor_hash.sh — vbmeta-graft list-hash.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
@@ -479,7 +479,7 @@ echo "PASS: 085 vbmeta-graft list-hash"
 ```
 make -C tools/vbmeta-graft
 bash tests/host/074_vbmeta_graft.sh   # regression
-bash tests/host/085_vbmeta_descriptor_hash.sh
+bash tests/host/090_vbmeta_descriptor_hash.sh
 ```
 
 Both must end with `PASS: …`.
@@ -487,7 +487,7 @@ Both must end with `PASS: …`.
 - [ ] **Step 6: Commit.**
 
 ```
-git add tools/vbmeta-graft/vbmeta-graft.c tests/host/085_vbmeta_descriptor_hash.sh
+git add tools/vbmeta-graft/vbmeta-graft.c tests/host/090_vbmeta_descriptor_hash.sh
 git commit -m "tools(vbmeta-graft): list-hash subcommand — per-descriptor verdict for diag"
 ```
 

@@ -1,6 +1,6 @@
 # gbl-chainload host-side tools
 
-Six small C utilities (and one Python script) for turning a dumped ABL
+Seven small C utilities (and one Python script) for turning a dumped ABL
 partition image into a ready-to-flash EFISP payload, then optionally writing
 it to disk. Some workflows also consume additional inputs; for example, a
 stock `vbmeta.img` is only needed for mode 2. Most of the C tools build
@@ -198,6 +198,23 @@ The `mode2-profile/vendor/tomlc99/` directory contains
 [tomlc99](https://github.com/cktan/tomlc99) by CK Tan (MIT) — a single-file
 C99 TOML parser used by `compile`.
 
+### gblp1-inspect
+
+GBLP1 container inspector — parses + verifies a GBLP1 container and reports
+per-entry SHA-256 status. Used by the diag mode. Scans for the GBLP1 header
+inside an arbitrary image (so it works on a bare `payload.bin` or a full
+EFISP = base EFI || GBLP1), validates the header and every entry digest, and
+prints a `result:` verdict (`ok`, `entry_sha_mismatch`, `not_a_gblp1`),
+exiting non-zero on any failure.
+
+```
+gblp1-inspect <image>
+```
+
+```
+tools/gblp1-inspect/gblp1-inspect payload.bin
+```
+
 ## scripts/efisp-package.py
 
 Off-device chaining of `fv-unwrap → abl-patcher → gbl-pack` (plus
@@ -261,6 +278,7 @@ with `--out`.
 | gbl-commit       | ✓     | ✓       | ✓       | ✓     |
 | vbmeta-graft     | ✓     | ✓       | ✓       | ✓     |
 | mode2-profile    | ✓     | ✓       | ✓       | ✓     |
+| gblp1-inspect    | ✓     | ✓       | ✓       | ✓     |
 | mode2-profile.py | ✓     | —       | ✓       | ✓     |
 
 `mode2-profile.py` runs on any host with Python 3.11+; `derive` additionally

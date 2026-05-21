@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/host/085_vbmeta_descriptor_hash.sh — vbmeta-graft list-hash.
+# tests/host/090_vbmeta_descriptor_hash.sh — vbmeta-graft list-hash.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
@@ -8,7 +8,7 @@ make -s -C tools/vbmeta-graft
 FX=tests/images/grafted-recovery.img
 [ -f "$FX" ] || { echo "SKIP: $FX absent"; exit 0; }
 
-OUT=tests/host/.last/085
+OUT=tests/host/.last/090
 rm -rf "$OUT"; mkdir -p "$OUT/byname"
 VG=tools/vbmeta-graft/vbmeta-graft
 
@@ -55,4 +55,4 @@ mv "$OUT/byname/recovery_a.bak" "$OUT/byname/recovery_a"
 bash tests/host/074_vbmeta_graft.sh > "$OUT/074.log" 2>&1 \
   || { echo "FAIL: 074 regressed"; cat "$OUT/074.log"; exit 1; }
 
-echo "PASS: 085 vbmeta-graft list-hash"
+echo "PASS: 090 vbmeta-graft list-hash"

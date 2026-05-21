@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/host/084_gblp1_inspect.sh — gblp1-inspect round-trip + failure-mode.
+# tests/host/089_gblp1_inspect.sh — gblp1-inspect round-trip + failure-mode.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
@@ -10,7 +10,7 @@ make -s -C tools/abl-patcher
 make -s -C tools/gbl-pack
 make -s -C tools/gblp1-inspect
 
-OUT=tests/host/.last/084
+OUT=tests/host/.last/089
 rm -rf "$OUT"; mkdir -p "$OUT"
 
 # Build a valid payload.bin via the same path as 060.
@@ -57,4 +57,4 @@ grep -q '^result: not_a_gblp1$' "$OUT/random.txt" \
 [ "$rc" != 0 ] \
   || { echo "FAIL: not_a_gblp1 returned exit 0"; exit 1; }
 
-echo "PASS: 084 gblp1-inspect"
+echo "PASS: 089 gblp1-inspect"
