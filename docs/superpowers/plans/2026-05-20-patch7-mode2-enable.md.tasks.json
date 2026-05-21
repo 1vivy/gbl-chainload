@@ -3,7 +3,7 @@
   "tasks": [
     {
       "id": 0,
-      "subject": "Task 0: Branch setup — feat/patch7-mode2-enable off main",
+      "subject": "Task 0: Branch setup \u2014 feat/patch7-mode2-enable off main",
       "status": "completed",
       "description": "**Goal:** Land changes on a dedicated feature branch off main, per the project's PR-only workflow. Move the existing spec commit dabd30d from spec/release-workflow to the new branch.\n\n**Files:** none (git only).\n\n**Acceptance Criteria:**\n- On a new branch feat/patch7-mode2-enable based on origin/main\n- Spec commit dabd30d is reachable from the new branch (cherry-pick)\n- Working tree clean\n\n**Verify:** `git rev-parse --abbrev-ref HEAD && git log --oneline main..HEAD`\n\n```json:metadata\n{\"files\": [], \"verifyCommand\": \"git rev-parse --abbrev-ref HEAD && git log --oneline main..HEAD\", \"acceptanceCriteria\": [\"On branch feat/patch7-mode2-enable based on origin/main\", \"Spec commit dabd30d cherry-picked\", \"Working tree clean\"]}\n```"
     },
@@ -11,37 +11,48 @@
       "id": 1,
       "subject": "Task 1: Unarchive patch7 in oem/oneplus_canoe.c",
       "status": "completed",
-      "blockedBy": [0],
+      "blockedBy": [
+        0
+      ],
       "description": "**Goal:** kOemOneplusPatches[] is a single-entry table containing the patch7 descriptor, with no #ifdef GBL_PATCH7_ENABLED anywhere.\n\n**Files:**\n- Modify: GblChainloadPkg/Library/DynamicPatchLib/oem/oneplus_canoe.c\n\n**Acceptance Criteria:**\n- No occurrences of GBL_PATCH7_ENABLED anywhere in the repo\n- kOemOneplusPatches[] contains exactly one entry, named patch7-orange-screen, .Scope = SCOPE_OEM_ONEPLUS, .Mandatory = FALSE\n- kOemOneplusPatchesCount uses sizeof()/sizeof()\n- File doc comment no longer says 'archived from active mode-1 table'\n- make -s -C tools/abl-patcher rebuilds clean\n- bash tests/045_mode_taxonomy_lint.sh passes\n\n**Verify:** `! grep -rn GBL_PATCH7_ENABLED GblChainloadPkg tools tests && make -s -C tools/abl-patcher && bash tests/045_mode_taxonomy_lint.sh`\n\n```json:metadata\n{\"files\": [\"GblChainloadPkg/Library/DynamicPatchLib/oem/oneplus_canoe.c\"], \"verifyCommand\": \"! grep -rn GBL_PATCH7_ENABLED GblChainloadPkg tools tests && make -s -C tools/abl-patcher && bash tests/045_mode_taxonomy_lint.sh\", \"acceptanceCriteria\": [\"GBL_PATCH7_ENABLED removed from repo\", \"kOemOneplusPatches[] has 1 entry named patch7-orange-screen\", \"kOemOneplusPatchesCount uses sizeof()/sizeof()\", \"tools/abl-patcher rebuilds clean\", \"tests/045_mode_taxonomy_lint.sh passes\"]}\n```"
     },
     {
       "id": 2,
       "subject": "Task 2: Update tests/patches/test_patch7.c for active-table wiring",
       "status": "completed",
-      "blockedBy": [1],
+      "blockedBy": [
+        1
+      ],
       "description": "**Goal:** Test reflects that patch7 is no longer archived. Adds a kOemOneplusPatches[] membership assertion that runs before fixture-dependent checks; existing byte-level checks keep passing.\n\n**Files:**\n- Modify: tests/patches/test_patch7.c\n\n**Acceptance Criteria:**\n- File comment no longer says 'archived from the active mode-1 aggregator table'\n- Adds externs for kOemOneplusPatches[] and kOemOneplusPatchesCount\n- Asserts kOemOneplusPatchesCount >= 1 and finds an entry .Name == 'patch7-orange-screen' with non-null .Apply\n- Membership check runs BEFORE fixture load (so SKIP path still executes it)\n- All existing byte-level checks still pass\n\n**Verify:** `make -s -C tests/patches test_patch7 && (cd tests/patches && ./test_patch7)`\n\n```json:metadata\n{\"files\": [\"tests/patches/test_patch7.c\"], \"verifyCommand\": \"make -s -C tests/patches test_patch7 && (cd tests/patches && ./test_patch7)\", \"acceptanceCriteria\": [\"File comment updated (no 'archived' language)\", \"Membership assertion runs before fixture-dependent checks\", \"Existing anchor/CBZ/idempotency checks pass on fixture\", \"SKIP path emits 'ok patch7 table membership' before SKIP\"]}\n```"
     },
     {
       "id": 3,
       "subject": "Task 3: Extend tests/host/083 to assert patch7 applied with --oem oneplus",
       "status": "completed",
-      "blockedBy": [1],
+      "blockedBy": [
+        1
+      ],
       "description": "**Goal:** Close the TODO in tests/host/083_abl_patcher_oem.sh. Verify patch7 IS applied with --oem oneplus --no-mode1 and NOT applied with default abl-patcher invocation.\n\n**Files:**\n- Modify: tests/host/083_abl_patcher_oem.sh\n\n**Acceptance Criteria:**\n- Coverage-note comment updated (no GBL_PATCH7_ENABLED reference)\n- Test 1 asserts grep -qF 'patch7-orange-screen' on m2.log\n- Test 2 asserts ! grep -qF 'patch7-orange-screen' on m1.log\n- Existing mode_1 / unknown-oem checks unchanged\n- Regression gate (060, 062, 045) still green\n\n**Verify:** `bash tests/host/083_abl_patcher_oem.sh`\n\n```json:metadata\n{\"files\": [\"tests/host/083_abl_patcher_oem.sh\"], \"verifyCommand\": \"bash tests/host/083_abl_patcher_oem.sh\", \"acceptanceCriteria\": [\"Coverage note updated\", \"Test 1 asserts patch7-orange-screen present in --oem oneplus run\", \"Test 2 asserts patch7-orange-screen absent in default run\", \"Regression gate (060, 062, 045) still passes\"]}\n```"
     },
     {
       "id": 4,
       "subject": "Task 4: Widen zip/modes/mode-2-install.sh OEM detect",
       "status": "completed",
-      "blockedBy": [0],
+      "blockedBy": [
+        0
+      ],
       "description": "**Goal:** detect_oem accepts the full oplus family (oneplus / oppo / oplus / realme), all mapped to OEM_ID=oneplus.\n\n**Files:**\n- Modify: zip/modes/mode-2-install.sh\n\n**Acceptance Criteria:**\n- Case branch reads `*oneplus*|*oppo*|*oplus*|*realme*) OEM_ID=oneplus ;;`\n- Unknown OEM still aborts with the existing message\n- bash -n parses clean\n\n**Verify:** `bash -n zip/modes/mode-2-install.sh && grep -n 'oneplus.*oppo.*oplus.*realme' zip/modes/mode-2-install.sh`\n\n```json:metadata\n{\"files\": [\"zip/modes/mode-2-install.sh\"], \"verifyCommand\": \"bash -n zip/modes/mode-2-install.sh && grep -n 'oneplus.*oppo.*oplus.*realme' zip/modes/mode-2-install.sh\", \"acceptanceCriteria\": [\"case branch matches *oneplus*|*oppo*|*oplus*|*realme*\", \"abort path unchanged\", \"bash -n parses clean\"]}\n```"
     },
     {
       "id": 5,
       "subject": "Task 5: On-device verify orange-state warning is gone in mode-2",
-      "status": "pending",
-      "blockedBy": [1, 4],
-      "description": "**USER-ORDERED GATE — NON-SKIPPABLE.** This task was requested by the user in the current conversation. It MUST NOT be closed by walking around it, by declaring it 'verified inline', or by substituting a cheaper check. Close only after every item in acceptanceCriteria has been re-validated independently, with output captured.\n\n**Goal:** Build a mode-2 EFI with patch7 enabled, stage on the infiniti test phone via fastboot stage + oem boot-efi (never fastboot flash), and confirm: (1) orange-state warning screen no longer renders on boot, (2) mode-2 attestation baseline still passes.\n\n**Files:** none (host build + on-device execution + log capture).\n\n**Acceptance Criteria:**\n- dist/mode-2.efi built from feat/patch7-mode2-enable HEAD\n- EFI staged via fastboot stage + oem boot-efi (no fastboot flash)\n- Orange-state warning screen does NOT render on boot (visual)\n- dmesg + logcat + getprop captured under logs/<ts>_manual_mode2-patch7-on_v<sha>/\n- Key attestation reports PASS (matches 2026-05-18 baseline)\n- Widevine / RKP / Strongbox / SOTER unchanged from 2026-05-18 baseline\n\n**Verify:** Manual — see plan §Task 5.\n\n⚠️ SAFETY: CLAUDE.md §Safety blocks fastboot flash / oem unlock/lock / flashing unlock_critical / --set-active / erase for non-HLOS partitions. Stage + oem boot-efi only.\n\n```json:metadata\n{\"files\": [], \"verifyCommand\": \"scripts/build.sh --mode 2 && echo MANUAL_STEPS_REQUIRED\", \"acceptanceCriteria\": [\"dist/mode-2.efi built from feat/patch7-mode2-enable HEAD\", \"EFI staged via fastboot stage + oem boot-efi (no flash)\", \"orange-state warning screen does NOT render on boot (visual)\", \"dmesg + logcat + getprop captured under logs/<ts>_manual_mode2-patch7-on_v<sha>/\", \"key attestation reports PASS (matches 2026-05-18 baseline)\", \"Widevine/RKP/Strongbox/SOTER unchanged from 2026-05-18 baseline\"], \"userGate\": true, \"tags\": [\"user-gate\"], \"gateScope\": \"user\", \"failurePolicy\": \"stop\"}\n```"
+      "status": "completed",
+      "blockedBy": [
+        1,
+        4
+      ],
+      "description": "**USER-ORDERED GATE \u2014 NON-SKIPPABLE.** This task was requested by the user in the current conversation. It MUST NOT be closed by walking around it, by declaring it 'verified inline', or by substituting a cheaper check. Close only after every item in acceptanceCriteria has been re-validated independently, with output captured.\n\n**Goal:** Build a mode-2 EFI with patch7 enabled, stage on the infiniti test phone via fastboot stage + oem boot-efi (never fastboot flash), and confirm: (1) orange-state warning screen no longer renders on boot, (2) mode-2 attestation baseline still passes.\n\n**Files:** none (host build + on-device execution + log capture).\n\n**Acceptance Criteria:**\n- dist/mode-2.efi built from feat/patch7-mode2-enable HEAD\n- EFI staged via fastboot stage + oem boot-efi (no fastboot flash)\n- Orange-state warning screen does NOT render on boot (visual)\n- dmesg + logcat + getprop captured under logs/<ts>_manual_mode2-patch7-on_v<sha>/\n- Key attestation reports PASS (matches 2026-05-18 baseline)\n- Widevine / RKP / Strongbox / SOTER unchanged from 2026-05-18 baseline\n\n**Verify:** Manual \u2014 see plan \u00a7Task 5.\n\n\u26a0\ufe0f SAFETY: CLAUDE.md \u00a7Safety blocks fastboot flash / oem unlock/lock / flashing unlock_critical / --set-active / erase for non-HLOS partitions. Stage + oem boot-efi only.\n\n```json:metadata\n{\"files\": [], \"verifyCommand\": \"scripts/build.sh --mode 2 && echo MANUAL_STEPS_REQUIRED\", \"acceptanceCriteria\": [\"dist/mode-2.efi built from feat/patch7-mode2-enable HEAD\", \"EFI staged via fastboot stage + oem boot-efi (no flash)\", \"orange-state warning screen does NOT render on boot (visual)\", \"dmesg + logcat + getprop captured under logs/<ts>_manual_mode2-patch7-on_v<sha>/\", \"key attestation reports PASS (matches 2026-05-18 baseline)\", \"Widevine/RKP/Strongbox/SOTER unchanged from 2026-05-18 baseline\"], \"userGate\": true, \"tags\": [\"user-gate\"], \"gateScope\": \"user\", \"failurePolicy\": \"stop\"}\n```"
     }
   ],
-  "lastUpdated": "2026-05-20T18:20:00Z"
+  "lastUpdated": "2026-05-21T03:40:17Z"
 }
