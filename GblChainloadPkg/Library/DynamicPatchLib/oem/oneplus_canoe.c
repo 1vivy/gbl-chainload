@@ -1,4 +1,4 @@
-/** @file oneplus_canoe.c — OnePlus/Oppo (Phoenix/canoe) family OEM patches.
+/** @file oneplus_canoe.c — OnePlus/Oppo/Realme (oplus / canoe) family OEM patches.
 
   ## Patch 7 — orange-state-screen + unlock-warning + 5-second boot-delay gate
 
@@ -11,7 +11,14 @@
   and does not include the CBZ word itself, so patching is idempotent.
 
   Faithful port of gbl_root_canoe tools/patchlib.h:patch_orange_state_screen.
-  Non-mandatory — cosmetic only.
+  Non-mandatory — cosmetic only; PATCH_MISS on non-matching ABLs is a clean
+  no-op.
+
+  Scope: SCOPE_OEM_ONEPLUS.  Selected at host build time by
+  `abl-patcher --oem oneplus`, and aggregated automatically by the EFI
+  runtime patch table (mode-1 fakelocks the orange-state code path so the
+  rewrite is dead code there; mode-2 keeps ABL honest and needs the rewrite
+  to silence the warning).
 **/
 
 #include "../../../Include/Library/PatchDesc.h"
@@ -40,27 +47,13 @@ ApplyOrangeScreen (
 }
 
 CONST PATCH_DESC kOemOneplusPatches[] = {
-#ifdef GBL_PATCH7_ENABLED
   {
     .Name      = "patch7-orange-screen",
     .Scope     = SCOPE_OEM_ONEPLUS,
     .Mandatory = FALSE,
     .Apply     = ApplyOrangeScreen,
   },
-#else
-  /* patch7 archived from active mode-1 table.
-     Mode-1 fakelocks the protocol view so the orange-screen warning
-     never fires; patch7 is dead at runtime under fakelock.
-     Re-enable as a one-line build flag (-DGBL_PATCH7_ENABLED) if patch7
-     is wanted for diagnostic purposes (e.g., probing ABL's lock-state
-     output behavior when libavb patching needs to be debugged).  */
-  { .Name = NULL, .Scope = 0, .Mandatory = FALSE, .Apply = NULL }, /* sentinel */
-#endif
 };
 
-#ifdef GBL_PATCH7_ENABLED
 CONST UINTN kOemOneplusPatchesCount =
   sizeof (kOemOneplusPatches) / sizeof (kOemOneplusPatches[0]);
-#else
-CONST UINTN kOemOneplusPatchesCount = 0;
-#endif
