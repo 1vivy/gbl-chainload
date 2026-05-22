@@ -163,6 +163,23 @@ ENV LIBLZMA_MACOS_X64=/opt/liblzma-macos-x64
 ENV LIBLZMA_MACOS_ARM64=/opt/liblzma-macos-arm64
 ENV LIBLZMA_LINUX=/opt/liblzma-linux
 
+# --- Rust toolchain for the tools-rs/ port (pilot: gbl-commit) ---
+# rustup + stable, plus the aarch64-linux-android target. The aarch64 C compile
+# (build.rs's `cc` step) and the Rust linker both reuse the NDK r27 clang
+# already provisioned above — the exact toolchain the C tools' `android` make
+# target uses, so the recovery binary's environment matches. Installed
+# system-wide so `--user` runtime invocations still find cargo.
+ARG RUST_VER=1.95.0
+ENV RUSTUP_HOME=/opt/rustup CARGO_HOME=/opt/cargo
+ENV PATH=/opt/cargo/bin:$PATH
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+      | sh -s -- -y --profile minimal --default-toolchain "${RUST_VER}" \
+ && /opt/cargo/bin/rustup target add aarch64-linux-android \
+ && chmod -R a+rwX /opt/rustup /opt/cargo
+ENV NDK_BIN=/opt/android-ndk/toolchains/llvm/prebuilt/linux-x86_64/bin
+ENV CC_aarch64_linux_android=$NDK_BIN/aarch64-linux-android31-clang \
+    CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$NDK_BIN/aarch64-linux-android31-clang
+
 # Default to a writable workdir; run --user maps host UID at runtime so
 # bind-mounted outputs are owned by the host user.
 WORKDIR /work
