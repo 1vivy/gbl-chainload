@@ -9,6 +9,7 @@
 
 use std::fs::OpenOptions;
 use std::io::{Read, Write};
+#[cfg(any(target_os = "linux", target_os = "android"))]
 use std::os::unix::io::AsRawFd;
 use std::path::PathBuf;
 
