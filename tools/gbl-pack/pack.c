@@ -1,9 +1,13 @@
-/* tools/gbl-pack/pack.c — pure-logic GBLP1 packer. */
+/* tools/gbl-pack/pack.c — pure-logic GBLP1 packer.
+
+   Task 10 retired the efisp UTF-16 rejection path here: the BlockIoHook
+   EFISP gate is the operational guarantee, so the packer is now permissive
+   about cached_abl content.  The CLI layer (gbl-pack.c) emits a warning
+   when it sees the pattern, but does not fail. */
 #include <stdlib.h>
 #include <string.h>
 #include "pack.h"
 #include "../shared/gblp1.h"
-#include "../shared/efisp_scan.h"
 #include "../shared/gbl_mode2_profile.h"
 #include "../../GblChainloadPkg/Library/GblPayloadLib/Internal/Sha256.h"
 #include "../../GblChainloadPkg/Library/GblPayloadLib/Internal/Crc32.h"
@@ -32,8 +36,10 @@ gbl_pack_build(const struct gbl_pack_inputs *in,
         return GBL_PACK_ERR_BAD_INPUT;
 
     if (have_cached) {
-        if (gbl_contains_utf16_efisp(in->cached_abl, in->cached_abl_size))
-            return GBL_PACK_ERR_EFISP_PRESENT;
+        /* Task 10: efisp UTF-16 rejection retired — BlockIoHook gate is the
+           operational guarantee; the CLI front-end warns when it sees the
+           pattern.  Keep PE sanity as a hard reject (it catches genuinely
+           malformed inputs that would never boot). */
         if (gbl_pe_sanity(in->cached_abl, in->cached_abl_size) != GBL_PE_OK)
             return GBL_PACK_ERR_PE_INSANE;
     }

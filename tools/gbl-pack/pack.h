@@ -18,7 +18,10 @@ struct gbl_pack_inputs {
 
 enum gbl_pack_status {
     GBL_PACK_OK = 0,
-    GBL_PACK_ERR_EFISP_PRESENT,
+    /* GBL_PACK_ERR_EFISP_PRESENT removed in Task 10 — BlockIoHook EFISP gate
+       supersedes the patch-time rejection.  gbl-pack.c warns at the CLI
+       layer instead.  Numeric values of the codes below shifted down by 1
+       (status codes are not stable wire format; pack.c is the only emitter). */
     GBL_PACK_ERR_PE_INSANE,
     GBL_PACK_ERR_TOO_LARGE,
     GBL_PACK_ERR_OOM,

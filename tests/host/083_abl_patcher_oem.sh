@@ -83,10 +83,12 @@ fi
 echo "  ok: unknown --oem exits non-zero with clear message"
 
 # ---- Regression gate --------------------------------------------------------
-# Run sibling tests so a breakage in roundtrip / efisp-scan / mode taxonomy
-# surfaces here too.  Each test exits 0 on SKIP (missing fixture) already.
+# Run sibling tests so a breakage in roundtrip / mode taxonomy surfaces here
+# too.  Each test exits 0 on SKIP (missing fixture) already.
+# (062 efisp-scan-gate retired in Task 10 — BlockIoHook EFISP gate replaces
+#  the patch-time UTF-16 reject path, and gbl-pack now warns instead of
+#  rejecting; nothing left to gate from here.)
 bash tests/host/060_pack_roundtrip.sh
-bash tests/host/062_efisp_scan_gate.sh
 bash tests/045_mode_taxonomy_lint.sh
 
 echo "PASS: 083 abl-patcher oem"

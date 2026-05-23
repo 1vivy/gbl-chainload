@@ -7,6 +7,7 @@
 #include <errno.h>
 #include "pack.h"
 #include "../shared/gblp1.h"
+#include "../shared/efisp_scan.h"
 
 static int slurp(const char *path, uint8_t **out, size_t *out_size)
 {
@@ -88,6 +89,16 @@ int main(int argc, char **argv)
         if (slurp(cached,    (uint8_t **)&in.cached_abl, &in.cached_abl_size)) return 1;
         if (slurp(source,    (uint8_t **)&in.source,      &in.source_size))     return 1;
         if (slurp(extracted, (uint8_t **)&in.extracted,   &in.extracted_size))  return 1;
+        /* Task 10: efisp UTF-16 rejection retired from the packer; warn only.
+           The BlockIoHook EFISP gate is the runtime guarantee, so the packer
+           accepts cached_abl containing the literal pattern.  Still useful
+           as a signal that patch10/patch6 may have missed. */
+        if (gbl_contains_utf16_efisp(in.cached_abl, in.cached_abl_size)) {
+            fprintf(stderr,
+                "gbl-pack: warning: cached_abl still contains UTF-16 \"efisp\" "
+                "— BlockIoHook gate will handle this, but check that "
+                "patch10/patch6 applied as expected\n");
+        }
     }
     if (profile) {
         if (slurp(profile, (uint8_t **)&in.mode2_profile, &in.mode2_profile_size))

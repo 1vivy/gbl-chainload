@@ -1,10 +1,14 @@
 /** @file retired/block_efisp_recursion.c — retired patch1 (EFISP recursion fix).
 
   RETIRED 2026-05-22 — superseded by BlockIoHook EFISP gate (Task 9).
-  Reference implementation only.  The array `kUniversalPatches[]` still
-  exists and is referenced by PatchTable.c so the build links; the array
-  contents will be dropped in Task 10 after the BlockIoHook EFISP gate is
-  proven to fully cover the original recursion case.
+  Reference implementation only.  The `kUniversalPatches[]` array was
+  emptied in Task 10 (this commit): the active table no longer carries
+  patch1-efisp-recursion, because the BlockIoHook EFISP gate refuses
+  BlockIo reads/writes against the efisp partition handle at the
+  protocol layer and that is now the operational guarantee against the
+  second-stage-ABL recursion.  The static `ApplyEfispRecursion` function
+  below is kept solely as a reference implementation; it is marked
+  __attribute__((unused)) so the compiler does not warn.
 
   ## Patch 1 — EFISP recursion fix (historical context)
 
@@ -27,7 +31,7 @@
 #include "../../../Include/Library/ScanLib.h"
 #include "Signatures.h"
 
-STATIC PATCH_OUTCOME
+STATIC PATCH_OUTCOME __attribute__((unused))
 ApplyEfispRecursion (
   IN OUT UINT8  *Buf,
   IN     UINT32  Size
@@ -52,13 +56,13 @@ ApplyEfispRecursion (
   return PATCH_OK;
 }
 
+/* RETIRED (Task 10) — patch1-efisp-recursion dropped from the active table.
+   The BlockIoHook EFISP gate (Task 9) supersedes its operational role.
+   A zero-length array is not portable C, so we keep a single-slot sentinel
+   placeholder that is never iterated (kUniversalPatchesCount = 0u).  The
+   sentinel's Apply pointer is NULL — exercising it would trap, which is
+   the intended outcome if the count is ever incorrectly raised. */
 CONST PATCH_DESC kUniversalPatches[] = {
-  {
-    .Name      = "patch1-efisp-recursion",
-    .Scope     = SCOPE_UNIVERSAL,
-    .Mandatory = FALSE,
-    .Apply     = ApplyEfispRecursion,
-  },
+  { .Name = "(retired)", .Scope = SCOPE_UNIVERSAL, .Mandatory = FALSE, .Apply = NULL },
 };
-CONST UINTN kUniversalPatchesCount =
-  sizeof (kUniversalPatches) / sizeof (kUniversalPatches[0]);
+CONST UINTN kUniversalPatchesCount = 0u;

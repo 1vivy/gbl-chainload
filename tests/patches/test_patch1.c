@@ -126,7 +126,16 @@ main (void)
       break;
     }
   }
-  assert (apply != NULL && "patch1-efisp-recursion not found in kUniversalPatches");
+  /* Task 10 (engine-rework) retired patch1 from kUniversalPatches; the
+     BlockIoHook EFISP gate is the operational replacement and is exercised
+     by separate hook-level tests.  When the table no longer carries
+     patch1, this fixture-driven byte-scan test has nothing to drive, so
+     emit a SKIP and exit 0 instead of failing. */
+  if (apply == NULL) {
+    printf ("SKIP: test_patch1 — patch1-efisp-recursion retired "
+            "(Task 10); BlockIoHook EFISP gate covers this case\n");
+    return 0;
+  }
 
   const char *exts[] = { ".efi", ".bin", ".img" };
   int ran = 0, ok = 0;
