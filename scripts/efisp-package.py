@@ -1,14 +1,19 @@
 #!/usr/bin/env python3
 """efisp-package.py — build a ready-to-flash EFISP payload off-device.
 
-Chains the host-side tools into a single `mode-N.efi + GBLP1 overlay`
+Chains the host-side tools into a single `<base>.efi + GBLP1 overlay`
 image, the off-device equivalent of the install ZIP's build_payload:
 
-    fv-unwrap  <abl.img>            -> extracted.efi
-    abl-patcher (mode-correct flags) -> patched.efi
+    fv-unwrap  <abl.img>             -> extracted.efi
+    abl-patcher (--oem, optional)    -> patched.efi
     mode2-profile derive+compile     -> profile.bin     (mode 2 only)
-    gbl-pack    (overlay)            -> payload.bin
-    cat mode-N.efi payload.bin       -> <out>
+    gbl-pack    (overlay, --manifest 0x0N) -> payload.bin
+    cat <base>.efi payload.bin       -> <out>
+
+Post-Task-13 the base EFI is the single `gbl-chainload.efi`; the script
+is name-agnostic — any path the user passes to `--efi` is accepted and
+concatenated as-is. Mode is selected at runtime via the gbl-pack
+manifest, not by which EFI is being shipped.
 
 The output is produced only; flashing is the user's manual step
 (`fastboot stage` + `oem boot-efi`).
@@ -95,7 +100,8 @@ def main():
     ap.add_argument("--mode", choices=("0", "1", "2"))
     ap.add_argument("--efi", help="base mode-N.efi")
     ap.add_argument("--stock-vbmeta", help="stock vbmeta image (mode 2 only)")
-    ap.add_argument("--oem", help="OEM id for abl-patcher --oem (mode 2 only)")
+    ap.add_argument("--oem", help="OEM id for abl-patcher --oem "
+                                  "(allowed for any --mode)")
     ap.add_argument("--out", help="output path "
                     "(default: dist/efisp-payload/<abl>-mode<N>.efi)")
     ap.add_argument("--version", action="store_true",
@@ -121,13 +127,13 @@ def main():
         if not os.path.isfile(f):
             die(f"input not found: {f}")
     if args.mode == "2":
-        if not args.stock_vbmeta or not args.oem:
-            die("--mode 2 requires --stock-vbmeta and --oem")
+        if not args.stock_vbmeta:
+            die("--mode 2 requires --stock-vbmeta")
         if not os.path.isfile(args.stock_vbmeta):
             die(f"input not found: {args.stock_vbmeta}")
-    else:
-        if args.stock_vbmeta or args.oem:
-            die("--stock-vbmeta / --oem are only valid for --mode 2")
+    elif args.stock_vbmeta:
+        die("--stock-vbmeta is only valid for --mode 2")
+    # --oem is allowed for any mode; abl-patcher always applies abl_permissive.
 
     fv     = _resolve_tool("fv-unwrap", args.bin_dir)
     patch  = _resolve_tool("abl-patcher", args.bin_dir)
@@ -148,12 +154,11 @@ def main():
         # 1. unwrap the ABL PE out of the partition image
         run([fv, args.abl, extracted], "fv-unwrap")
 
-        # 2. patch — mode-correct abl-patcher flags
+        # 2. patch — abl-patcher always applies abl_permissive; --oem is
+        # passed through for any mode (decoupled from --mode post-Task-13).
         patch_argv = [patch, "--in", extracted, "--out", patched]
-        if args.mode == "0":
-            patch_argv.append("--no-mode1")
-        elif args.mode == "2":
-            patch_argv += ["--oem", args.oem, "--no-mode1"]
+        if args.oem:
+            patch_argv += ["--oem", args.oem]
         run(patch_argv, "abl-patcher")
 
         # 3. mode 2: derive + compile the mode2 profile
@@ -165,9 +170,15 @@ def main():
             run([m2p, "compile", toml, "-o", pbin], "mode2-profile compile")
             pack_extra = ["--mode2-profile", pbin]
 
-        # 4. pack the GBLP1 overlay
+        # 4. pack the GBLP1 overlay — manifest bits derived from --mode.
+        #   mode 0 → 0x00              (no capability bits set)
+        #   mode 1 → 0x01 WANT_FAKELOCK_HOOK
+        #   mode 2 → 0x02 WANT_PROFILE_SPOOF
+        manifest_bits = {"0": "0x00", "1": "0x01", "2": "0x02"}[args.mode]
         run([pack, "--cached-abl", patched, "--source", args.abl,
-             "--extracted", extracted, *pack_extra, "--out", payload],
+             "--extracted", extracted, *pack_extra,
+             "--manifest", manifest_bits,
+             "--out", payload],
             "gbl-pack")
 
         # 5. concatenate base EFI + overlay -> the output payload
