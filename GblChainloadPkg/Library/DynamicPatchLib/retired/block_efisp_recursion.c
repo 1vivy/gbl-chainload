@@ -1,10 +1,12 @@
-/** @file universal.c — universal-scope patches (apply to every supported PE).
+/** @file retired/block_efisp_recursion.c — retired patch1 (EFISP recursion fix).
 
-  ## Patch 1 — EFISP recursion fix
+  RETIRED 2026-05-22 — superseded by BlockIoHook EFISP gate (Task 9).
+  Reference implementation only.  The array `kUniversalPatches[]` still
+  exists and is referenced by PatchTable.c so the build links; the array
+  contents will be dropped in Task 10 after the BlockIoHook EFISP gate is
+  proven to fully cover the original recursion case.
 
-  We could totally replace this patch with our new blockio hook LOL, and
-  return an EFI FAILURE when ABL tries to load the "efisp" partition. But,
-  a runtime hook for it would be not worth it, and the outcome is same.
+  ## Patch 1 — EFISP recursion fix (historical context)
 
   After our gbl-chainload.efi is loaded by stock ABL, it LoadImages an
   unwrapped copy of ABL from the abl partition.  That second-stage ABL,

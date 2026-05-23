@@ -14,9 +14,10 @@ SRCS := abl-patcher.c \
         $(DPL)/Internal/Arm64Decode.c \
         $(DPL)/Internal/PatchEngine.c \
         $(DPL)/PatchTable.c \
-        $(DPL)/universal/universal.c \
-        $(DPL)/oem/oneplus_canoe.c \
-        $(DPL)/mode_1/mode_1.c
+        $(DPL)/retired/block_efisp_recursion.c \
+        $(DPL)/oem/oplus/bypass_warning.c \
+        $(DPL)/abl_permissive/libavb_force_success.c \
+        $(DPL)/abl_permissive/fastboot_lock_gates.c
 
 abl-patcher: $(SRCS)
 	$(CC) $(CFLAGS) $^ -o $@

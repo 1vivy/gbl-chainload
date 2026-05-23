@@ -9,7 +9,10 @@ OUT=tests/host/.last/065
 mkdir -p "$OUT"
 
 missing=0
-for f in GblChainloadPkg/Library/DynamicPatchLib/{mode_1,oem,universal}/Signatures.h; do
+for f in \
+    GblChainloadPkg/Library/DynamicPatchLib/abl_permissive/Signatures.h \
+    GblChainloadPkg/Library/DynamicPatchLib/oem/oplus/Signatures.h \
+    GblChainloadPkg/Library/DynamicPatchLib/retired/Signatures.h; do
   if ! grep -q 'tools/shared/patch_signatures.h' "$f"; then
     echo "FAIL: $f does not include tools/shared/patch_signatures.h"
     missing=1

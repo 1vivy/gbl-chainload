@@ -15,17 +15,15 @@
 #include "PatchScope.h"
 #endif
 
-extern CONST PATCH_DESC kUniversalPatches[];
+extern CONST PATCH_DESC kUniversalPatches[];           /* retired/block_efisp_recursion.c; drops in Task 10 */
 extern CONST UINTN      kUniversalPatchesCount;
-extern CONST PATCH_DESC kOemOneplusPatches[];
-extern CONST UINTN      kOemOneplusPatchesCount;
-
-/* kMode1Patches is needed when GBL_MODE >= 1 (on-device) *or* when building
-   for the host (abl-patcher): the object is always linked in both cases and
-   EnsureInitScoped decides at runtime whether to include the patches. */
-#if (GBL_MODE >= 1) || defined(__HOST_BUILD__)
-extern CONST PATCH_DESC kMode1Patches[];
-extern CONST UINTN      kMode1PatchesCount;
+extern CONST PATCH_DESC kAblPermissiveLibavbPatches[];   /* was part of kMode1Patches */
+extern CONST UINTN      kAblPermissiveLibavbPatchesCount;
+extern CONST PATCH_DESC kAblPermissiveFastbootGatePatches[];
+extern CONST UINTN      kAblPermissiveFastbootGatePatchesCount;
+#ifdef __HOST_BUILD__
+extern CONST PATCH_DESC kOemOplusPatches[];              /* was kOemOneplusPatches */
+extern CONST UINTN      kOemOplusPatchesCount;
 #endif
 
 #define MAX_PATCHES  16
@@ -47,14 +45,19 @@ InitAggregate (VOID)
   for (i = 0; i < kUniversalPatchesCount && n < MAX_PATCHES; ++i) {
     gAggregated[n++] = kUniversalPatches[i];
   }
-  for (i = 0; i < kOemOneplusPatchesCount && n < MAX_PATCHES; ++i) {
-    gAggregated[n++] = kOemOneplusPatches[i];
-  }
-#if (GBL_MODE >= 1)
-  for (i = 0; i < kMode1PatchesCount && n < MAX_PATCHES; ++i) {
-    gAggregated[n++] = kMode1Patches[i];
+#ifdef __HOST_BUILD__
+  /* OEM source is only compiled into host tools; firmware build does not
+     link oem/oplus/bypass_warning.c. */
+  for (i = 0; i < kOemOplusPatchesCount && n < MAX_PATCHES; ++i) {
+    gAggregated[n++] = kOemOplusPatches[i];
   }
 #endif
+  for (i = 0; i < kAblPermissiveLibavbPatchesCount && n < MAX_PATCHES; ++i) {
+    gAggregated[n++] = kAblPermissiveLibavbPatches[i];
+  }
+  for (i = 0; i < kAblPermissiveFastbootGatePatchesCount && n < MAX_PATCHES; ++i) {
+    gAggregated[n++] = kAblPermissiveFastbootGatePatches[i];
+  }
   gAggregatedLen = n;
   gPatchTable    = gAggregated;
   gPatchTableLen = n;
@@ -71,11 +74,12 @@ DynamicPatchLib_EnsureInit (VOID)
 
 #ifdef __HOST_BUILD__
 /* Runtime scope aggregator for host callers (abl-patcher).
-   Builds the table from: universal, then (if oem != NONE) the OEM group,
-   then (if include_mode1) the mode_1 group.  Replaces the compile-time
-   GBL_MODE aggregation for tools that serve multiple modes from one binary. */
+   Builds the table from: universal (retired patch1), then (if oem != NONE)
+   the OEM group, then (if include_abl_permissive) the ABL-permissive groups.
+   Replaces the compile-time GBL_MODE aggregation for tools that serve
+   multiple modes from one binary. */
 void
-DynamicPatchLib_EnsureInitScoped (GBL_OEM oem, int include_mode1)
+DynamicPatchLib_EnsureInitScoped (GBL_OEM oem, int include_abl_permissive)
 {
   UINTN n = 0;
   UINTN i;
@@ -83,11 +87,14 @@ DynamicPatchLib_EnsureInitScoped (GBL_OEM oem, int include_mode1)
   for (i = 0; i < kUniversalPatchesCount && n < MAX_PATCHES; ++i)
     gAggregated[n++] = kUniversalPatches[i];
   if (oem == GBL_OEM_ONEPLUS)
-    for (i = 0; i < kOemOneplusPatchesCount && n < MAX_PATCHES; ++i)
-      gAggregated[n++] = kOemOneplusPatches[i];
-  if (include_mode1)
-    for (i = 0; i < kMode1PatchesCount && n < MAX_PATCHES; ++i)
-      gAggregated[n++] = kMode1Patches[i];
+    for (i = 0; i < kOemOplusPatchesCount && n < MAX_PATCHES; ++i)
+      gAggregated[n++] = kOemOplusPatches[i];
+  if (include_abl_permissive) {
+    for (i = 0; i < kAblPermissiveLibavbPatchesCount && n < MAX_PATCHES; ++i)
+      gAggregated[n++] = kAblPermissiveLibavbPatches[i];
+    for (i = 0; i < kAblPermissiveFastbootGatePatchesCount && n < MAX_PATCHES; ++i)
+      gAggregated[n++] = kAblPermissiveFastbootGatePatches[i];
+  }
   gAggregatedLen = n;
   gPatchTable    = gAggregated;
   gPatchTableLen = n;

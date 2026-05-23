@@ -31,8 +31,8 @@
 #error "TEST_FIXTURES_DIR must be -D'd at compile time (set by Makefile)"
 #endif
 
-extern CONST PATCH_DESC kMode1Patches[];
-extern CONST UINTN      kMode1PatchesCount;
+extern CONST PATCH_DESC kAblPermissiveLibavbPatches[];
+extern CONST UINTN      kAblPermissiveLibavbPatchesCount;
 
 /* Same anchor string as patch10 uses internally — duplicated here to keep
    test independent of the patch's private signature header. */
@@ -137,13 +137,13 @@ int
 main (void)
 {
   PATCH_APPLY apply = NULL;
-  for (UINTN i = 0; i < kMode1PatchesCount; ++i) {
-    if (strcmp (kMode1Patches[i].Name, "patch10-libavb-force-avb-success") == 0) {
-      apply = kMode1Patches[i].Apply;
+  for (UINTN i = 0; i < kAblPermissiveLibavbPatchesCount; ++i) {
+    if (strcmp (kAblPermissiveLibavbPatches[i].Name, "patch10-libavb-force-avb-success") == 0) {
+      apply = kAblPermissiveLibavbPatches[i].Apply;
       break;
     }
   }
-  assert (apply != NULL && "patch10 not found in kMode1Patches");
+  assert (apply != NULL && "patch10 not found in kAblPermissiveLibavbPatches");
 
   char pat[1024];
   snprintf (pat, sizeof (pat), "%s/*.efi", TEST_FIXTURES_DIR);

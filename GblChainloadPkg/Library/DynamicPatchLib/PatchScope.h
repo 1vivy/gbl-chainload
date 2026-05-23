@@ -8,8 +8,8 @@
 typedef enum { GBL_OEM_NONE = 0, GBL_OEM_ONEPLUS = 1 } GBL_OEM;
 
 /* Aggregate the runtime patch table: universal, then (if oem != NONE) the
-   OEM group, then (if include_mode1) the mode_1 group. Replaces the
-   compile-time aggregation for host callers. */
-void DynamicPatchLib_EnsureInitScoped (GBL_OEM oem, int include_mode1);
+   OEM group, then (if include_abl_permissive) the ABL-permissive groups.
+   Replaces the compile-time aggregation for host callers. */
+void DynamicPatchLib_EnsureInitScoped (GBL_OEM oem, int include_abl_permissive);
 
 #endif

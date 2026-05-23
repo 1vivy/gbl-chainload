@@ -19,9 +19,13 @@
   Internal/Arm64Decode.c
   Internal/PatchEngine.c
   PatchTable.c
-  universal/universal.c
-  oem/oneplus_canoe.c
-  mode_1/mode_1.c
+  retired/block_efisp_recursion.c
+  abl_permissive/libavb_force_success.c
+  abl_permissive/fastboot_lock_gates.c
+  # OEM patches (oem/oplus/bypass_warning.c) are host-only — they are
+  # consumed via tools/abl-patcher/Makefile's explicit source list and
+  # NOT compiled into the firmware image.  PatchTable.c gates the OEM
+  # extern decl on #ifdef __HOST_BUILD__.  Task 6 will tighten this.
 
 [Packages]
   MdePkg/MdePkg.dec

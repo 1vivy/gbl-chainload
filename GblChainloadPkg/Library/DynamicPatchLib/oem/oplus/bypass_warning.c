@@ -1,4 +1,4 @@
-/** @file oneplus_canoe.c — OnePlus/Oppo/Realme (oplus / canoe) family OEM patches.
+/** @file oem/oplus/bypass_warning.c — OnePlus/Oppo/Realme (oplus / canoe) family OEM patches.
 
   ## Patch 7 — orange-state-screen + unlock-warning + 5-second boot-delay gate
 
@@ -33,10 +33,10 @@
   to silence the warning).
 **/
 
-#include "../../../Include/Library/PatchDesc.h"
-#include "../Internal/ScanLib.h"
-#include "../Internal/Encode.h"
-#include "../Internal/Arm64Decode.h"
+#include "../../../../Include/Library/PatchDesc.h"
+#include "../../Internal/ScanLib.h"
+#include "../../Internal/Encode.h"
+#include "../../Internal/Arm64Decode.h"
 #include "Signatures.h"
 
 PATCH_OUTCOME
@@ -84,7 +84,7 @@ ApplyOrangeScreen (
   return PATCH_MISS;
 }
 
-CONST PATCH_DESC kOemOneplusPatches[] = {
+CONST PATCH_DESC kOemOplusPatches[] = {
   {
     .Name      = "patch7-orange-screen",
     .Scope     = SCOPE_OEM_ONEPLUS,
@@ -93,5 +93,5 @@ CONST PATCH_DESC kOemOneplusPatches[] = {
   },
 };
 
-CONST UINTN kOemOneplusPatchesCount =
-  sizeof (kOemOneplusPatches) / sizeof (kOemOneplusPatches[0]);
+CONST UINTN kOemOplusPatchesCount =
+  sizeof (kOemOplusPatches) / sizeof (kOemOplusPatches[0]);

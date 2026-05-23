@@ -28,8 +28,8 @@
 #error "TEST_FIXTURES_DIR must be -D'd at compile time (set by Makefile)"
 #endif
 
-extern CONST PATCH_DESC kMode1Patches[];
-extern CONST UINTN      kMode1PatchesCount;
+extern CONST PATCH_DESC kAblPermissiveFastbootGatePatches[];
+extern CONST UINTN      kAblPermissiveFastbootGatePatchesCount;
 
 static const char *const kRefusalStrs[] = {
   "Flashing is not allowed in Lock State",
@@ -108,13 +108,13 @@ int
 main (void)
 {
   PATCH_APPLY apply = NULL;
-  for (UINTN i = 0; i < kMode1PatchesCount; ++i) {
-    if (strcmp (kMode1Patches[i].Name, "patch6-lock-state-fastboot-gate") == 0) {
-      apply = kMode1Patches[i].Apply;
+  for (UINTN i = 0; i < kAblPermissiveFastbootGatePatchesCount; ++i) {
+    if (strcmp (kAblPermissiveFastbootGatePatches[i].Name, "patch6-lock-state-fastboot-gate") == 0) {
+      apply = kAblPermissiveFastbootGatePatches[i].Apply;
       break;
     }
   }
-  assert (apply != NULL && "patch6 not found in kMode1Patches");
+  assert (apply != NULL && "patch6 not found in kAblPermissiveFastbootGatePatches");
 
   char pat[1024];
   snprintf (pat, sizeof (pat), "%s/*.efi", TEST_FIXTURES_DIR);
