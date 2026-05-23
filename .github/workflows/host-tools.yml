@@ -3,13 +3,21 @@ name: host-tools
 on:
   push:
     paths:
+      - 'crates/**'
       - 'tools/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.cargo/**'
       - 'scripts/build-cross-tools.sh'
       - 'docker/**'
       - '.github/workflows/host-tools.yml'
   pull_request:
     paths:
+      - 'crates/**'
       - 'tools/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.cargo/**'
       - 'scripts/build-cross-tools.sh'
       - 'docker/**'
       - '.github/workflows/host-tools.yml'
@@ -42,6 +50,9 @@ jobs:
           name: tools-linux
           path: dist/linux
 
+  # PR2 Task 8 collapsed the 7 host C tools into the single `gbl` multicall.
+  # Smoke-test: `gbl --help` lists the 7 subcommands, and each subcommand's
+  # `--help` prints its own clap usage block.
   test-windows:
     needs: cross-build
     runs-on: windows-latest
@@ -50,18 +61,29 @@ jobs:
         with:
           name: tools-windows
           path: dist/windows
-      - name: Smoke-test each .exe
+      - name: Smoke-test gbl.exe + every subcommand
         shell: bash
         run: |
           set -u
+          bin=dist/windows/gbl.exe
           fail=0
-          for t in fv-unwrap abl-patcher gbl-pack gbl-commit vbmeta-graft mode2-profile gblp1-inspect; do
-            bin="dist/windows/$t.exe"
-            out=$("$bin" 2>&1 || true)
-            if printf '%s' "$out" | grep -qiE 'usage|--in|derive'; then
-              echo "ok  $t"
+          # Top-level help lists all 7 subcommands.
+          out=$("$bin" --help 2>&1 || true)
+          for sub in commit unwrap patch pack inspect mode2 avb; do
+            if printf '%s' "$out" | grep -qE "^[[:space:]]+$sub\b"; then
+              echo "ok  gbl --help lists $sub"
             else
-              echo "FAIL $t — no usage banner; output was: $out"
+              echo "FAIL gbl --help missing $sub"
+              fail=1
+            fi
+          done
+          # Per-subcommand --help prints its own clap usage.
+          for sub in commit unwrap patch pack inspect mode2 avb; do
+            out=$("$bin" "$sub" --help 2>&1 || true)
+            if printf '%s' "$out" | grep -qiE 'usage|options'; then
+              echo "ok  gbl $sub --help"
+            else
+              echo "FAIL gbl $sub --help — no usage banner; output was: $out"
               fail=1
             fi
           done
@@ -75,19 +97,28 @@ jobs:
         with:
           name: tools-macos
           path: dist/macos
-      - name: Smoke-test each universal binary
+      - name: Smoke-test gbl universal + every subcommand
         shell: bash
         run: |
           set -u
+          bin=dist/macos/gbl
+          chmod +x "$bin"
           fail=0
-          for t in fv-unwrap abl-patcher gbl-pack gbl-commit vbmeta-graft mode2-profile gblp1-inspect; do
-            bin="dist/macos/$t"
-            chmod +x "$bin"
-            out=$("$bin" 2>&1 || true)
-            if printf '%s' "$out" | grep -qiE 'usage|--in|derive'; then
-              echo "ok  $t"
+          out=$("$bin" --help 2>&1 || true)
+          for sub in commit unwrap patch pack inspect mode2 avb; do
+            if printf '%s' "$out" | grep -qE "^[[:space:]]+$sub\b"; then
+              echo "ok  gbl --help lists $sub"
             else
-              echo "FAIL $t — no usage banner; output was: $out"
+              echo "FAIL gbl --help missing $sub"
+              fail=1
+            fi
+          done
+          for sub in commit unwrap patch pack inspect mode2 avb; do
+            out=$("$bin" "$sub" --help 2>&1 || true)
+            if printf '%s' "$out" | grep -qiE 'usage|options'; then
+              echo "ok  gbl $sub --help"
+            else
+              echo "FAIL gbl $sub --help — no usage banner; output was: $out"
               fail=1
             fi
           done
@@ -101,19 +132,28 @@ jobs:
         with:
           name: tools-linux
           path: dist/linux
-      - name: Smoke-test each static ELF
+      - name: Smoke-test gbl static ELF + every subcommand
         shell: bash
         run: |
           set -u
+          bin=dist/linux/gbl
+          chmod +x "$bin"
           fail=0
-          for t in fv-unwrap abl-patcher gbl-pack gbl-commit vbmeta-graft mode2-profile gblp1-inspect; do
-            bin="dist/linux/$t"
-            chmod +x "$bin"
-            out=$("$bin" 2>&1 || true)
-            if printf '%s' "$out" | grep -qiE 'usage|--in|derive'; then
-              echo "ok  $t"
+          out=$("$bin" --help 2>&1 || true)
+          for sub in commit unwrap patch pack inspect mode2 avb; do
+            if printf '%s' "$out" | grep -qE "^[[:space:]]+$sub\b"; then
+              echo "ok  gbl --help lists $sub"
             else
-              echo "FAIL $t — no usage banner; output was: $out"
+              echo "FAIL gbl --help missing $sub"
+              fail=1
+            fi
+          done
+          for sub in commit unwrap patch pack inspect mode2 avb; do
+            out=$("$bin" "$sub" --help 2>&1 || true)
+            if printf '%s' "$out" | grep -qiE 'usage|options'; then
+              echo "ok  gbl $sub --help"
+            else
+              echo "FAIL gbl $sub --help — no usage banner; output was: $out"
               fail=1
             fi
           done
