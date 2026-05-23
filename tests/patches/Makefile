@@ -17,10 +17,10 @@ TESTS := test_patch1 test_patch7 test_patch10 test_patch6
 all: $(TESTS)
 	@for t in $(TESTS); do echo "== $$t =="; ./$$t || exit 1; done
 
-test_patch1: test_patch1.c \
-             $(DPL)/Internal/ScanLib.c \
-             $(DPL)/Internal/PeSections.c \
-             $(DPL)/retired/block_efisp_recursion.c
+# test_patch1 is a SKIP placeholder post engine-rework Task 10 (patch1 retired);
+# kept so the run-all wiring still has a binary to invoke. Self-contained: no
+# DPL sources needed.
+test_patch1: test_patch1.c
 	$(CC) $(CFLAGS) $(INCLUDES) $^ -o $@
 
 test_patch7: test_patch7.c \
