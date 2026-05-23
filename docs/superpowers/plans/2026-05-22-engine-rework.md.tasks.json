@@ -1,0 +1,114 @@
+{
+  "planPath": "docs/superpowers/plans/2026-05-22-engine-rework.md",
+  "tasks": [
+    {
+      "id": 1,
+      "subject": "Task 1: GBLP1 manifest entry — wire format + host-testable parser",
+      "status": "pending",
+      "description": "**Goal:** Define GBLP1_TYPE_MANIFEST=0x0020 constants in tools/shared/gblp1.h, add gbl_payload_find_manifest() to PayloadParse.c, cover absence/present/malformed cases with tests/host/093_manifest_parse.sh.\n\n**Files:** tools/shared/gblp1.h, GblChainloadPkg/Library/GblPayloadLib/{Internal/PayloadParse.h,PayloadParse.c}, tests/host/093_manifest_parse.sh, tests/host/helpers/test_manifest_parse.c, tests/host/helpers/Makefile\n\n**Verify:** bash tests/host/093_manifest_parse.sh → \"093_manifest_parse: OK (8/8)\"\n\n```json:metadata\n{\"files\": [\"tools/shared/gblp1.h\", \"GblChainloadPkg/Library/GblPayloadLib/Internal/PayloadParse.h\", \"GblChainloadPkg/Library/GblPayloadLib/PayloadParse.c\", \"tests/host/093_manifest_parse.sh\", \"tests/host/helpers/test_manifest_parse.c\", \"tests/host/helpers/Makefile\"], \"verifyCommand\": \"bash tests/host/093_manifest_parse.sh\", \"acceptanceCriteria\": [\"gblp1.h defines manifest constants\", \"PayloadParse.h declares struct + parser\", \"new error codes added\", \"parser validates payload correctly\", \"093 test 8/8 pass\"]}\n```"
+    },
+    {
+      "id": 2,
+      "subject": "Task 2: GblPayload_LoadManifest API + gManifest global; BootFlow load",
+      "status": "pending",
+      "blockedBy": [1],
+      "description": "**Goal:** Expose parser through GblPayloadLib as GblPayload_LoadManifest(); define firmware-side gManifest global; wire into BootFlow.c with runtime profile-spoof gate.\n\n**Files:** GblChainloadPkg/Include/Library/GblPayloadLib.h, GblChainloadPkg/Library/GblPayloadLib/GblPayload.c, GblChainloadPkg/Application/GblChainload/BootFlow.c\n\n**Verify:** Firmware EDK2 build succeeds for any GBL_MODE input.\n\n```json:metadata\n{\"files\": [\"GblChainloadPkg/Include/Library/GblPayloadLib.h\", \"GblChainloadPkg/Library/GblPayloadLib/GblPayload.c\", \"GblChainloadPkg/Application/GblChainload/BootFlow.c\"], \"verifyCommand\": \"bash scripts/build.sh\", \"acceptanceCriteria\": [\"GblManifest struct + LoadManifest API declared\", \"gManifest defined as global\", \"BootFlow loads manifest + runtime-gates Mode2_SetProfile\", \"firmware builds cleanly\"]}\n```"
+    },
+    {
+      "id": 3,
+      "subject": "Task 3: gbl-pack --manifest <bits> emits manifest entry",
+      "status": "pending",
+      "blockedBy": [1],
+      "description": "**Goal:** Teach gbl-pack to emit a GBLP1_TYPE_MANIFEST entry when --manifest <bits> is passed. Round-trip tested against Task 1 parser.\n\n**Files:** tools/gbl-pack/{pack.h,pack.c,gbl-pack.c}, tests/host/094_gbl_pack_manifest.sh\n\n**Verify:** bash tests/host/094_gbl_pack_manifest.sh exits 0.\n\n```json:metadata\n{\"files\": [\"tools/gbl-pack/pack.h\", \"tools/gbl-pack/pack.c\", \"tools/gbl-pack/gbl-pack.c\", \"tests/host/094_gbl_pack_manifest.sh\"], \"verifyCommand\": \"bash tests/host/094_gbl_pack_manifest.sh\", \"acceptanceCriteria\": [\"--manifest emits GMAN entry parser can decode\", \"no --manifest = no entry\", \"hex+decimal accepted\", \"reserved bit rejected exit 2\"]}\n```"
+    },
+    {
+      "id": 4,
+      "subject": "Task 4: gblp1-inspect pretty-prints manifest entry",
+      "status": "pending",
+      "blockedBy": [3],
+      "description": "**Goal:** Add a manifest-aware case to gblp1-inspect so users can see capability bits without hex-diving.\n\n**Files:** tools/gblp1-inspect/gblp1-inspect.c, tests/host/089_gblp1_inspect.sh\n\n**Verify:** bash tests/host/089_gblp1_inspect.sh exits 0.\n\n```json:metadata\n{\"files\": [\"tools/gblp1-inspect/gblp1-inspect.c\", \"tests/host/089_gblp1_inspect.sh\"], \"verifyCommand\": \"bash tests/host/089_gblp1_inspect.sh\", \"acceptanceCriteria\": [\"inspect prints manifest section with magic/schema/bits\", \"089 test asserts the rendering\"]}\n```"
+    },
+    {
+      "id": 5,
+      "subject": "Task 5: Restructure DynamicPatchLib (abl_permissive/, oem/oplus/, retired/) + split per-patch",
+      "status": "pending",
+      "description": "**Goal:** Pure filesystem + symbol restructure. mode_1/mode_1.c splits into per-patch files under abl_permissive/; oem/oneplus_canoe.c → oem/oplus/bypass_warning.c; universal/universal.c → retired/block_efisp_recursion.c. Patch behavior unchanged.\n\n**Files:** GblChainloadPkg/Library/DynamicPatchLib/{abl_permissive/,oem/oplus/,retired/,DynamicPatchLib.inf,PatchTable.c}, tools/abl-patcher/Makefile, tools/gbl-pack/Makefile\n\n**Verify:** bash tests/host/run-all.sh exit 0.\n\n```json:metadata\n{\"files\": [\"GblChainloadPkg/Library/DynamicPatchLib/abl_permissive/\", \"GblChainloadPkg/Library/DynamicPatchLib/oem/oplus/\", \"GblChainloadPkg/Library/DynamicPatchLib/retired/\", \"GblChainloadPkg/Library/DynamicPatchLib/DynamicPatchLib.inf\", \"GblChainloadPkg/Library/DynamicPatchLib/PatchTable.c\", \"tools/abl-patcher/Makefile\", \"tools/gbl-pack/Makefile\"], \"verifyCommand\": \"bash tests/host/run-all.sh\", \"acceptanceCriteria\": [\"old dirs/files removed\", \"new files declare renamed arrays\", \"retired/ has retirement docstring\", \"DynamicPatchLib.inf excludes oem/*\", \"all tests pass\"]}\n```"
+    },
+    {
+      "id": 6,
+      "subject": "Task 6: PatchScope enum rename + host-only OEM gate in PatchTable",
+      "status": "pending",
+      "blockedBy": [5],
+      "description": "**Goal:** Rename GBL_OEM_ONEPLUS → GBL_OEM_OPLUS, SCOPE_MODE_1 → SCOPE_ABL_PERMISSIVE, SCOPE_OEM_ONEPLUS → SCOPE_OEM_OPLUS. Confirm OEM extern decls are #ifdef __HOST_BUILD__ in PatchTable.c.\n\n**Files:** GblChainloadPkg/Library/DynamicPatchLib/{PatchScope.h,PatchTable.c}, GblChainloadPkg/Include/Library/PatchDesc.h, the renamed patch .c files (.Scope updates), tools/abl-patcher/abl-patcher.c\n\n**Verify:** make -s -C tools/abl-patcher && bash tests/host/083_abl_patcher_oem.sh both pass.\n\n```json:metadata\n{\"files\": [\"GblChainloadPkg/Library/DynamicPatchLib/PatchScope.h\", \"GblChainloadPkg/Library/DynamicPatchLib/PatchTable.c\", \"GblChainloadPkg/Include/Library/PatchDesc.h\", \"tools/abl-patcher/abl-patcher.c\"], \"verifyCommand\": \"make -s -C tools/abl-patcher && bash tests/host/083_abl_patcher_oem.sh\", \"acceptanceCriteria\": [\"enum + scope renames done\", \"OEM extern decls host-only via #ifdef\", \"no stale references in tree\", \"abl-patcher builds + tests pass\"]}\n```"
+    },
+    {
+      "id": 7,
+      "subject": "Task 7: Rename Mode1Overlay → FakelockOverlay, Mode2{Overlay,Rewrite} → Profile{Overlay,Rewrite}",
+      "status": "pending",
+      "description": "**Goal:** Pure C-side rename. Compile-time #if (GBL_MODE == N) gates PRESERVED — swap to runtime in Task 8.\n\n**Files:** GblChainloadPkg/Library/ProtocolHookLib/{FakelockOverlay,ProfileOverlay,ProfileRewrite}.{c,h}, ProtocolHookLib.inf, {VerifiedBootHook,QseecomHook,SpssHook}.c, GblChainloadPkg/Application/GblChainload/BootFlow.c\n\n**Verify:** bash tests/host/078_profile_rewrite.sh (or 078_mode2_rewrite.sh) passes; firmware EDK2 build succeeds.\n\n```json:metadata\n{\"files\": [\"GblChainloadPkg/Library/ProtocolHookLib/FakelockOverlay.c\", \"GblChainloadPkg/Library/ProtocolHookLib/FakelockOverlay.h\", \"GblChainloadPkg/Library/ProtocolHookLib/ProfileOverlay.c\", \"GblChainloadPkg/Library/ProtocolHookLib/ProfileOverlay.h\", \"GblChainloadPkg/Library/ProtocolHookLib/ProfileRewrite.c\", \"GblChainloadPkg/Library/ProtocolHookLib/ProfileRewrite.h\", \"GblChainloadPkg/Library/ProtocolHookLib/ProtocolHookLib.inf\", \"GblChainloadPkg/Library/ProtocolHookLib/VerifiedBootHook.c\", \"GblChainloadPkg/Library/ProtocolHookLib/QseecomHook.c\", \"GblChainloadPkg/Library/ProtocolHookLib/SpssHook.c\", \"GblChainloadPkg/Application/GblChainload/BootFlow.c\"], \"verifyCommand\": \"bash tests/host/run-all.sh\", \"acceptanceCriteria\": [\"all renames applied\", \"all includes updated\", \"no stale Mode1*/Mode2* references\", \"firmware + tests pass\"]}\n```"
+    },
+    {
+      "id": 8,
+      "subject": "Task 8: Replace #if (GBL_MODE) with runtime gManifest gates in InstallAll + hooks",
+      "status": "pending",
+      "blockedBy": [2, 7],
+      "description": "**Goal:** Switch every per-hook + InstallAll mode gate from compile-time to runtime gManifest reads. Mutation helper headers drop their #if (GBL_MODE == N) declaration guards.\n\n**Files:** GblChainloadPkg/Library/ProtocolHookLib/{InstallAll.c,VerifiedBootHook.c,QseecomHook.c,SpssHook.c,FakelockOverlay.h,ProfileOverlay.h,ProfileRewrite.h}\n\n**Verify:** firmware build + bash tests/host/078_profile_rewrite.sh && bash tests/host/088_patch7_multi_abl.sh pass.\n\n```json:metadata\n{\"files\": [\"GblChainloadPkg/Library/ProtocolHookLib/InstallAll.c\", \"GblChainloadPkg/Library/ProtocolHookLib/VerifiedBootHook.c\", \"GblChainloadPkg/Library/ProtocolHookLib/QseecomHook.c\", \"GblChainloadPkg/Library/ProtocolHookLib/SpssHook.c\", \"GblChainloadPkg/Library/ProtocolHookLib/FakelockOverlay.h\", \"GblChainloadPkg/Library/ProtocolHookLib/ProfileOverlay.h\", \"GblChainloadPkg/Library/ProtocolHookLib/ProfileRewrite.h\"], \"verifyCommand\": \"bash scripts/build.sh && bash tests/host/run-all.sh\", \"acceptanceCriteria\": [\"no GBL_MODE in ProtocolHookLib/Application\", \"InstallAll required-status gates use gManifest\", \"mutation call sites use runtime if\", \"firmware builds + tests pass\"]}\n```"
+    },
+    {
+      "id": 9,
+      "subject": "Task 9: BlockIoHook EFISP gate — return EFI_NO_MEDIA on EFISP records",
+      "status": "pending",
+      "description": "**Goal:** Add IsEfisp flag to BLOCK_IO_HOOK_RECORD, detect EFISP partition by GPT name at install, short-circuit Hooked{Read,Write}Blocks with EFI_NO_MEDIA on those records. Makes patch1 redundant.\n\n**Files:** GblChainloadPkg/Library/ProtocolHookLib/BlockIoHook.c\n\n**Verify:** EDK2 firmware build succeeds; on-device confirmation deferred to Task 16.\n\n```json:metadata\n{\"files\": [\"GblChainloadPkg/Library/ProtocolHookLib/BlockIoHook.c\"], \"verifyCommand\": \"bash scripts/build.sh\", \"acceptanceCriteria\": [\"IsEfisp field added\", \"install-time detection via partition name\", \"Hooked{Read,Write}Blocks short-circuit with EFI_NO_MEDIA\", \"firmware builds\"]}\n```"
+    },
+    {
+      "id": 10,
+      "subject": "Task 10: Retire patch1 + drop PatchEngine post-patch efisp scan; gbl-pack warn-only",
+      "status": "pending",
+      "blockedBy": [5, 6, 9],
+      "description": "**Goal:** Drop patch1 entry from kUniversalPatches[] (array empty), drop PatchEngine.c post-patch efisp invariant scan, downgrade gbl-pack efisp_scan to warning, delete 062_efisp_scan_gate.sh.\n\n**Files:** GblChainloadPkg/Library/DynamicPatchLib/retired/block_efisp_recursion.c, GblChainloadPkg/Library/DynamicPatchLib/Internal/PatchEngine.c, tools/gbl-pack/{pack.c,gbl-pack.c}, delete tests/host/062_efisp_scan_gate.sh\n\n**Verify:** bash tests/host/run-all.sh exit 0; no 062 in output.\n\n```json:metadata\n{\"files\": [\"GblChainloadPkg/Library/DynamicPatchLib/retired/block_efisp_recursion.c\", \"GblChainloadPkg/Library/DynamicPatchLib/Internal/PatchEngine.c\", \"tools/gbl-pack/pack.c\", \"tools/gbl-pack/gbl-pack.c\"], \"verifyCommand\": \"bash tests/host/run-all.sh\", \"acceptanceCriteria\": [\"kUniversalPatches array removed\", \"post-patch efisp scan deleted\", \"gbl-pack warns + exits 0\", \"062 test deleted\", \"all remaining tests pass\"]}\n```"
+    },
+    {
+      "id": 11,
+      "subject": "Task 11: Drop GBL_MODE compile-time flag — collapse to single EFI",
+      "status": "pending",
+      "blockedBy": [8, 10],
+      "description": "**Goal:** Eliminate GBL_MODE from the build. .dsc no longer DEFINEs it; BuildOptions no longer emits -DGBL_MODE; scripts collapse the per-mode loop to a single build producing dist/gbl-chainload.efi.\n\n**Files:** GblChainloadPkg/{GblChainloadPkg.dsc,Application/GblChainload/GblChainload.inf,Library/DynamicPatchLib/DynamicPatchLib.inf,Library/DynamicPatchLib/PatchTable.c}, scripts/build*.sh, .github/workflows/*\n\n**Verify:** bash scripts/build.sh produces dist/gbl-chainload.efi.\n\n```json:metadata\n{\"files\": [\"GblChainloadPkg/GblChainloadPkg.dsc\", \"GblChainloadPkg/Application/GblChainload/GblChainload.inf\", \"GblChainloadPkg/Library/DynamicPatchLib/DynamicPatchLib.inf\", \"GblChainloadPkg/Library/DynamicPatchLib/PatchTable.c\", \"scripts/build.sh\", \"scripts/build-inside-docker.sh\", \".github/workflows/\"], \"verifyCommand\": \"bash scripts/build.sh && ls -l dist/gbl-chainload.efi\", \"acceptanceCriteria\": [\"no GBL_MODE references in build system\", \"single EFI artifact produced\", \"release workflows updated\"]}\n```"
+    },
+    {
+      "id": 12,
+      "subject": "Task 12: abl-patcher — drop --no-mode1, --oem oplus canonical + oneplus alias",
+      "status": "pending",
+      "blockedBy": [6],
+      "description": "**Goal:** Always-apply abl_permissive at host. Drop --no-mode1 / --no-libavb-bypass. --oem oplus canonical; --oem oneplus accepted with stderr deprecation note.\n\n**Files:** tools/abl-patcher/{abl-patcher.c,Makefile}, tests/host/083_abl_patcher_oem.sh\n\n**Verify:** bash tests/host/083_abl_patcher_oem.sh passes.\n\n```json:metadata\n{\"files\": [\"tools/abl-patcher/abl-patcher.c\", \"tools/abl-patcher/Makefile\", \"tests/host/083_abl_patcher_oem.sh\"], \"verifyCommand\": \"bash tests/host/083_abl_patcher_oem.sh\", \"acceptanceCriteria\": [\"--no-mode1 removed\", \"--oem oplus canonical\", \"--oem oneplus deprecation msg\", \"abl_permissive always applied\", \"083 test passes\"]}\n```"
+    },
+    {
+      "id": 13,
+      "subject": "Task 13: efisp-package.py — single base EFI, --manifest, decouple --oem from --mode",
+      "status": "pending",
+      "blockedBy": [3, 12],
+      "description": "**Goal:** Switch host packaging to single-EFI world. --efi points at gbl-chainload.efi; --oem allowed in any mode; gbl-pack --manifest <bits> derived from --mode.\n\n**Files:** scripts/efisp-package.py, tests/host/085_efisp_package.sh\n\n**Verify:** bash tests/host/085_efisp_package.sh passes.\n\n```json:metadata\n{\"files\": [\"scripts/efisp-package.py\", \"tests/host/085_efisp_package.sh\"], \"verifyCommand\": \"bash tests/host/085_efisp_package.sh\", \"acceptanceCriteria\": [\"--oem decoupled from --mode\", \"--manifest derived from --mode\", \"no --no-mode1 passed to abl-patcher\", \"test passes\"]}\n```"
+    },
+    {
+      "id": 14,
+      "subject": "Task 14: Install scripts — single base EFI, M_MANIFEST_BITS, detect_oem moved",
+      "status": "pending",
+      "blockedBy": [13],
+      "description": "**Goal:** mode-{0,1,2}-install.sh stop selecting per-mode EFIs. install-common.sh's build_payload derives manifest bits from M_MANIFEST_BITS. detect_oem moves into install-common.sh.\n\n**Files:** zip/modes/{install-common.sh,mode-0-install.sh,mode-1-install.sh,mode-2-install.sh}, zip/update-tools.sh, tests/host/{071,073}*.sh\n\n**Verify:** bash tests/host/071_zip_assembly.sh && bash tests/host/073_install_assembly.sh both pass.\n\n```json:metadata\n{\"files\": [\"zip/modes/install-common.sh\", \"zip/modes/mode-0-install.sh\", \"zip/modes/mode-1-install.sh\", \"zip/modes/mode-2-install.sh\", \"zip/update-tools.sh\", \"tests/host/071_zip_assembly.sh\", \"tests/host/073_install_assembly.sh\"], \"verifyCommand\": \"bash tests/host/071_zip_assembly.sh && bash tests/host/073_install_assembly.sh\", \"acceptanceCriteria\": [\"per-mode scripts use single EFI + M_MANIFEST_BITS\", \"detect_oem in install-common\", \"--manifest passed to gbl-pack\", \"zip tests pass\"]}\n```"
+    },
+    {
+      "id": 15,
+      "subject": "Task 15: Test housekeeping — 088 argv update + run-all green",
+      "status": "pending",
+      "blockedBy": [12, 14],
+      "description": "**Goal:** Final test sweep. 088_patch7_multi_abl.sh drops --no-mode1 (flag gone post-Task 12). Any other tests still grepping retired symbols/paths get fixed. Full run-all green.\n\n**Files:** tests/host/088_patch7_multi_abl.sh + any straggler tests\n\n**Verify:** bash tests/host/run-all.sh exit 0.\n\n```json:metadata\n{\"files\": [\"tests/host/088_patch7_multi_abl.sh\"], \"verifyCommand\": \"bash tests/host/run-all.sh\", \"acceptanceCriteria\": [\"088 no longer uses --no-mode1\", \"no retired symbol references in tests/scripts/tools/zip\", \"full suite green\"]}\n```"
+    },
+    {
+      "id": 16,
+      "subject": "Task 16: On-device boot validation — mode 0/1/2 against single EFI [USER GATE]",
+      "status": "pending",
+      "blockedBy": [11, 15],
+      "description": "**Goal:** Validate end-to-end that the single-EFI build, packed with each install preset (mode 0 / mode 1 / mode 2), boots cleanly on the infiniti test device via `fastboot stage` + `oem boot-efi`. Merge gate.\n\n**USER-ORDERED GATE — NON-SKIPPABLE.** This task was requested by the user in the current conversation. It MUST NOT be closed by walking around it, by declaring it \"verified inline\", or by substituting a cheaper check. Close only after every item in `acceptanceCriteria` has been re-validated independently, with output captured.\n\n**Files:** None — runtime verification gate.\n\n**Verify:** Per mode-N: fastboot stage + oem boot-efi then verify chainload log + getprop. Each evidence axis must be captured independently.\n\n```json:metadata\n{\"files\": [], \"verifyCommand\": \"for m in 0 1 2; do fastboot stage dist/efisp-payload/infiniti-mode$m.efi && fastboot oem boot-efi && echo \\\"mode-$m booted; capture chainload log + getprop\\\"; done\", \"acceptanceCriteria\": [\"mode-0 boots with fakelock=0 profile_spoof=0 + locked=0\", \"mode-1 boots with fakelock=1 + locked=1 + verifiedbootstate=green\", \"mode-2 boots with profile_spoof=1 + attestation indicators pass + 0 vb-fakelock lines\", \"BlockIoHook EFISP refusal logged each boot\"], \"userGate\": true, \"tags\": [\"user-gate\"], \"requiresUserSpecification\": false, \"requireEvidenceTokens\": [[\"mode-0\", \"fakelock=0\"], [\"mode-1\", \"fakelock=1\"], [\"mode-2\", \"profile_spoof=1\"]]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-05-22T22:00:00Z"
+}
