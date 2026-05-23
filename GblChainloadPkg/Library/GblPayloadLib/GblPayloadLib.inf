@@ -19,9 +19,14 @@
   LocateOverlay.c
   EfispBlockIo.c
   GblPayload.c
-  # PeSanity.c is intentionally not built into the EFI shim: gBS->LoadImage
-  # is the runtime authority for PE validity. PeSanity.c is a host pre-flight
-  # source consumed only by tools/gbl-pack.
+  # PR2 Task 3: The PE sanity check (formerly PeSanity.c) lives in the
+  # Rust workspace as `crates/pe-utils`. The crate has no firmware
+  # caller today — gBS->LoadImage is the runtime authority — so the
+  # staticlib (target/aarch64-unknown-uefi/release/libpe_utils.a) is
+  # built by cargo and stays unlinked from this .inf until a firmware
+  # call site lands (patcher loader-path gate, Task 4+, per the design
+  # doc). Host consumers (gbl-pack, fv-unwrap, test_pe_sanity) link the
+  # staticlib via their own Makefiles.
 
 [Packages]
   MdePkg/MdePkg.dec

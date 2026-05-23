@@ -1,7 +1,16 @@
-/* tests/host/helpers/test_efisp_scan.c */
+/* tests/host/helpers/test_efisp_scan.c
+ *
+ * PR2 Task 3: links the Rust pe-utils staticlib instead of the C
+ * efisp_scan.h header. The extern decl is forward-declared here so
+ * the test binary stays standalone.
+ */
+#include <stdbool.h>
+#include <stdint.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <string.h>
-#include "../../../tools/shared/efisp_scan.h"
+
+extern bool gbl_contains_utf16_efisp(const void *buf, size_t len);
 
 int main(void) {
     /* UTF-16 LE "efisp" + null = 12 bytes */

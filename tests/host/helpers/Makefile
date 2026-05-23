@@ -1,6 +1,12 @@
 # tests/host/helpers/Makefile
+#
+# PR2 Task 3: test_pe_sanity + test_efisp_scan link the Rust pe-utils
+# staticlib (target/release/libpe_utils.a) instead of the deleted C
+# sources (PeSanity.c, efisp_scan.h).
 CC ?= gcc
 CFLAGS ?= -Wall -Wextra -Werror -O2 -std=c99
+PROJ := $(realpath ../../..)
+PE_UTILS_LIB := $(PROJ)/target/release/libpe_utils.a
 
 BINS = test_efisp_scan
 BINS += test_crc32
@@ -8,10 +14,17 @@ BINS += test_sha256
 BINS += test_pe_sanity
 BINS += test_manifest_parse
 
+# Default target up here so we don't accidentally trigger the cargo
+# staticlib rule when running bare `make`.
 all: $(BINS)
 
-test_efisp_scan: test_efisp_scan.c ../../../tools/shared/efisp_scan.h
-	$(CC) $(CFLAGS) -o $@ $<
+.PHONY: all $(PE_UTILS_LIB)
+
+$(PE_UTILS_LIB):
+	cd $(PROJ) && cargo build --release -p pe-utils
+
+test_efisp_scan: test_efisp_scan.c $(PE_UTILS_LIB)
+	$(CC) $(CFLAGS) -o $@ test_efisp_scan.c $(PE_UTILS_LIB)
 
 test_crc32: test_crc32.c ../../../GblChainloadPkg/Library/GblPayloadLib/Crc32.c \
             ../../../GblChainloadPkg/Library/GblPayloadLib/Internal/Crc32.h
@@ -23,10 +36,8 @@ test_sha256: test_sha256.c ../../../GblChainloadPkg/Library/GblPayloadLib/Sha256
 	$(CC) $(CFLAGS) -DGBL_HOST_BUILD=1 -o $@ test_sha256.c \
 	      ../../../GblChainloadPkg/Library/GblPayloadLib/Sha256.c
 
-test_pe_sanity: test_pe_sanity.c ../../../GblChainloadPkg/Library/GblPayloadLib/PeSanity.c \
-                ../../../GblChainloadPkg/Library/GblPayloadLib/Internal/PeSanity.h
-	$(CC) $(CFLAGS) -DGBL_HOST_BUILD=1 -o $@ test_pe_sanity.c \
-	      ../../../GblChainloadPkg/Library/GblPayloadLib/PeSanity.c
+test_pe_sanity: test_pe_sanity.c $(PE_UTILS_LIB)
+	$(CC) $(CFLAGS) -o $@ test_pe_sanity.c $(PE_UTILS_LIB)
 
 test_manifest_parse: test_manifest_parse.c \
                      ../../../GblChainloadPkg/Library/GblPayloadLib/PayloadParse.c \

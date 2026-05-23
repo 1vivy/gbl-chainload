@@ -11,7 +11,23 @@
 #include "../shared/gbl_mode2_profile.h"
 #include "../../GblChainloadPkg/Library/GblPayloadLib/Internal/Sha256.h"
 #include "../../GblChainloadPkg/Library/GblPayloadLib/Internal/Crc32.h"
-#include "../../GblChainloadPkg/Library/GblPayloadLib/Internal/PeSanity.h"
+
+/* PR2 Task 3: `gbl_pe_sanity` now lives in `crates/pe-utils` (Rust). The
+   numeric values of the status enum match the old C `gbl_pe_status`
+   declarations one-for-one so the existing call site keeps the same
+   meaning. Linked in via target/<triple>/release/libpe_utils.a. */
+enum gbl_pe_status {
+    GBL_PE_OK = 0,
+    GBL_PE_TOO_SMALL,
+    GBL_PE_BAD_DOS,
+    GBL_PE_BAD_LFANEW,
+    GBL_PE_BAD_PE_MAGIC,
+    GBL_PE_BAD_MACHINE,
+    GBL_PE_BAD_OPT_MAGIC,
+    GBL_PE_BAD_SUBSYS,
+    GBL_PE_ENTRY_OUT_OF_BOUNDS
+};
+extern enum gbl_pe_status gbl_pe_sanity(const void *buf, size_t len);
 
 static void wle16(uint8_t *p, uint16_t v) { p[0] = (uint8_t)v; p[1] = (uint8_t)(v >> 8); }
 static void wle32(uint8_t *p, uint32_t v) {

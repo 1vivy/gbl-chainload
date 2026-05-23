@@ -1,5 +1,6 @@
 /* tools/gbl-pack/gbl-pack.c — CLI for the packer. */
 #define _POSIX_C_SOURCE 200809L  /* gmtime_r */
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -7,7 +8,10 @@
 #include <errno.h>
 #include "pack.h"
 #include "../shared/gblp1.h"
-#include "../shared/efisp_scan.h"
+
+/* PR2 Task 3: `gbl_contains_utf16_efisp` now lives in `crates/pe-utils`
+   (Rust). Linked from target/<triple>/release/libpe_utils.a. */
+extern bool gbl_contains_utf16_efisp(const void *buf, size_t len);
 
 static int slurp(const char *path, uint8_t **out, size_t *out_size)
 {

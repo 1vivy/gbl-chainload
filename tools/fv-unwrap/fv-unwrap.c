@@ -14,12 +14,16 @@
  *  cross-compiled static liblzma the Android target links against.
  */
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
 #include <lzma.h>
-#include "../shared/efisp_scan.h"
+
+/* PR2 Task 3: `gbl_contains_utf16_efisp` moved into crates/pe-utils
+   (Rust). Linked via target/<triple>/release/libpe_utils.a. */
+extern bool gbl_contains_utf16_efisp(const void *buf, size_t len);
 
 /* =========================================================================
  * Result type: a heap-allocated PE blob
