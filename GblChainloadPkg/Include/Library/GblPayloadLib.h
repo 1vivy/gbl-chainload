@@ -23,4 +23,29 @@ EFI_STATUS EFIAPI
 GblPayload_LoadMode2Profile (IN  EFI_HANDLE                ImageHandle,
                              OUT struct gbl_mode2_profile *Profile);
 
+/* Engine capability manifest, firmware-facing form. The wire-level
+   cap_bits field is translated into named booleans here so call sites
+   read as `if (gManifest.WantFakelockHook)` instead of bit math. */
+struct GblManifest {
+  BOOLEAN WantFakelockHook;
+  BOOLEAN WantProfileSpoof;
+};
+
+/* Single firmware-wide manifest instance. Owned by GblPayloadLib;
+   populated by GblPayload_LoadManifest() once per boot in BootFlow.
+   Defaults to all-FALSE (effective mode-0 / pure observation). */
+extern struct GblManifest gManifest;
+
+/* Locate the GBLP1 overlay, find the GBLP1_TYPE_MANIFEST (0x0020) entry,
+   and translate its cap_bits into *Manifest. Returns:
+     EFI_SUCCESS    — present and valid, OR absent (then *Manifest is
+                      all-FALSE; absence is the safe mode-0 default)
+     EFI_NOT_FOUND  — no overlay at all (no GBLP1 magic anywhere)
+     EFI_LOAD_ERROR — overlay/entry present but failed validation
+   On EFI_NOT_FOUND, *Manifest is zeroed so callers can treat the result
+   as "all capabilities cleared." */
+EFI_STATUS EFIAPI
+GblPayload_LoadManifest (IN  EFI_HANDLE          ImageHandle,
+                         OUT struct GblManifest *Manifest);
+
 #endif

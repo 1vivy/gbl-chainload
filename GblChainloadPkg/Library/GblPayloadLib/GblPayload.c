@@ -14,6 +14,11 @@
 
 EFI_STATUS LocateOverlayBytes(OUT VOID **Bytes, OUT UINTN *Size);
 
+/* Single firmware-wide engine manifest. Populated by GblPayload_LoadManifest
+   from BootFlow once per boot; consumed by ProtocolHookLib hook bodies and
+   the BootFlow mode-2 gate. Defaults to all-zero (effective mode-0). */
+struct GblManifest gManifest = {0};
+
 EFI_STATUS EFIAPI
 GblPayload_LoadCachedAbl (IN EFI_HANDLE ImageHandle,
                           OUT VOID **Pe, OUT UINT32 *PeSize) {
@@ -94,5 +99,66 @@ GblPayload_LoadMode2Profile (IN  EFI_HANDLE                ImageHandle,
   }
   GBL_INFO("gbl-payload: mode2 — profile loaded (ver=%u color=%u)\n",
            Profile->version, Profile->color);
+  return EFI_SUCCESS;
+}
+
+EFI_STATUS EFIAPI
+GblPayload_LoadManifest (IN  EFI_HANDLE          ImageHandle,
+                         OUT struct GblManifest *Manifest) {
+  VOID *Bytes = NULL; UINTN Size = 0;
+  if (Manifest == NULL) return EFI_INVALID_PARAMETER;
+
+  /* Default: all-FALSE (safe mode-0). Set first so every error path
+     leaves the caller with a defined, all-zero manifest. */
+  Manifest->WantFakelockHook = FALSE;
+  Manifest->WantProfileSpoof = FALSE;
+
+  EFI_STATUS Status = LocateOverlayBytes(&Bytes, &Size);
+  if (EFI_ERROR(Status)) {
+    GBL_INFO("gbl-payload: manifest — no overlay bytes (%r)\n", Status);
+    return EFI_NOT_FOUND;
+  }
+
+  /* Scan for the GBLP1 magic, tolerating stray copies, then locate the
+     manifest entry within the first fully-valid container. Mirrors the
+     same loop used by GblPayload_LoadMode2Profile. */
+  CONST UINT8 *B = (CONST UINT8 *)Bytes;
+  enum gbl_payload_status PS = GBL_PAYLOAD_BAD_MAGIC;
+  struct gbl_manifest Wire = {0};
+  int Present = 0;
+  BOOLEAN Located = FALSE;
+  for (UINTN i = 0; i + GBLP1_MAGIC_SIZE <= Size; i++) {
+    if (CompareMem(B + i, GBLP1_MAGIC, GBLP1_MAGIC_SIZE) != 0) continue;
+    PS = gbl_payload_find_manifest(B + i, Size - i, &Wire, &Present);
+    if (PS == GBL_PAYLOAD_OK) { Located = TRUE; break; }
+  }
+
+  if (!Located) {
+    if (PS == GBL_PAYLOAD_BAD_MAGIC) {
+      GBL_INFO("gbl-payload: manifest — no GBLP1 magic in overlay\n");
+      return EFI_NOT_FOUND;
+    }
+    GBL_INFO("gbl-payload: manifest — container invalid (status=%d)\n",
+             (int)PS);
+    return EFI_LOAD_ERROR;
+  }
+
+  if (!Present) {
+    /* Container valid, but no 0x0020 entry. Forward-compat: old GBLP1
+       overlays predate the manifest type; treat absence as the safe
+       all-zero default (mode-0 / pure observation). */
+    GBL_INFO("gbl-payload: manifest — absent; defaulting all caps to 0\n");
+    return EFI_SUCCESS;
+  }
+
+  Manifest->WantFakelockHook =
+      (Wire.cap_bits & GBLP1_MANIFEST_BIT_FAKELOCK_HOOK) ? TRUE : FALSE;
+  Manifest->WantProfileSpoof =
+      (Wire.cap_bits & GBLP1_MANIFEST_BIT_PROFILE_SPOOF) ? TRUE : FALSE;
+
+  GBL_INFO("gbl-payload: manifest — loaded (caps=0x%04x fakelock=%u spoof=%u)\n",
+           (UINT32)Wire.cap_bits,
+           (UINT32)Manifest->WantFakelockHook,
+           (UINT32)Manifest->WantProfileSpoof);
   return EFI_SUCCESS;
 }

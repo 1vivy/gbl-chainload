@@ -1,11 +1,13 @@
 /** @file Mode2Overlay.h — mode-2-scope hook policy declarations.
-    Only active when GBL_MODE == 2. **/
+
+    Declarations are unconditionally available so BootFlow can call
+    Mode2_SetProfile under a runtime gate (gManifest.WantProfileSpoof).
+    Hook-body call sites in QseecomHook.c / SpssHook.c still gate on
+    `#if (GBL_MODE == 2)` until Task 8 moves those to runtime. **/
 #ifndef MODE2_OVERLAY_H_
 #define MODE2_OVERLAY_H_
 
 #include <Uefi.h>
-
-#if (GBL_MODE == 2)
 
 #include "../../../tools/shared/gbl_mode2_profile.h"
 
@@ -27,5 +29,4 @@ BOOLEAN EFIAPI
 Mode2Policy_RewriteSpss (IN OUT VOID   *Info,
                          IN     UINT32  InfoLen);
 
-#endif /* GBL_MODE == 2 */
 #endif /* MODE2_OVERLAY_H_ */

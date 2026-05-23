@@ -1,9 +1,13 @@
 /** @file Mode2Overlay.c — mode-2-scope hook policy implementation.
     Holds the validated profile and applies the QSEE/SPSS rewrites.
-    Compiled out entirely in non-mode-2 builds via the GBL_MODE guard. **/
-#include "Mode2Overlay.h"
 
-#if (GBL_MODE == 2)
+    Compiled unconditionally (paralleling Mode2Rewrite.c) so BootFlow's
+    runtime-gated Mode2_SetProfile call links cleanly under any
+    GBL_MODE value. The QseecomHook / SpssHook call sites that invoke
+    Mode2Policy_RewriteXxx remain `#if (GBL_MODE == 2)`-gated until
+    Task 8 moves them to runtime, at which point unreferenced symbols
+    here get dead-stripped just like Mode2Rewrite. **/
+#include "Mode2Overlay.h"
 
 #include <Library/BaseMemoryLib.h>
 #include <Library/GblLog.h>
@@ -41,5 +45,3 @@ Mode2Policy_RewriteSpss (IN OUT VOID *Info, IN UINT32 InfoLen) {
   }
   return FALSE;
 }
-
-#endif /* GBL_MODE == 2 */

@@ -27,14 +27,8 @@
 #include <Library/ProtocolHookLib.h>
 #include <Library/GblPayloadLib.h>
 
-#if (GBL_MODE == 2)
 #include "../../Library/ProtocolHookLib/Mode2Overlay.h"
 extern VOID GblFastbootSetMode2Warning (IN CONST CHAR8 *Warning);
-#endif
-
-#ifndef GBL_MODE
-# error "GBL_MODE must be defined"
-#endif
 
 #ifndef GBL_DEBUG
 # define GBL_DEBUG 0
@@ -130,7 +124,7 @@ BootFlowChainLoad (VOID)
     }
   }
 
-  GBL_INFO ("BootFlow: start (mode=%d)\n", (int)GBL_MODE);
+  GBL_INFO ("BootFlow: start\n");
 
   GblPayload_LogProvenance (gImageHandle);
 
@@ -156,8 +150,25 @@ BootFlowChainLoad (VOID)
 
   GBL_INFO ("BootFlow: ABL loaded via %a (size=%u)\n", Origin, PeSize);
 
-#if (GBL_MODE == 2)
+  /* Load the engine capability manifest before any hook install. Absence
+     is non-fatal: gManifest defaults to all-FALSE (effective mode-0 /
+     pure observation), and downstream gates fall through cleanly. */
   {
+    EFI_STATUS MStatus = GblPayload_LoadManifest (gImageHandle, &gManifest);
+    if (EFI_ERROR (MStatus)) {
+      GBL_INFO ("BootFlow: manifest load failed (%r) — defaulting all caps to 0\n",
+                MStatus);
+      /* Defensive: GblPayload_LoadManifest already zeroes on error, but
+         re-assert so a future API change can't silently leave stale data. */
+      gManifest.WantFakelockHook = FALSE;
+      gManifest.WantProfileSpoof = FALSE;
+    }
+    GBL_INFO ("BootFlow: manifest — fakelock=%u spoof=%u\n",
+              (UINT32)gManifest.WantFakelockHook,
+              (UINT32)gManifest.WantProfileSpoof);
+  }
+
+  if (gManifest.WantProfileSpoof) {
     struct gbl_mode2_profile Mode2Profile;
     EFI_STATUS M2Status =
         GblPayload_LoadMode2Profile (gImageHandle, &Mode2Profile);
@@ -182,7 +193,6 @@ BootFlowChainLoad (VOID)
           : "MODE-2 PROFILE INVALID - booting honest, attestation will fail");
     }
   }
-#endif
 
   /* Install protocol hooks (universal baseline + mode-N overlay).
      Mode-0 installs the universal observation/preservation hooks but no
