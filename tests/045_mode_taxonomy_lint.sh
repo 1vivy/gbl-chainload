@@ -1,61 +1,61 @@
 #!/usr/bin/env bash
-# 045_mode_taxonomy_lint.sh — assert the patch scope tables exist and use the
-# expected SCOPE_* enum tags. After Task 11 there is no compile-time GBL_MODE
-# gate anywhere; activation is manifest-driven at runtime. This lint guards
-# the directory layout and scope-tag invariants the runtime relies on.
+# 045_mode_taxonomy_lint.sh — assert the patch scope tables exist and
+# use the expected SCOPE_* enum tags. After Task 11 there is no
+# compile-time GBL_MODE gate anywhere; activation is manifest-driven at
+# runtime. This lint guards the directory layout and scope-tag
+# invariants the runtime relies on.
+#
+# PR2 Task 6: the engine moved into crates/patch-engine (Rust). The
+# C source paths the lint used to anchor on no longer exist; the lint
+# now anchors on the Rust crate layout instead.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-PKG="GblChainloadPkg/Library/DynamicPatchLib"
+CRATE="crates/patch-engine/src"
 
-# 1. PatchTable.c exists. (Task 5 restructure: the firmware-side mode-1 gate
-#    was moved out; abl_permissive/* now compiles unconditionally and the OEM
-#    file is host-only via #ifdef __HOST_BUILD__. Task 6 renamed the scope
-#    enum to SCOPE_ABL_PERMISSIVE / SCOPE_OEM_OPLUS.)
-test -f "$PKG/PatchTable.c" || { echo "FAIL: missing PatchTable.c"; exit 1; }
+# 1. The Rust crate exists. (Task 6 replaces all DPL C sources with the
+#    crate; PatchTable.c is gone — its aggregation lives in lib.rs.)
+test -f "$CRATE/lib.rs" || { echo "FAIL: missing crates/patch-engine/src/lib.rs"; exit 1; }
 
-# 2. Universal (retired) patches use SCOPE_UNIVERSAL.
-grep -q 'SCOPE_UNIVERSAL' "$PKG/retired/block_efisp_recursion.c" \
-  || { echo "FAIL: retired/block_efisp_recursion.c must declare SCOPE_UNIVERSAL"; exit 1; }
+# 2. The retired (universal) patch lives in retired/block_efisp_recursion.rs.
+#    Marked SCOPE_UNIVERSAL via PatchScope::Universal.
+grep -q 'EFISP_UTF16_PATTERN' "$CRATE/retired/block_efisp_recursion.rs" \
+  || { echo "FAIL: retired/block_efisp_recursion.rs missing EFISP_UTF16_PATTERN"; exit 1; }
 
-# 3. OEM patches use SCOPE_OEM_OPLUS.
-grep -q 'SCOPE_OEM_OPLUS' "$PKG/oem/oplus/bypass_warning.c" \
-  || { echo "FAIL: oem/oplus/bypass_warning.c must declare SCOPE_OEM_OPLUS"; exit 1; }
+# 3. OEM patches use PatchScope::OemOplus.
+grep -q 'PatchScope::OemOplus' "$CRATE/oem/oplus/mod.rs" \
+  || { echo "FAIL: oem/oplus/mod.rs must register patches under PatchScope::OemOplus"; exit 1; }
 
-# 4. ABL-permissive patches use SCOPE_ABL_PERMISSIVE.
-grep -q 'SCOPE_ABL_PERMISSIVE' "$PKG/abl_permissive/libavb_force_success.c" \
-  || { echo "FAIL: abl_permissive/libavb_force_success.c must declare SCOPE_ABL_PERMISSIVE"; exit 1; }
-grep -q 'SCOPE_ABL_PERMISSIVE' "$PKG/abl_permissive/fastboot_lock_gates.c" \
-  || { echo "FAIL: abl_permissive/fastboot_lock_gates.c must declare SCOPE_ABL_PERMISSIVE"; exit 1; }
+# 4. ABL-permissive patches use PatchScope::AblPermissive.
+grep -q 'PatchScope::AblPermissive' "$CRATE/abl_permissive/mod.rs" \
+  || { echo "FAIL: abl_permissive/mod.rs must register patches under PatchScope::AblPermissive"; exit 1; }
 
-# 5. ABL-permissive patches live under abl_permissive/, NOT in retired/ or oem/.
-#    patch10 (libavb force-AVB-success) lives in libavb_force_success.c;
-#    patch6 (lock-state fastboot-gate) lives in fastboot_lock_gates.c.
-if grep -q 'patch10-libavb-force-avb-success' "$PKG/retired/block_efisp_recursion.c" \
-   || grep -q 'patch10-libavb-force-avb-success' "$PKG/oem/oplus/bypass_warning.c"; then
-  echo "FAIL: patch10 must be in abl_permissive/, not retired/ or oem/"; exit 1
-fi
-grep -q 'patch10-libavb-force-avb-success' "$PKG/abl_permissive/libavb_force_success.c" \
-  || { echo "FAIL: patch10 must be in abl_permissive/libavb_force_success.c"; exit 1; }
-if grep -q 'patch6-lock-state-fastboot-gate' "$PKG/retired/block_efisp_recursion.c" \
-   || grep -q 'patch6-lock-state-fastboot-gate' "$PKG/oem/oplus/bypass_warning.c"; then
-  echo "FAIL: patch6 must be in abl_permissive/, not retired/ or oem/"; exit 1
-fi
-grep -q 'patch6-lock-state-fastboot-gate' "$PKG/abl_permissive/fastboot_lock_gates.c" \
-  || { echo "FAIL: patch6 must be in abl_permissive/fastboot_lock_gates.c"; exit 1; }
-if grep -rq 'patch9-avb-locked-recoverable-continue' "$PKG/abl_permissive/"; then
+# 5. patch10 (libavb force-AVB-success) lives in abl_permissive/libavb_force_success.rs;
+#    patch6 (lock-state fastboot-gate) lives in abl_permissive/fastboot_lock_gates.rs.
+test -f "$CRATE/abl_permissive/libavb_force_success.rs" \
+  || { echo "FAIL: patch10 must be in abl_permissive/libavb_force_success.rs"; exit 1; }
+test -f "$CRATE/abl_permissive/fastboot_lock_gates.rs" \
+  || { echo "FAIL: patch6 must be in abl_permissive/fastboot_lock_gates.rs"; exit 1; }
+grep -q 'patch10-libavb-force-avb-success' "$CRATE/abl_permissive/mod.rs" \
+  || { echo "FAIL: patch10 name must appear in abl_permissive/mod.rs"; exit 1; }
+grep -q 'patch6-lock-state-fastboot-gate' "$CRATE/abl_permissive/mod.rs" \
+  || { echo "FAIL: patch6 name must appear in abl_permissive/mod.rs"; exit 1; }
+if grep -rq 'patch9-avb-locked-recoverable-continue' "$CRATE/abl_permissive/"; then
   echo "FAIL: patch9 is superseded by patch10; remove patch9 from abl_permissive/"
   exit 1
 fi
 
-# 6. patch1 lives in retired/ (universal scope).  Task 10 drops it entirely.
-grep -q 'patch1-efisp-recursion' "$PKG/retired/block_efisp_recursion.c" \
-  || { echo "FAIL: patch1 must be in retired/block_efisp_recursion.c"; exit 1; }
+# 6. patch7 is OEM scope, lives in oem/oplus/bypass_warning.rs.
+test -f "$CRATE/oem/oplus/bypass_warning.rs" \
+  || { echo "FAIL: patch7 must be in oem/oplus/bypass_warning.rs"; exit 1; }
+grep -q 'patch7-orange-screen' "$CRATE/oem/oplus/mod.rs" \
+  || { echo "FAIL: patch7 must be registered in oem/oplus/mod.rs"; exit 1; }
 
-# 7. patch7 is oem scope.
-grep -q 'patch7-orange-screen' "$PKG/oem/oplus/bypass_warning.c" \
-  || { echo "FAIL: patch7 must be in oem/oplus/bypass_warning.c"; exit 1; }
+# 7. Host-only modules are gated behind `feature = "host"` so the
+#    firmware staticlib doesn't drag OEM / retired code on-device.
+grep -q '#\[cfg(feature = "host")\]' "$CRATE/lib.rs" \
+  || { echo "FAIL: host-only modules must be gated behind feature = \"host\""; exit 1; }
 
 # 8. Universal preservation is narrow: TZ soft-fuse drop plus reserve writes.
 grep -q 'UniversalPolicy_ShouldDropScmSip' \
@@ -95,7 +95,7 @@ test -f GblChainloadPkg/Include/Library/ProtocolHookLib.h \
 # "mode 3" text does not trip the lint.
 if grep -RnE --exclude=045_mode_taxonomy_lint.sh \
     'GBL_MODE[[:space:]]*==[[:space:]]*3|mode-3|SCOPE_MODE_3' \
-    GblChainloadPkg scripts tests \
+    GblChainloadPkg scripts tests crates \
     edk2/QcomModulePkg/Library/FastbootLib \
     edk2/QcomModulePkg/Library/BootLib 2>/dev/null; then
   echo "FAIL: mode-3 must not be advertised or gated in active surfaces"

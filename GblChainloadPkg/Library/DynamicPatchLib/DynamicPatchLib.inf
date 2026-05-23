@@ -1,7 +1,16 @@
 ## @file DynamicPatchLib.inf
-#  Runtime patch-table aggregator and engine for GBL chainload.
-#  Assembles universal, OEM, and mode-specific patches into a single table
-#  and applies them to the in-memory ABL PE image.
+#  Library-class shim for the patch engine. The actual engine lives in
+#  the crates/patch-engine Rust staticlib — this .inf exists only so
+#  EDK2's library-class resolution graph is satisfied for consumers that
+#  still declare a `DynamicPatchLib` dep (BootFlow.c via
+#  GblChainload.inf).
+#
+#  PR2 Task 6 inverted the dependency: ALL .c sources under
+#  GblChainloadPkg/Library/DynamicPatchLib/ moved into Rust. The
+#  firmware EDK2 build picks up libpatch_engine.a via DLINK2_FLAGS in
+#  GblChainloadPkg.dsc; this .inf compiles a single empty placeholder so
+#  the EDK2 build system has a translation unit to attach the library
+#  class to.
 ##
 
 [Defines]
@@ -9,23 +18,11 @@
   BASE_NAME                      = DynamicPatchLib
   FILE_GUID                      = 3967c143-4d98-4eba-80c6-5f95825b6ffd
   MODULE_TYPE                    = BASE
-  VERSION_STRING                 = 0.1
+  VERSION_STRING                 = 0.2
   LIBRARY_CLASS                  = DynamicPatchLib
 
 [Sources]
-  Internal/ScanLib.c
-  Internal/PeSections.c
-  Internal/Encode.c
-  Internal/Arm64Decode.c
-  Internal/PatchEngine.c
-  PatchTable.c
-  retired/block_efisp_recursion.c
-  abl_permissive/libavb_force_success.c
-  abl_permissive/fastboot_lock_gates.c
-  # OEM patches (oem/oplus/bypass_warning.c) are host-only — they are
-  # consumed via tools/abl-patcher/Makefile's explicit source list and
-  # NOT compiled into the firmware image.  PatchTable.c gates the OEM
-  # extern decl on #ifdef __HOST_BUILD__.  Task 6 will tighten this.
+  DynamicPatchLib_RustShim.c
 
 [Packages]
   MdePkg/MdePkg.dec
@@ -33,5 +30,3 @@
 
 [LibraryClasses]
   BaseLib
-  BaseMemoryLib
-  DebugLib

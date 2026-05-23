@@ -1,13 +1,24 @@
 /* tools/abl-patcher/abl-patcher.c — host-runnable patcher driving the same
-   DynamicPatchLib code that runs on-device. */
+   DynamicPatchLib code that runs on-device.
+
+   PR2 Task 6: the engine moved into crates/patch-engine (Rust). The
+   public header — patch_engine_ffi.h — keeps the same DynamicPatchLib_*
+   / DynamicPatch_Apply / PATCH_RESULT C ABI the old DPL exposed, so
+   this driver still works unchanged at the call sites. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <getopt.h>
+#include <stdint.h>
 
-/* The DynamicPatchLib headers — host-built via __HOST_BUILD__ in ScanLib.h. */
-#include "DynamicPatchLib.h"
-#include "../../GblChainloadPkg/Library/DynamicPatchLib/PatchScope.h"
+#include "patch_engine_ffi.h"
+
+/* Compat alias: previous code uses UINT8 throughout. */
+typedef uint8_t UINT8;
+typedef uint32_t UINT32;
+#ifndef CONST
+#define CONST const
+#endif
 
 static int Usage (CONST char *argv0) {
   fprintf (stderr,

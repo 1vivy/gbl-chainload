@@ -1,33 +1,17 @@
+/* GblChainloadPkg/Include/Library/DynamicPatchLib.h
+ *
+ * PR2 Task 6: the patch engine moved to crates/patch-engine. This
+ * header is now a thin re-export of the Rust crate's FFI header so
+ * existing #include <Library/DynamicPatchLib.h> call sites keep
+ * working without source changes.
+ *
+ * The wire-ABI commitments (PATCH_OUTCOME / PATCH_WORST / PATCH_RESULT
+ * / GBL_OEM discriminants) live in patch_engine_ffi.h — see the Rust
+ * shim at crates/patch-engine/src/ffi.rs for the parity assertions.
+ */
 #ifndef DYNAMIC_PATCH_LIB_H_
 #define DYNAMIC_PATCH_LIB_H_
 
-#include "PatchDesc.h"   /* sibling under Include/Library/ */
-
-typedef enum {
-  PATCH_RESULT_OK              = 0,
-  PATCH_RESULT_OPTIONAL_MISS   = 1,
-  PATCH_RESULT_MANDATORY_MISS  = 2,
-} PATCH_WORST;
-
-typedef struct {
-  UINT32       AppliedCount;
-  UINT32       MissedCount;
-  PATCH_WORST  WorstOutcome;
-} PATCH_RESULT;
-
-VOID
-DynamicPatch_Apply (
-  IN OUT UINT8         *Buf,
-  IN     UINT32         Size,
-  OUT    PATCH_RESULT  *Result
-  );
-
-/**
-  Populate gPatchTable / gPatchTableLen from the per-scope patch arrays.
-  Call once before DynamicPatch_Apply() in EDK-II builds.
-  Host tests skip this — they assign gPatchTable directly.
-**/
-VOID
-DynamicPatchLib_EnsureInit (VOID);
+#include "../../../crates/patch-engine/include/patch_engine_ffi.h"
 
 #endif /* DYNAMIC_PATCH_LIB_H_ */

@@ -187,6 +187,13 @@
   # and their `toml` / `serde` dependencies are excluded from the
   # firmware staticlib.
   GCC:*_*_AARCH64_DLINK2_FLAGS = $(WORKSPACE)/target/aarch64-unknown-none/release/libmode2_profile_core.a
+  # PR2 Task 6: libpatch_engine.a supplies DynamicPatch_Apply() +
+  # DynamicPatchLib_EnsureInit() (the Rust port of the deleted
+  # DynamicPatchLib C sources). Built with --no-default-features so the
+  # host-only `oem` + `retired` modules are excluded from the firmware
+  # staticlib — only `abl_permissive` (patch6 + patch10) ships in the
+  # device EFI.
+  GCC:*_*_AARCH64_DLINK2_FLAGS = $(WORKSPACE)/target/aarch64-unknown-none/release/libpatch_engine.a
   GCC:*_*_*_CC_FLAGS = -DZ_SOLO
   GCC:*_*_*_CC_FLAGS = -DPRODUCT_NAME=\"$(BOARD_BOOTLOADER_PRODUCT_NAME)\"
   GCC:*_*_*_CC_FLAGS = -DGBL_CHAINLOAD_VERSION=\"$(GBL_CHAINLOAD_VERSION)\"

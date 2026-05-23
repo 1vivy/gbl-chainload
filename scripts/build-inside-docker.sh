@@ -91,6 +91,13 @@ cargo build --release --target aarch64-unknown-none -p gblp1 --no-default-featur
 echo ">>> cargo build: crates/mode2-profile-core (aarch64-unknown-none ELF staticlib)"
 cargo build --release --target aarch64-unknown-none -p mode2-profile-core --no-default-features
 
+# PR2 Task 6: the dynamic patch engine moved into crates/patch-engine.
+# `--no-default-features` strips the host-only OEM + retired modules
+# from the firmware staticlib — only the abl_permissive group
+# (patch6 + patch10) ships on-device.
+echo ">>> cargo build: crates/patch-engine (aarch64-unknown-none ELF staticlib)"
+cargo build --release --target aarch64-unknown-none -p patch-engine --no-default-features
+
 echo ">>> build: $TOOLCHAIN_TAG / $ARCH / $BUILD_TARGET / name=$GBL_BUILD_NAME auto=$GBL_AUTO debug=$GBL_DEBUG verbose=$GBL_VERBOSE"
 build \
   -p GblChainloadPkg/GblChainloadPkg.dsc \
