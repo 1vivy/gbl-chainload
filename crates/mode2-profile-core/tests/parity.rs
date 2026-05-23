@@ -81,12 +81,16 @@ fn derive_infiniti_vbmeta_matches_golden() {
     let profile = mode2_profile_core::derive(&vbmeta).expect("derive succeeds");
 
     // Cross-check the key derived fields against the captured golden.
-    // (The golden TOML is the textual form the C tool emits; we check
-    // the underlying binary values here. The TOML byte-identity test
-    // is in tools/mode2-profile/tests/regression-fixture.sh, which is
-    // exercised by tests/host/087.)
+    // (The golden TOML is the textual form the C tool emitted; we check
+    // the underlying binary values here. The TOML byte-identity test is
+    // tests/host/087, which compares against the same fixture.)
+    //
+    // Path note (Task 10): Task 8 deleted tools/mode2-profile/ and
+    // relocated the captured-pre-Rust C-tool TOML golden under
+    // tests/host/goldens/087/baseline.toml. This test now reads from
+    // the relocated path.
     let golden_toml = std::fs::read_to_string(
-        repo_root().join("tools/mode2-profile/tests/baseline.toml.golden"),
+        repo_root().join("tests/host/goldens/087/baseline.toml"),
     )
     .expect("golden TOML read");
 

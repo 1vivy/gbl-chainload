@@ -257,9 +257,13 @@ fn ffi_scan_cached_abl_returns_bad_magic_when_absent() {
 
 #[test]
 fn mode2_profile_present_and_absent() {
-    // Synthesize a 256-byte GM2P-prefixed blob to satisfy the packer's
-    // structural check on the profile entry.
-    let mut profile = vec![0u8; 256];
+    // Synthesize a 120-byte GM2P-prefixed blob to satisfy the packer's
+    // structural check on the profile entry. 120 is GBL_M2P_SIZE — the
+    // wire size of the mode-2 profile struct (see tools/shared/gbl_mode2_profile.h
+    // and `mode2_profile_core`). Task 8 corrected this constant in
+    // lib.rs from 256 to 120; Task 10 brought this stale test fixture
+    // into alignment with that fix.
+    let mut profile = vec![0u8; 120];
     profile[0..4].copy_from_slice(b"GM2P");
     let pe = vec![0xCDu8; 256];
     let inputs = PackInputs {
