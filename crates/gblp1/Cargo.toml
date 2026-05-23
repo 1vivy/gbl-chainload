@@ -1,0 +1,12 @@
+# Placeholder — real crate lands in PR2 Task 5.
+[package]
+name = "gblp1"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+
+[lib]
+path = "src/lib.rs"

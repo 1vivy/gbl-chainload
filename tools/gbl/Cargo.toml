@@ -1,0 +1,13 @@
+# Placeholder — real `gbl` multicall binary lands in PR2 Task 8.
+[package]
+name = "gbl"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "gbl"
+path = "src/main.rs"

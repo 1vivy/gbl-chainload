@@ -1,0 +1,25 @@
+# /.cargo/config.toml — per-target linker config.
+#
+# Linkers are provided by docker/Dockerfile:
+#   - aarch64-linux-android: Android NDK clang (NDK r27, API 31).
+#   - aarch64-unknown-uefi:  rust-lld (bundled with rustc — no config).
+#   - host-cross targets:    tiny zig-cc wrapper scripts (under /usr/local/bin)
+#                            that pin the zig `-target` triple.
+
+[target.aarch64-linux-android]
+linker = "aarch64-linux-android31-clang"
+
+[target.aarch64-unknown-uefi]
+# rust-lld is bundled with rustc; no extra config needed.
+
+[target.x86_64-pc-windows-gnu]
+linker = "/usr/local/bin/zig-cc-windows-x64"
+
+[target.x86_64-apple-darwin]
+linker = "/usr/local/bin/zig-cc-macos-x64"
+
+[target.aarch64-apple-darwin]
+linker = "/usr/local/bin/zig-cc-macos-arm64"
+
+[target.x86_64-unknown-linux-musl]
+linker = "/usr/local/bin/zig-cc-linux-musl"
