@@ -1,11 +1,12 @@
-/** @file Mode2Overlay.h — mode-2-scope hook policy declarations.
+/** @file ProfileOverlay.h — profile-spoof hook policy declarations
+    (mode-2 surface).
 
     Declarations are unconditionally available so BootFlow can call
-    Mode2_SetProfile under a runtime gate (gManifest.WantProfileSpoof).
+    ProfileOverlay_SetProfile under a runtime gate (gManifest.WantProfileSpoof).
     Hook-body call sites in QseecomHook.c / SpssHook.c still gate on
     `#if (GBL_MODE == 2)` until Task 8 moves those to runtime. **/
-#ifndef MODE2_OVERLAY_H_
-#define MODE2_OVERLAY_H_
+#ifndef PROFILE_OVERLAY_H_
+#define PROFILE_OVERLAY_H_
 
 #include <Uefi.h>
 
@@ -13,20 +14,20 @@
 
 /* Store a validated profile. Copies *Profile into module state and
    sets the internal gMode2HasProfile flag. Called once by BootFlow. */
-VOID EFIAPI Mode2_SetProfile (IN CONST struct gbl_mode2_profile *Profile);
+VOID EFIAPI ProfileOverlay_SetProfile (IN CONST struct gbl_mode2_profile *Profile);
 
 /* QseecomSendCmd policy: rewrite a KM send buffer in place from the
    stored profile. No-op (returns FALSE) if no profile is stored or the
    cmd-id is not a spoof target. Emits a GBL_INFO line on a rewrite. */
 BOOLEAN EFIAPI
-Mode2Policy_RewriteKmSend (IN     UINT32  CmdId,
-                           IN OUT UINT8  *SendBuf,
-                           IN     UINT32  SendLen);
+ProfileOverlay_RewriteKmSend (IN     UINT32  CmdId,
+                              IN OUT UINT8  *SendBuf,
+                              IN     UINT32  SendLen);
 
 /* SPSS ShareKeyMintInfo policy: rewrite the packed RoT/BootState/Vbh
    struct in place from the stored profile. No-op if no profile. */
 BOOLEAN EFIAPI
-Mode2Policy_RewriteSpss (IN OUT VOID   *Info,
-                         IN     UINT32  InfoLen);
+ProfileOverlay_RewriteSpss (IN OUT VOID   *Info,
+                            IN     UINT32  InfoLen);
 
-#endif /* MODE2_OVERLAY_H_ */
+#endif /* PROFILE_OVERLAY_H_ */

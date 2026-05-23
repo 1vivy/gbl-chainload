@@ -68,13 +68,13 @@ grep -q 'op=write-swallow' \
   || { echo "FAIL: BlockIoHook missing reserve write swallow"; exit 1; }
 
 # VB/OplusSec persistence suppression is mode-1 overlay, not universal mode-0 policy.
-grep -q 'Mode1Policy_OnVbWriteConfig' \
+grep -q 'FakelockOverlay_OnVbWriteConfig' \
   GblChainloadPkg/Library/ProtocolHookLib/VerifiedBootHook.c \
   || { echo "FAIL: VerifiedBootHook missing mode-1 VB write swallow"; exit 1; }
-grep -q 'Mode1Policy_OnVbReset' \
+grep -q 'FakelockOverlay_OnVbReset' \
   GblChainloadPkg/Library/ProtocolHookLib/VerifiedBootHook.c \
   || { echo "FAIL: VerifiedBootHook missing mode-1 VB reset swallow"; exit 1; }
-grep -q 'Mode1Policy_ShouldDropQseeOplusSec' \
+grep -q 'FakelockOverlay_ShouldDropQseeOplusSec' \
   GblChainloadPkg/Library/ProtocolHookLib/QseecomHook.c \
   || { echo "FAIL: QseecomHook missing mode-1 OplusSec drop"; exit 1; }
 

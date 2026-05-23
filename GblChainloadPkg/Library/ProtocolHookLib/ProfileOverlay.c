@@ -1,23 +1,24 @@
-/** @file Mode2Overlay.c — mode-2-scope hook policy implementation.
-    Holds the validated profile and applies the QSEE/SPSS rewrites.
+/** @file ProfileOverlay.c — profile-spoof hook policy implementation
+    (mode-2 surface). Holds the validated profile and applies the
+    QSEE/SPSS rewrites.
 
-    Compiled unconditionally (paralleling Mode2Rewrite.c) so BootFlow's
-    runtime-gated Mode2_SetProfile call links cleanly under any
+    Compiled unconditionally (paralleling ProfileRewrite.c) so BootFlow's
+    runtime-gated ProfileOverlay_SetProfile call links cleanly under any
     GBL_MODE value. The QseecomHook / SpssHook call sites that invoke
-    Mode2Policy_RewriteXxx remain `#if (GBL_MODE == 2)`-gated until
+    ProfileOverlay_RewriteXxx remain `#if (GBL_MODE == 2)`-gated until
     Task 8 moves them to runtime, at which point unreferenced symbols
-    here get dead-stripped just like Mode2Rewrite. **/
-#include "Mode2Overlay.h"
+    here get dead-stripped just like ProfileRewrite. **/
+#include "ProfileOverlay.h"
 
 #include <Library/BaseMemoryLib.h>
 #include <Library/GblLog.h>
-#include "Mode2Rewrite.h"
+#include "ProfileRewrite.h"
 
 STATIC struct gbl_mode2_profile  gMode2Profile;
 STATIC BOOLEAN                   gMode2HasProfile = FALSE;
 
 VOID EFIAPI
-Mode2_SetProfile (IN CONST struct gbl_mode2_profile *Profile) {
+ProfileOverlay_SetProfile (IN CONST struct gbl_mode2_profile *Profile) {
   if (Profile == NULL) return;
   CopyMem (&gMode2Profile, Profile, sizeof (gMode2Profile));
   gMode2HasProfile = TRUE;
@@ -26,10 +27,10 @@ Mode2_SetProfile (IN CONST struct gbl_mode2_profile *Profile) {
 }
 
 BOOLEAN EFIAPI
-Mode2Policy_RewriteKmSend (IN UINT32 CmdId, IN OUT UINT8 *SendBuf,
-                           IN UINT32 SendLen) {
+ProfileOverlay_RewriteKmSend (IN UINT32 CmdId, IN OUT UINT8 *SendBuf,
+                              IN UINT32 SendLen) {
   if (!gMode2HasProfile) return FALSE;
-  if (gbl_m2_rewrite_km (CmdId, SendBuf, SendLen, &gMode2Profile)) {
+  if (gbl_profile_rewrite_km (CmdId, SendBuf, SendLen, &gMode2Profile)) {
     GBL_INFO ("mode2 | km-rewrite | cmd=0x%08x | len=%u\n", CmdId, SendLen);
     return TRUE;
   }
@@ -37,9 +38,9 @@ Mode2Policy_RewriteKmSend (IN UINT32 CmdId, IN OUT UINT8 *SendBuf,
 }
 
 BOOLEAN EFIAPI
-Mode2Policy_RewriteSpss (IN OUT VOID *Info, IN UINT32 InfoLen) {
+ProfileOverlay_RewriteSpss (IN OUT VOID *Info, IN UINT32 InfoLen) {
   if (!gMode2HasProfile || Info == NULL) return FALSE;
-  if (gbl_m2_rewrite_spss ((UINT8 *)Info, InfoLen, &gMode2Profile)) {
+  if (gbl_profile_rewrite_spss ((UINT8 *)Info, InfoLen, &gMode2Profile)) {
     GBL_INFO ("mode2 | spss-rewrite | len=%u\n", InfoLen);
     return TRUE;
   }

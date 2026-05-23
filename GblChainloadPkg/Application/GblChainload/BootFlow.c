@@ -27,7 +27,7 @@
 #include <Library/ProtocolHookLib.h>
 #include <Library/GblPayloadLib.h>
 
-#include "../../Library/ProtocolHookLib/Mode2Overlay.h"
+#include "../../Library/ProtocolHookLib/ProfileOverlay.h"
 extern VOID GblFastbootSetMode2Warning (IN CONST CHAR8 *Warning);
 
 #ifndef GBL_DEBUG
@@ -173,7 +173,7 @@ BootFlowChainLoad (VOID)
     EFI_STATUS M2Status =
         GblPayload_LoadMode2Profile (gImageHandle, &Mode2Profile);
     if (!EFI_ERROR (M2Status)) {
-      Mode2_SetProfile (&Mode2Profile);
+      ProfileOverlay_SetProfile (&Mode2Profile);
       GBL_INFO ("BootFlow: mode-2 profile loaded — spoof active\n");
     } else {
       GBL_INFO ("BootFlow: mode-2 profile unavailable (%r) — honest boot\n",

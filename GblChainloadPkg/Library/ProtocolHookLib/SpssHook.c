@@ -26,7 +26,7 @@
 #include <Library/UefiLib.h>
 #include <Protocol/EFISPSS.h>
 #include "HookCommon.h"
-#include "Mode2Overlay.h"
+#include "ProfileOverlay.h"
 
 STATIC SpssProtocol             *gHookedSpss           = NULL;
 STATIC SPSS_SHARE_KEYMINT_INFO   gOrigShareKeyMintInfo = NULL;
@@ -88,7 +88,7 @@ HookedShareKeyMintInfo (
   /* Mode-2: rewrite the packed RoT/BootState/Vbh mirror before it
      reaches the SPU. KeymintSharedInfoStruct is the packed wire form. */
   if (First && Info != NULL) {
-    Mode2Policy_RewriteSpss (Info, (UINT32)sizeof (KeymintSharedInfoStruct));
+    ProfileOverlay_RewriteSpss (Info, (UINT32)sizeof (KeymintSharedInfoStruct));
   }
 #endif
 

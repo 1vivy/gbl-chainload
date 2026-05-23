@@ -24,8 +24,8 @@
 #include <Library/UefiLib.h>
 #include <Protocol/EFIQseecom.h>
 #include "HookCommon.h"
-#include "Mode1Overlay.h"
-#include "Mode2Overlay.h"
+#include "FakelockOverlay.h"
+#include "ProfileOverlay.h"
 #include "UniversalBaseline.h"
 
 STATIC QCOM_QSEECOM_SEND_CMD_APP gOriginalSendCmd  = NULL;
@@ -513,7 +513,7 @@ HookedSendCmd (
      reentrant calls. */
   if (Handle == gOplusSecHandle && Handle != (UINT32)-1) {
     EFI_STATUS FakeStatus;
-    if (Mode1Policy_ShouldDropQseeOplusSec (CmdId, &FakeStatus)) {
+    if (FakelockOverlay_ShouldDropQseeOplusSec (CmdId, &FakeStatus)) {
       HookLeave (&gQseecomSendGuard);
       return FakeStatus;
     }
@@ -526,7 +526,7 @@ HookedSendCmd (
      TZ. Applies on the first-entry path only; reentrant calls below
      forward the (already-rewritten) buffer untouched. */
   if (First && SendBuf != NULL) {
-    Mode2Policy_RewriteKmSend (CmdId, SendBuf, SendLen);
+    ProfileOverlay_RewriteKmSend (CmdId, SendBuf, SendLen);
   }
 #endif
 

@@ -1,7 +1,7 @@
-/* GblChainloadPkg/Library/ProtocolHookLib/Mode2Rewrite.c — pure-logic
+/* GblChainloadPkg/Library/ProtocolHookLib/ProfileRewrite.c — pure-logic
    KM/SPSS rewrite. Field offsets cross-checked against
    ~/gbl_root_canoe/tools/keymaster_wire.h and QseecomHook.c's decoder. */
-#include "Mode2Rewrite.h"
+#include "ProfileRewrite.h"
 
 static void wr32(uint8_t *p, uint32_t v) {
     p[0] = (uint8_t)v;       p[1] = (uint8_t)(v >> 8);
@@ -36,7 +36,7 @@ static void rewrite_set_vbh(uint8_t *b, const struct gbl_mode2_profile *p) {
     wrbytes(b + 4, p->vbh, 32);
 }
 
-int gbl_m2_rewrite_km(uint32_t cmd_id, uint8_t *buf, uint32_t len,
+int gbl_profile_rewrite_km(uint32_t cmd_id, uint8_t *buf, uint32_t len,
                       const struct gbl_mode2_profile *p) {
     if (buf == NULL || p == NULL) return 0;
     switch (cmd_id) {
@@ -57,7 +57,7 @@ int gbl_m2_rewrite_km(uint32_t cmd_id, uint8_t *buf, uint32_t len,
     }
 }
 
-int gbl_m2_rewrite_spss(uint8_t *info, uint32_t info_len,
+int gbl_profile_rewrite_spss(uint8_t *info, uint32_t info_len,
                         const struct gbl_mode2_profile *p) {
     if (info == NULL || p == NULL || info_len < GBL_SPSS_INFO_LEN) return 0;
     rewrite_set_rot(info + 0, p);          /* RoT sub-struct  @0  (44) */

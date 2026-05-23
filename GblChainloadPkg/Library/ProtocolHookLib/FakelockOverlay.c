@@ -1,19 +1,20 @@
-/** @file Mode1Overlay.c — mode-1-scope hook policy implementation.
+/** @file FakelockOverlay.c — fakelock / persistence-suppression hook policy
+  implementation (mode-1 surface).
 
   Contains fakelock and persistence-suppression policies exclusive to mode-1:
 
-    Mode1Policy_OnVbReadConfig_Post  — post-call: clears is_unlocked +
+    FakelockOverlay_OnVbReadConfig_Post  — post-call: clears is_unlocked +
         is_unlock_critical in the raw READ_CONFIG device-state buffer
         (which is a DeviceInfo blob). Uses offset arithmetic identical
         to the dirty VbForceDeviceInfoBufferLocked helper it replaces.
 
-    Mode1Policy_OnVbDeviceInit_PrePost — pre/post-call: clears the same
+    FakelockOverlay_OnVbDeviceInit_PrePost — pre/post-call: clears the same
         two fields in the device_info_vb_t struct passed to VBDeviceInit.
 
   These functions are compiled-out entirely in non-mode-1 builds via the
-  GBL_MODE == 1 guard in Mode1Overlay.h.
+  GBL_MODE == 1 guard in FakelockOverlay.h.
 **/
-#include "Mode1Overlay.h"
+#include "FakelockOverlay.h"
 
 #if (GBL_MODE == 1)
 
@@ -44,7 +45,7 @@ Mode1OffsetOfIsUnlockCritical (VOID)
  * -------------------------------------------------------------------------- */
 
 EFI_STATUS EFIAPI
-Mode1Policy_OnVbReadConfig_Post (
+FakelockOverlay_OnVbReadConfig_Post (
   IN  EFI_STATUS  OrigStatus,
   IN  VOID       *Buf,
   IN  UINT32      BufLen
@@ -84,7 +85,7 @@ Mode1Policy_OnVbReadConfig_Post (
 }
 
 VOID EFIAPI
-Mode1Policy_OnVbDeviceInit_PrePost (
+FakelockOverlay_OnVbDeviceInit_PrePost (
   IN OUT device_info_vb_t *Devinfo,
   IN     BOOLEAN           IsPre
   )
@@ -107,7 +108,7 @@ Mode1Policy_OnVbDeviceInit_PrePost (
 }
 
 EFI_STATUS EFIAPI
-Mode1Policy_OnVbWriteConfig (
+FakelockOverlay_OnVbWriteConfig (
   IN UINT32  Op,
   IN VOID   *Buf,
   IN UINT32  BufLen
@@ -119,14 +120,14 @@ Mode1Policy_OnVbWriteConfig (
 }
 
 EFI_STATUS EFIAPI
-Mode1Policy_OnVbReset (VOID)
+FakelockOverlay_OnVbReset (VOID)
 {
   GBL_INFO ("vb-reset | swallowed (mode-1)\n");
   return EFI_SUCCESS;
 }
 
 BOOLEAN
-Mode1Policy_ShouldDropQseeOplusSec (
+FakelockOverlay_ShouldDropQseeOplusSec (
   IN  UINT32       CmdId,
   OUT EFI_STATUS  *FakeStatus
   )

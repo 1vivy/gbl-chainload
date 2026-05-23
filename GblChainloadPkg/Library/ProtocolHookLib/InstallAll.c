@@ -9,8 +9,8 @@
     observation plus the narrow preservation baseline; mode-1 layers its
     fakelock/persistence overlay on top.
 
-    Mode-1 overlay (Mode1Overlay.c) -- same pattern.  Future mode overlays
-    must opt in explicitly.
+    Fakelock overlay (FakelockOverlay.c) -- same pattern.  Future mode
+    overlays must opt in explicitly.
 
     EbsHook is declared in HookCommon.h but not yet implemented; it is not
     called here until its source file lands.

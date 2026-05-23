@@ -67,7 +67,7 @@ locate_overlay_host: locate_overlay_host.c
 	$(CC) $(CFLAGS) -o $@ $<
 
 MODE2_SRC = ../../../GblChainloadPkg/Library/GblPayloadLib/Mode2Profile.c
-MODE2_REWRITE_SRC = ../../../GblChainloadPkg/Library/ProtocolHookLib/Mode2Rewrite.c
+MODE2_REWRITE_SRC = ../../../GblChainloadPkg/Library/ProtocolHookLib/ProfileRewrite.c
 
 BINS += mode2_harness
 

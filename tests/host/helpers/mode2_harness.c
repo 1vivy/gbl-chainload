@@ -10,7 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "Internal/Mode2Profile.h"
-#include "Mode2Rewrite.h"
+#include "ProfileRewrite.h"
 
 static unsigned char *slurp(const char *path, size_t *n) {
     FILE *f = fopen(path, "rb");
@@ -38,7 +38,7 @@ int main(int argc, char **argv) {
         if (gbl_mode2_profile_parse(pb, pn, &prof) != GBL_M2P_OK) {
             printf("rewrote=0\n"); return 0;
         }
-        int r = gbl_m2_rewrite_km(cmd, bb, (uint32_t)bn, &prof);
+        int r = gbl_profile_rewrite_km(cmd, bb, (uint32_t)bn, &prof);
         printf("rewrote=%d\n", r);
         for (size_t i = 0; i < bn; i++) printf("%02x", bb[i]);
         printf("\n");
@@ -52,7 +52,7 @@ int main(int argc, char **argv) {
         if (gbl_mode2_profile_parse(pb, pn, &prof) != GBL_M2P_OK) {
             printf("rewrote=0\n"); return 0;
         }
-        int r = gbl_m2_rewrite_spss(bb, (uint32_t)bn, &prof);
+        int r = gbl_profile_rewrite_spss(bb, (uint32_t)bn, &prof);
         printf("rewrote=%d\n", r);
         for (size_t i = 0; i < bn; i++) printf("%02x", bb[i]);
         printf("\n");

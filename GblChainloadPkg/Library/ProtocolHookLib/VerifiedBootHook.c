@@ -38,7 +38,7 @@
 #include <Library/UefiLib.h>
 #include <Protocol/EFIVerifiedBoot.h>
 #include "HookCommon.h"
-#include "Mode1Overlay.h"
+#include "FakelockOverlay.h"
 #include "UniversalBaseline.h"
 
 STATIC QCOM_VERIFIEDBOOT_PROTOCOL    *gHookedVb               = NULL;
@@ -130,7 +130,7 @@ HookedVBRwDeviceState (
   }
 #if (GBL_MODE == 1)
   if (Op == WRITE_CONFIG) {
-    Status = Mode1Policy_OnVbWriteConfig ((UINT32)Op, Buf, BufLen);
+    Status = FakelockOverlay_OnVbWriteConfig ((UINT32)Op, Buf, BufLen);
     HookLeave (&gVbGuard);
     return Status;
   }
@@ -141,7 +141,7 @@ HookedVBRwDeviceState (
 #if (GBL_MODE == 1)
     /* Fakelock policy enforced on reentry too — same as first-entry path. */
     if (Op == READ_CONFIG) {
-      Mode1Policy_OnVbReadConfig_Post (Status, Buf, BufLen);
+      FakelockOverlay_OnVbReadConfig_Post (Status, Buf, BufLen);
     }
 #endif
     HookLeave (&gVbGuard);
@@ -159,7 +159,7 @@ HookedVBRwDeviceState (
 
 #if (GBL_MODE == 1)
   if (Op == READ_CONFIG) {
-    Mode1Policy_OnVbReadConfig_Post (Status, Buf, BufLen);
+    FakelockOverlay_OnVbReadConfig_Post (Status, Buf, BufLen);
   }
 #endif
 
@@ -195,24 +195,24 @@ HookedVBDeviceInit (
   if (!First) {
 #if (GBL_MODE == 1)
     /* Fakelock policy enforced on reentry too — same as first-entry path. */
-    Mode1Policy_OnVbDeviceInit_PrePost (Devinfo, /*IsPre=*/TRUE);
+    FakelockOverlay_OnVbDeviceInit_PrePost (Devinfo, /*IsPre=*/TRUE);
 #endif
     Status = gOrigVbDeviceInit (This, Devinfo);
 #if (GBL_MODE == 1)
-    Mode1Policy_OnVbDeviceInit_PrePost (Devinfo, /*IsPre=*/FALSE);
+    FakelockOverlay_OnVbDeviceInit_PrePost (Devinfo, /*IsPre=*/FALSE);
 #endif
     HookLeave (&gVbGuard);
     return Status;
   }
 
 #if (GBL_MODE == 1)
-  Mode1Policy_OnVbDeviceInit_PrePost (Devinfo, /*IsPre=*/TRUE);
+  FakelockOverlay_OnVbDeviceInit_PrePost (Devinfo, /*IsPre=*/TRUE);
 #endif
 
   Status = gOrigVbDeviceInit (This, Devinfo);
 
 #if (GBL_MODE == 1)
-  Mode1Policy_OnVbDeviceInit_PrePost (Devinfo, /*IsPre=*/FALSE);
+  FakelockOverlay_OnVbDeviceInit_PrePost (Devinfo, /*IsPre=*/FALSE);
 #endif
   Unlocked       = (Devinfo != NULL) ? (UINT32)Devinfo->is_unlocked        : 0xFF;
   UnlockCritical = (Devinfo != NULL) ? (UINT32)Devinfo->is_unlock_critical : 0xFF;
@@ -337,7 +337,7 @@ HookedVBResetState (
   }
   if (!First) {
 #if (GBL_MODE == 1)
-    Status = Mode1Policy_OnVbReset ();
+    Status = FakelockOverlay_OnVbReset ();
 #else
     Status = gOrigVbResetState (This);
 #endif
@@ -346,7 +346,7 @@ HookedVBResetState (
   }
 
 #if (GBL_MODE == 1)
-  Status = Mode1Policy_OnVbReset ();
+  Status = FakelockOverlay_OnVbReset ();
 #else
   Status = gOrigVbResetState (This);
 #endif

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/host/078_mode2_rewrite.sh — mode-2 KM rewrite unit test.
+# tests/host/078_profile_rewrite.sh — profile (mode-2) KM rewrite unit test.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
