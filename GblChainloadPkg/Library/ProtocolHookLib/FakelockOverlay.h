@@ -1,13 +1,13 @@
 /** @file FakelockOverlay.h — fakelock / persistence-suppression hook policy
-    declarations (mode-1 surface). Only active when GBL_MODE == 1. **/
+    declarations. Activation is runtime-gated on gManifest.WantFakelockHook
+    at the call sites; declarations are unconditional so the wrappers can
+    take the gate inline. **/
 #ifndef FAKELOCK_OVERLAY_H_
 #define FAKELOCK_OVERLAY_H_
 
 #include <Uefi.h>
 #include <Protocol/EFIVerifiedBoot.h>
 #include "HookCommon.h"
-
-#if (GBL_MODE == 1)
 
 /** Fakelock policy for VBRwDeviceState(READ_CONFIG) post-call mutator.
     Clears is_unlocked and is_unlock_critical in the returned device_info_vb_t.
@@ -49,7 +49,5 @@ FakelockOverlay_ShouldDropQseeOplusSec (
   IN  UINT32       CmdId,
   OUT EFI_STATUS  *FakeStatus
   );
-
-#endif /* GBL_MODE == 1 */
 
 #endif /* FAKELOCK_OVERLAY_H_ */

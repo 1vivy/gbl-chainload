@@ -1,7 +1,10 @@
 /** @file FakelockOverlay.c — fakelock / persistence-suppression hook policy
-  implementation (mode-1 surface).
+  implementation.
 
-  Contains fakelock and persistence-suppression policies exclusive to mode-1:
+  Contains fakelock and persistence-suppression policies; activation is
+  runtime-gated by callers on gManifest.WantFakelockHook, so these symbols
+  compile in every build and are dead-stripped if no call site references
+  them.
 
     FakelockOverlay_OnVbReadConfig_Post  — post-call: clears is_unlocked +
         is_unlock_critical in the raw READ_CONFIG device-state buffer
@@ -10,13 +13,8 @@
 
     FakelockOverlay_OnVbDeviceInit_PrePost — pre/post-call: clears the same
         two fields in the device_info_vb_t struct passed to VBDeviceInit.
-
-  These functions are compiled-out entirely in non-mode-1 builds via the
-  GBL_MODE == 1 guard in FakelockOverlay.h.
 **/
 #include "FakelockOverlay.h"
-
-#if (GBL_MODE == 1)
 
 #include <Library/DebugLib.h>
 #include <Library/GblLog.h>
@@ -140,5 +138,3 @@ FakelockOverlay_ShouldDropQseeOplusSec (
   }
   return FALSE;
 }
-
-#endif /* GBL_MODE == 1 */

@@ -20,6 +20,7 @@
 #include <Library/BaseMemoryLib.h>
 #include <Library/DebugLib.h>
 #include <Library/GblLog.h>
+#include <Library/GblPayloadLib.h>
 #include <Library/UefiBootServicesTableLib.h>
 #include <Library/UefiLib.h>
 #include <Protocol/EFIQseecom.h>
@@ -508,27 +509,24 @@ HookedSendCmd (
     CopyMem (&CmdId, SendBuf, sizeof (CmdId));
   }
 
-#if (GBL_MODE == 1)
-  /* Mode-1 policy: drop certain OplusSec commands before forwarding, including
-     reentrant calls. */
-  if (Handle == gOplusSecHandle && Handle != (UINT32)-1) {
+  /* Fakelock policy: drop certain OplusSec commands before forwarding,
+     including reentrant calls. */
+  if (gManifest.WantFakelockHook &&
+      Handle == gOplusSecHandle && Handle != (UINT32)-1) {
     EFI_STATUS FakeStatus;
     if (FakelockOverlay_ShouldDropQseeOplusSec (CmdId, &FakeStatus)) {
       HookLeave (&gQseecomSendGuard);
       return FakeStatus;
     }
   }
-#endif
 
-#if (GBL_MODE == 2)
-  /* Mode-2 policy: rewrite KM SET_ROT/SET_VERSION/SET_BOOT_STATE/SET_VBH
+  /* Profile-spoof policy: rewrite KM SET_ROT/SET_VERSION/SET_BOOT_STATE/SET_VBH
      send buffers in place from the loaded profile before forwarding to
      TZ. Applies on the first-entry path only; reentrant calls below
      forward the (already-rewritten) buffer untouched. */
-  if (First && SendBuf != NULL) {
+  if (gManifest.WantProfileSpoof && First && SendBuf != NULL) {
     ProfileOverlay_RewriteKmSend (CmdId, SendBuf, SendLen);
   }
-#endif
 
   if (!First) {
     Status = gOriginalSendCmd (This, Handle, SendBuf, SendLen, RspBuf, RspLen);

@@ -1,10 +1,8 @@
-/** @file ProfileOverlay.h — profile-spoof hook policy declarations
-    (mode-2 surface).
+/** @file ProfileOverlay.h — profile-spoof hook policy declarations.
 
-    Declarations are unconditionally available so BootFlow can call
-    ProfileOverlay_SetProfile under a runtime gate (gManifest.WantProfileSpoof).
-    Hook-body call sites in QseecomHook.c / SpssHook.c still gate on
-    `#if (GBL_MODE == 2)` until Task 8 moves those to runtime. **/
+    Declarations are unconditionally available; activation is runtime-gated
+    at every call site on gManifest.WantProfileSpoof (BootFlow loads the
+    profile; QseecomHook / SpssHook take the gate inline before rewrite). **/
 #ifndef PROFILE_OVERLAY_H_
 #define PROFILE_OVERLAY_H_
 

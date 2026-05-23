@@ -21,11 +21,12 @@
   internal traffic kicked off from our logging path can land on any
   slot via SCM/QSEECOM.
 
-  In mode-1 only (GBL_MODE == 1), READ_CONFIG and VBDeviceInit mutate ABL's
-  downstream view to locked/non-critical-locked, while WRITE_CONFIG and
-  VBDeviceResetState are swallowed so the fakelock overlay cannot persist
-  lock-state experiments back to RPMB.  Mode-0 observes and passes through VB
-  lock-state traffic unchanged.
+  When the fakelock-hook cap is set in gManifest, READ_CONFIG and
+  VBDeviceInit mutate ABL's downstream view to locked/non-critical-locked,
+  while WRITE_CONFIG and VBDeviceResetState are swallowed so the fakelock
+  overlay cannot persist lock-state experiments back to RPMB.  When the
+  cap is clear, this hook only observes and passes through VB lock-state
+  traffic unchanged.
 **/
 
 #include <Uefi.h>
@@ -34,6 +35,7 @@
 #include <Library/DebugLib.h>
 #include <Library/GblLog.h>
 #include <Library/DeviceInfo.h>
+#include <Library/GblPayloadLib.h>
 #include <Library/UefiBootServicesTableLib.h>
 #include <Library/UefiLib.h>
 #include <Protocol/EFIVerifiedBoot.h>
@@ -128,22 +130,18 @@ HookedVBRwDeviceState (
     HookLeave (&gVbGuard);
     return EFI_NOT_READY;
   }
-#if (GBL_MODE == 1)
-  if (Op == WRITE_CONFIG) {
+  if (gManifest.WantFakelockHook && Op == WRITE_CONFIG) {
     Status = FakelockOverlay_OnVbWriteConfig ((UINT32)Op, Buf, BufLen);
     HookLeave (&gVbGuard);
     return Status;
   }
-#endif
 
   if (!First) {
     Status = gOrigVbRwDeviceState (This, Op, Buf, BufLen);
-#if (GBL_MODE == 1)
     /* Fakelock policy enforced on reentry too — same as first-entry path. */
-    if (Op == READ_CONFIG) {
+    if (gManifest.WantFakelockHook && Op == READ_CONFIG) {
       FakelockOverlay_OnVbReadConfig_Post (Status, Buf, BufLen);
     }
-#endif
     HookLeave (&gVbGuard);
     return Status;
   }
@@ -157,11 +155,9 @@ HookedVBRwDeviceState (
 
   Status = gOrigVbRwDeviceState (This, Op, Buf, BufLen);
 
-#if (GBL_MODE == 1)
-  if (Op == READ_CONFIG) {
+  if (gManifest.WantFakelockHook && Op == READ_CONFIG) {
     FakelockOverlay_OnVbReadConfig_Post (Status, Buf, BufLen);
   }
-#endif
 
   if (Op != WRITE_CONFIG) {
     VbHex16 ((CONST UINT8 *)Buf, (UINTN)BufLen, Hex, sizeof (Hex));
@@ -193,27 +189,27 @@ HookedVBDeviceInit (
     return EFI_NOT_READY;
   }
   if (!First) {
-#if (GBL_MODE == 1)
     /* Fakelock policy enforced on reentry too — same as first-entry path. */
-    FakelockOverlay_OnVbDeviceInit_PrePost (Devinfo, /*IsPre=*/TRUE);
-#endif
+    if (gManifest.WantFakelockHook) {
+      FakelockOverlay_OnVbDeviceInit_PrePost (Devinfo, /*IsPre=*/TRUE);
+    }
     Status = gOrigVbDeviceInit (This, Devinfo);
-#if (GBL_MODE == 1)
-    FakelockOverlay_OnVbDeviceInit_PrePost (Devinfo, /*IsPre=*/FALSE);
-#endif
+    if (gManifest.WantFakelockHook) {
+      FakelockOverlay_OnVbDeviceInit_PrePost (Devinfo, /*IsPre=*/FALSE);
+    }
     HookLeave (&gVbGuard);
     return Status;
   }
 
-#if (GBL_MODE == 1)
-  FakelockOverlay_OnVbDeviceInit_PrePost (Devinfo, /*IsPre=*/TRUE);
-#endif
+  if (gManifest.WantFakelockHook) {
+    FakelockOverlay_OnVbDeviceInit_PrePost (Devinfo, /*IsPre=*/TRUE);
+  }
 
   Status = gOrigVbDeviceInit (This, Devinfo);
 
-#if (GBL_MODE == 1)
-  FakelockOverlay_OnVbDeviceInit_PrePost (Devinfo, /*IsPre=*/FALSE);
-#endif
+  if (gManifest.WantFakelockHook) {
+    FakelockOverlay_OnVbDeviceInit_PrePost (Devinfo, /*IsPre=*/FALSE);
+  }
   Unlocked       = (Devinfo != NULL) ? (UINT32)Devinfo->is_unlocked        : 0xFF;
   UnlockCritical = (Devinfo != NULL) ? (UINT32)Devinfo->is_unlock_critical : 0xFF;
   if (First) {
@@ -336,20 +332,20 @@ HookedVBResetState (
     return EFI_NOT_READY;
   }
   if (!First) {
-#if (GBL_MODE == 1)
-    Status = FakelockOverlay_OnVbReset ();
-#else
-    Status = gOrigVbResetState (This);
-#endif
+    if (gManifest.WantFakelockHook) {
+      Status = FakelockOverlay_OnVbReset ();
+    } else {
+      Status = gOrigVbResetState (This);
+    }
     HookLeave (&gVbGuard);
     return Status;
   }
 
-#if (GBL_MODE == 1)
-  Status = FakelockOverlay_OnVbReset ();
-#else
-  Status = gOrigVbResetState (This);
-#endif
+  if (gManifest.WantFakelockHook) {
+    Status = FakelockOverlay_OnVbReset ();
+  } else {
+    Status = gOrigVbResetState (This);
+  }
   HookLeave (&gVbGuard);
   return Status;
 }
@@ -482,11 +478,9 @@ InstallVerifiedBootHook (VOID)
   EFI_STATUS                  Status;
   QCOM_VERIFIEDBOOT_PROTOCOL *Vb = NULL;
   UINTN                       Installed = 0;
-#if (GBL_MODE == 1)
   BOOLEAN                     HaveRwDeviceState = FALSE;
   BOOLEAN                     HaveResetState    = FALSE;
   BOOLEAN                     HaveDeviceInit    = FALSE;
-#endif
 
   if (gHookedVb != NULL) {
     return EFI_ALREADY_STARTED;
@@ -505,18 +499,14 @@ InstallVerifiedBootHook (VOID)
     gOrigVbRwDeviceState = Vb->VBRwDeviceState;
     Vb->VBRwDeviceState  = HookedVBRwDeviceState;
     Installed++;
-#if (GBL_MODE == 1)
     HaveRwDeviceState = TRUE;
-#endif
   } else { Print (L"VerifiedBootHook: VBRwDeviceState NULL — skip\n"); }
 
   if (Vb->VBDeviceInit != NULL) {
     gOrigVbDeviceInit = Vb->VBDeviceInit;
     Vb->VBDeviceInit  = HookedVBDeviceInit;
     Installed++;
-#if (GBL_MODE == 1)
     HaveDeviceInit = TRUE;
-#endif
   } else { Print (L"VerifiedBootHook: VBDeviceInit NULL — skip\n"); }
 
   if (Vb->VBSendRot != NULL) {
@@ -541,9 +531,7 @@ InstallVerifiedBootHook (VOID)
     gOrigVbResetState        = Vb->VBDeviceResetState;
     Vb->VBDeviceResetState   = HookedVBResetState;
     Installed++;
-#if (GBL_MODE == 1)
     HaveResetState = TRUE;
-#endif
   } else { Print (L"VerifiedBootHook: VBDeviceResetState NULL — skip\n"); }
 
   if (Vb->VBIsDeviceSecure != NULL) {
@@ -570,19 +558,19 @@ InstallVerifiedBootHook (VOID)
     Installed++;
   } else { Print (L"VerifiedBootHook: VBIsKeymasterEnabled NULL — skip\n"); }
 
-#if (GBL_MODE == 1)
-  if (!HaveRwDeviceState || !HaveResetState) {
-    Print (L"VerifiedBootHook: mode-1 required slots missing "
-           L"(rw=%u reset=%u)\n",
-           (UINT32)HaveRwDeviceState, (UINT32)HaveResetState);
-    return EFI_NOT_READY;
+  if (gManifest.WantFakelockHook) {
+    if (!HaveRwDeviceState || !HaveResetState) {
+      Print (L"VerifiedBootHook: fakelock-hook required slots missing "
+             L"(rw=%u reset=%u)\n",
+             (UINT32)HaveRwDeviceState, (UINT32)HaveResetState);
+      return EFI_NOT_READY;
+    }
+    if (!HaveDeviceInit) {
+      Print (L"VerifiedBootHook: fakelock-hook required slots missing (init=%u)\n",
+             (UINT32)HaveDeviceInit);
+      return EFI_NOT_READY;
+    }
   }
-  if (!HaveDeviceInit) {
-    Print (L"VerifiedBootHook: mode-1 required slots missing (init=%u)\n",
-           (UINT32)HaveDeviceInit);
-    return EFI_NOT_READY;
-  }
-#endif
 
   gHookedVb = Vb;
   GBL_INFO ("VerifiedBootHook: installed %u of 10 slots\n", (UINT32)Installed);

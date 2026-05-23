@@ -22,6 +22,7 @@
 #include <Library/BaseMemoryLib.h>
 #include <Library/DebugLib.h>
 #include <Library/GblLog.h>
+#include <Library/GblPayloadLib.h>
 #include <Library/UefiBootServicesTableLib.h>
 #include <Library/UefiLib.h>
 #include <Protocol/EFISPSS.h>
@@ -84,13 +85,11 @@ HookedShareKeyMintInfo (
     return Status;
   }
 
-#if (GBL_MODE == 2)
-  /* Mode-2: rewrite the packed RoT/BootState/Vbh mirror before it
+  /* Profile-spoof: rewrite the packed RoT/BootState/Vbh mirror before it
      reaches the SPU. KeymintSharedInfoStruct is the packed wire form. */
-  if (First && Info != NULL) {
+  if (gManifest.WantProfileSpoof && First && Info != NULL) {
     ProfileOverlay_RewriteSpss (Info, (UINT32)sizeof (KeymintSharedInfoStruct));
   }
-#endif
 
   CHAR8 RotHex[65], PubKeyHex[65], VbhHex[65];
 

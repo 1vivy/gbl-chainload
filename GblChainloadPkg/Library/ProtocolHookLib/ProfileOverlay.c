@@ -1,13 +1,10 @@
-/** @file ProfileOverlay.c — profile-spoof hook policy implementation
-    (mode-2 surface). Holds the validated profile and applies the
-    QSEE/SPSS rewrites.
+/** @file ProfileOverlay.c — profile-spoof hook policy implementation.
+    Holds the validated profile and applies the QSEE/SPSS rewrites.
 
-    Compiled unconditionally (paralleling ProfileRewrite.c) so BootFlow's
-    runtime-gated ProfileOverlay_SetProfile call links cleanly under any
-    GBL_MODE value. The QseecomHook / SpssHook call sites that invoke
-    ProfileOverlay_RewriteXxx remain `#if (GBL_MODE == 2)`-gated until
-    Task 8 moves them to runtime, at which point unreferenced symbols
-    here get dead-stripped just like ProfileRewrite. **/
+    Compiled unconditionally (paralleling ProfileRewrite.c); BootFlow,
+    QseecomHook, and SpssHook all gate activation at runtime on
+    gManifest.WantProfileSpoof, so unreferenced symbols here get
+    dead-stripped when the manifest does not enable profile spoof. **/
 #include "ProfileOverlay.h"
 
 #include <Library/BaseMemoryLib.h>
