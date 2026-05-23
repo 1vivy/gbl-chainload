@@ -38,6 +38,10 @@
 091/default-list.txt:  vbmeta-graft list against vbmeta-graft.py graft output
 # 091/default.img: vbmeta-graft.py wrapper output of the fixture onto itself.
 #   deterministic but ~100 MB — same size reason as 074/grafted-footered.img.
+096/default-list.txt:  vbmeta-graft list against OrangeFox-onto-201 graft (real recovery pair)
+# 096/default.img: vbmeta-graft.py grafting recovery-infiniti-OrangeFox.img
+#   onto recovery-infiniti-IN-16.0.7.201.img's vbmeta. Deterministic but
+#   ~100 MB — same size reason as 074/091.
 
 # ---- mode2-profile compile (C tool parity baseline against Python) ----
 082/c.bin:             mode2-profile compile against a synthetic TOML (matches Python tool byte-for-byte; locked by 087)
@@ -106,8 +110,8 @@
 #   tests/images/xi17-pudding-44-abl.img          — used by 088 (non-oplus MISS path)
 #   tests/images/grafted-recovery.img             — used by 074/090/091
 #   tests/images/vbmeta-infiniti-IN-16.0.7.201.img — used by 079/082-derive/087
-#   tests/images/recovery-infiniti-IN-16.0.7.201.img — present, not yet wired into a golden test
-#   tests/images/recovery-infiniti-OrangeFox.img  — present, not yet wired into a golden test
+#   tests/images/recovery-infiniti-IN-16.0.7.201.img — used by 096 (--stock for real recovery graft)
+#   tests/images/recovery-infiniti-OrangeFox.img  — used by 096 (--custom for real recovery graft)
 # Missing / [user-provides]:
 #   real post-install EFISP image (raw EFISP partition dump from a device) — none in-tree
 #   stock OEM vbmeta of recent infiniti shipping ROM — none in-tree (203/703/etc. dumps)
