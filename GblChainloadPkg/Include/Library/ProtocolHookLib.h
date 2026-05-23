@@ -20,10 +20,12 @@ typedef struct {
   BOOLEAN  ModeOverlayOk;
 } HOOK_INSTALL_RESULT;
 
-/** Install universal baseline + per-mode overlay (selected by GBL_MODE feature
-    flag).  Returns EFI_SUCCESS only if all required slots installed and the
-    mode overlay configured cleanly.  Caller (BootFlow.c) aborts chain-load
-    on any error. **/
+/** Install universal baseline + manifest-gated overlays
+    (FakelockOverlay if `gManifest.WantFakelockHook`, ProfileRewrite /
+    ProfileOverlay if `gManifest.WantProfileSpoof`).  Returns EFI_SUCCESS
+    only if all required slots installed and the selected overlays
+    configured cleanly.  Caller (BootFlow.c) aborts chain-load on any
+    error. **/
 EFI_STATUS
 EFIAPI
 ProtocolHook_InstallAll (
