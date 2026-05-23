@@ -44,8 +44,8 @@ effects only.
 
 | Manifest bit | C field | Drives | Active when |
 |---|---|---|---|
-| bit 0 | `WantFakelockHook` | `FakelockOverlay` mutations in `VerifiedBootHook` + `QseecomHook` (mode-1 paths) | mode-1, cached_abl present |
-| bit 1 | `WantProfileSpoof` | `ProfileRewrite` mutations in `SpssHook` + `QseecomHook` (mode-2 paths) | mode-2, cached_abl present |
+| bit 0 | `WantFakelockHook` | `FakelockOverlay` mutations in `VerifiedBootHook` + `QseecomHook` (mode-1 paths) | host packed mode-1 |
+| bit 1 | `WantProfileSpoof` | `ProfileRewrite` mutations in `SpssHook` + `QseecomHook` (mode-2 paths) | host packed mode-2 |
 
 That's it — two bits. No advisory bits, no `Oem` byte on the wire. Patch
 group selection and OEM patch selection are pure host-side concerns
@@ -68,17 +68,17 @@ group selection and OEM patch selection are pure host-side concerns
 ### Patch groups (file-per-patch, brand directory above)
 
 ```
-DynamicPatchLib/                            (host-only after PR1; see §3)
-  fakelock_patches/                         (was: mode_1/)
+DynamicPatchLib/
+  abl_permissive/                           (was: mode_1/)
     libavb_force_success.c                  (was: patch10)
     fastboot_lock_gates.c                   (was: patch6)
     Signatures.h
-  oem/
+  oem/                                       host-only — never compiled into firmware
     oplus/                                  (was: oem/oneplus_canoe.c)
       bypass_warning.c                       (was: patch7)
       Signatures.h
-  universal/
-    block_efisp_recursion.c                 (was: patch1 — RETIRED holdover)
+  retired/                                   documentation only — not in any patch table
+    block_efisp_recursion.c                 (was: patch1)
     Signatures.h
 ```
 
@@ -86,40 +86,56 @@ Containment unit = **patch**. Each patch is a self-contained quad
 (signatures, anchor logic, apply fn, why-it-works comment). Group
 directories collect patches that ship together. Splitting patch10
 (libavb-internal) from patch6 (ABL fastboot-dispatcher) reflects that
-they're a *pair* — both needed for fakelock to work end-to-end — but live
-in different binaries' codepaths conceptually. The group name
-`fakelock_patches/` reflects the *effect* the pair delivers, mirroring the
-runtime side (`FakelockOverlay` / `WantFakelockHook`).
+they're a *pair* — both needed when paired with `FakelockHook` for mode-1
+to fakelock end-to-end — but they live in different binaries' codepaths
+conceptually, and they're also independently useful for boot-reliability +
+recovery flexibility on every install mode.
 
-OEM brand naming: **`oplus`**, not `oneplus`. The OnePlus / Oppo / Realme
+**Group name `abl_permissive/`** reflects the patches' *effect*: they make
+ABL maximally permissive (libavb returns OK for any AVB chain; fastboot
+gates relax). The patches do not themselves spoof lock state — the
+`FakelockHook` does, and it relies on `abl_permissive` being applied for
+its mutations to land cleanly. Naming the patches after their effect
+(`abl_permissive`) rather than their pairing (`fakelock_patches`) makes
+their universal-application story honest: mode-0 / mode-1 / mode-2 all
+benefit from boot reliability, only mode-1 adds the lock-state spoof on top.
+
+`SCOPE_UNIVERSAL` (in `PatchScope.h`) → `SCOPE_ABL_PERMISSIVE`.
+
+**OEM is host-only.** `oem/oplus/` patches are selected by `--oem` at host
+packing time and compiled into `abl-patcher` (and PR2's `tools/gbl patch`),
+never into the firmware EFI. PR1's `GblChainloadPkg.dsc` excludes the
+`oem/` subtree from the firmware `DynamicPatchLib.inf` build; PR2's
+`crates/patch-engine` puts `oem/*` modules behind `#[cfg(feature = "host")]`
+so the `aarch64-unknown-uefi` build doesn't pull them in. Reasoning lives
+in §4 (future OEM additions may have less reliable anchors; misapply risk
+at autonomous boot time > miss risk at consenting host time).
+
+**OEM brand naming: `oplus`**, not `oneplus`. The OnePlus / Oppo / Realme
 tree is unified enough in practice that the broader brand fits today's
 patches; reflects user experience working with these binaries.
 
-### `universal/block_efisp_recursion.c` — retired holdover
+### `retired/block_efisp_recursion.c` — holdover
 
 The file stays in tree as documentation / fallback reference. The patch is
-**not** registered in `kUniversalPatches[]` (array stays empty). Top-of-
-file comment notes the retirement and points at the `BlockIoHook` EFISP
-gate that supersedes it. `tests/host/062_efisp_scan_gate.sh` deleted.
+**not** registered in any patch table. Top-of-file comment notes the
+retirement and points at the `BlockIoHook` EFISP gate that supersedes it.
+`tests/host/062_efisp_scan_gate.sh` deleted.
 
 Cost: ~60 lines of unused C. Benefit: reference implementation of the
 UTF-16 byte-pattern-anchor style + a zero-rewrite fallback path if the
 `BlockIoHook` ever needs revisiting.
 
-### Terminology — "safety hooks" vs `universal/`
-
-Two distinct concepts that the word "universal" could ambiguate:
+### Terminology — "safety hooks" vs patch groups
 
 - **Safety hooks** (or **always-on hooks**) = the `ProtocolHookLib` hooks
   that fire unconditionally in every install: `BlockIoHook` EFISP gate +
   oplusreserve1 gate, `ScmHook` soft-fuse-blow drop. These are what makes
-  "honest boot" actually safe when no mode-specific mutations fire.
-- **`DynamicPatchLib/universal/`** = a host-side patch-group directory.
-  Currently holds the retired `block_efisp_recursion.c`; active set
-  empty.
-
-This doc uses *safety hooks* for #1 throughout; the directory name
-`universal/` is reserved for #2.
+  fallback boot safe regardless of which binary patches landed.
+- **`DynamicPatchLib/abl_permissive/`** = the binary patch group applied to
+  every cached_abl at host time **and** to slot ABL by the boot-time
+  fallback. Distinct from "safety hooks" — these mutate the ABL PE, not
+  protocol responses at runtime.
 
 ## 3. Refined manifest
 
@@ -148,45 +164,68 @@ with old GBLP1).
 This supersedes the manifest layout in the engine-rework spec § 2 (which
 had an extra advisory bit plus an `Oem` byte). The reasoning is in §4.
 
-## 4. No-cached-abl fallback — honest boot
+## 4. No-cached-abl fallback — dynamic abl_permissive
 
 ```
 1. EnumeratePartitions, LogFsInit
 2. GblPayload_LoadCachedAbl  →  if present: use it
-                              else: read slot ABL as-is (no on-device patching)
+                              else: RunDynamicPatchOnSlotAbl:
+                                    read slot ABL → apply abl_permissive group → use result
 3. GblPayload_LoadManifest    →  on absent: gManifest = all-zero
-4. if (gManifest.WantProfileSpoof) Mode2_SetProfile (if profile present)
+4. if (gManifest.WantProfileSpoof) Mode2_SetProfile (if profile present; warn-and-skip
+   if absent — existing engine-rework spec § Runtime)
 5. ProtocolHook_InstallAll:
      ALWAYS install (safety hooks):
        - BlockIoHook       efisp gate + oplusreserve1 gate
        - ScmHook           soft-fuse-blow drop
-     CONDITIONALLY install:
-       - VerifiedBootHook  if WantFakelockHook AND cached_abl present
-       - QseecomHook       if (WantFakelockHook || WantProfileSpoof) AND cached_abl present
-       - SpssHook          if WantProfileSpoof AND cached_abl present
+     CONDITIONALLY install (gated on manifest only — abl_permissive is now applied
+     either way, so the hooks have a coherent ABL to mutate against):
+       - VerifiedBootHook  if WantFakelockHook
+       - QseecomHook       if (WantFakelockHook || WantProfileSpoof)
+       - SpssHook          if WantProfileSpoof
 6. LogFsClose; LoadImage(abl); StartImage
 ```
 
-The `AND cached_abl present` clause is the honest-fallback guard. If a
-user installed mode-1 but their cached_abl is absent, the engine refuses
-to fire fakelock mutations against the un-patched ABL — the hook reads
-assume patched libavb / patched fastboot gates, and firing them blind
-would observably fail. The engine logs a one-line warning ("cached_abl
-absent — falling back to honest boot, mode-N requested but skipped") so
-the user understands they got a downgrade.
+The fallback applies the `abl_permissive` patch group **unconditionally** and
+**only** that group — no OEM patch trying-then-missing on device. Reasoning:
 
-### What this fallback drops compared to today's engine
+- `abl_permissive` (patch10 + patch6) has solid string anchors verified across
+  every test fixture; misapplication risk is bounded.
+- OEM groups may grow patches with weaker anchors over time. Even with solid
+  anchors, "applied wrongly" is a worse outcome than "cleanly missed and absent."
+  The host packer is a consenting context (user picked `--oem`, sees stderr,
+  can re-run); the boot-time fallback is autonomous and should stick to the
+  rock-solid set. OEM application stays host-only.
+- `abl_permissive` is also harmless on every install mode (see §5) — patch10 is
+  boot-reliability insurance, patch6 is fastboot recovery flexibility, neither
+  touches HLOS's view of lock state. Mode-2's "keep ABL honest" goal is about
+  *runtime VerifiedBoot reports*, owned by the absent `FakelockHook` — not by
+  these patches.
 
-- `BootFlow.c::RunDynamicPatchOnSlotAbl` — deleted. The engine never
-  binary-patches at boot. Patches land at host packing time only.
-- `DynamicPatchLib` — drops out of the firmware link entirely. Sources
-  stay in `GblChainloadPkg/Library/` because host tools (`abl-patcher`)
-  still link them; PR1 stops emitting firmware `.inf` builds for it. PR2
-  then replaces the C sources with `crates/patch-engine` once the host
-  tool collapses into `tools/gbl`.
-- The `Oem` byte and `want_fakelock_patches` advisory bit are removed
-  from the manifest. They only existed to drive the dynamic-patch
-  fallback that no longer exists; nothing else on the wire needed them.
+### Implications
+
+- **Mode-0 = dynamic-patched slot ABL with `abl_permissive` + safety hooks
+  + no runtime mutations.** Boots reliably on any AVB-chain state; HLOS
+  observes truthfully because no hook fires.
+- **Mode-1 cached_abl loss degrades gracefully.** Dynamic-patch reproduces the
+  patch state that cached_abl would have carried, `FakelockHook` still works.
+- **Mode-2 cached_abl loss degrades gracefully too**, modulo OEM patches
+  (orange-state warning + 5s delay re-appears on Oplus until cached_abl is
+  restored). Acceptable failure mode — not a boot failure.
+- **No "AND cached_abl present" guard** on the runtime hooks. The dynamic-patch
+  path reproduces the patches the hooks assume, so the guard is unnecessary.
+
+### What this drops from the engine-rework spec § 2 manifest
+
+- `Oem` byte on the wire — gone. OEM is purely a host-side input to
+  `abl-patcher`; the boot-time fallback only ever applies `abl_permissive`.
+- `want_fakelock_patches` advisory bit — gone. The patches are no longer
+  conditional on a wire bit; they're always applied by the host (mode-0/1/2)
+  and unconditionally applied by the fallback.
+
+`RunDynamicPatchOnSlotAbl` stays. `DynamicPatchLib` stays in the firmware
+link, restricted to the `abl_permissive` group (oem subtree excluded from
+the firmware `.inf` `[Sources]`).
 
 ## 5. PR1 scope (engine rework)
 
@@ -200,35 +239,47 @@ refinements from §3 and the structural cleanups from §4):
   collapse per-mode build loops.
 - Manifest type `GBLP1_TYPE_MANIFEST = 0x0020` with the 16-byte payload
   from §3; `GblPayload_LoadManifest()` API; absence → all-zero default.
-- Capability-gated hook installs in `ProtocolHook_InstallAll` per §4,
-  with the `AND cached_abl present` honest-fallback guard.
+- Capability-gated hook installs in `ProtocolHook_InstallAll` per §4
+  (gated on manifest bits only — no `cached_abl present` clause).
 - `BlockIoHook` EFISP gate returning `EFI_NO_MEDIA` (already designed in
   engine-rework spec § 6).
 - Mutation helper renames: `Mode1Overlay` → `FakelockOverlay`,
   `Mode2Rewrite` → `ProfileRewrite`. Public API renamed accordingly.
 - Patch group restructure (file-per-patch) per §2.
-  - `mode_1/` → `fakelock_patches/{libavb_force_success.c,fastboot_lock_gates.c}`
-  - `oem/oneplus_canoe.c` → `oem/oplus/bypass_warning.c`
-  - `universal/universal.c` → `universal/block_efisp_recursion.c`
-    (retired holdover; not registered).
-- Drop `RunDynamicPatchOnSlotAbl` from `BootFlow.c`.
-- Drop `DynamicPatchLib` from `GblChainloadPkg.dsc` firmware build.
-  `EnsureInitScoped` stays in the codebase (host tool callers) but no
-  longer needs to compile under `__HOST_BUILD__` toggling — it just
-  builds for the host target.
+  - `mode_1/` → `abl_permissive/{libavb_force_success.c,fastboot_lock_gates.c}`
+  - `oem/oneplus_canoe.c` → `oem/oplus/bypass_warning.c` (host-only — see below)
+  - `universal/universal.c` → `retired/block_efisp_recursion.c` (holdover; not
+    registered)
+- `SCOPE_UNIVERSAL` → `SCOPE_ABL_PERMISSIVE` in `PatchScope.h`.
+- `RunDynamicPatchOnSlotAbl` **stays** — applies the `abl_permissive` group
+  unconditionally when cached_abl is absent. Per §4, no OEM group attempted
+  on-device.
+- `DynamicPatchLib` **stays** in firmware link. The `oem/` subtree is
+  excluded from the firmware `DynamicPatchLib.inf` `[Sources]` (host tools
+  consume it separately via their own makefiles). `EnsureInitScoped` is no
+  longer `__HOST_BUILD__`-toggled — same code compiles for both targets,
+  but the firmware build only sees `abl_permissive/` patches.
 - Drop the post-patch `efisp` invariant scan in `PatchEngine.c` and the
   `efisp_scan.h` warning in `gbl-pack` (defense-in-depth preserved via the
   hook).
-- Host minimal changes: `gbl-pack --manifest <bits>` (no oem suffix);
-  `abl-patcher --no-libavb-bypass` alias and `--oem oplus` canonical
-  spelling (`--oem oneplus` accepted with deprecation note for one
-  release).
-- `efisp-package.py`: decouple `--oem` from `--mode`; emit single base EFI
-  + GBLP1 overlay with manifest.
+- **`abl-patcher` simplifications:** drops `--no-mode1` / `--no-libavb-bypass`
+  flags entirely (`abl_permissive` is now always applied to cached_abl on
+  every mode — see §4). Keeps `--oem <id>` for OEM patch group selection,
+  with `--oem oplus` canonical and `--oem oneplus` as a deprecation alias
+  for one release. Mode-0 install scripts stop passing any "skip patches"
+  flag.
+- `gbl-pack --manifest <bits>` (no oem suffix); emits the 16-byte manifest
+  entry.
+- `efisp-package.py`: decouple `--oem` from `--mode` (was mode-2-only);
+  emit single base EFI + GBLP1 overlay with manifest. Mode-0 install
+  continues to pack no cached_abl; the boot-time fallback delivers
+  `abl_permissive` (see §4).
 - `detect_oem` moved from `mode-2-install.sh` into `install-common.sh`.
 - Tests: new `tests/host/` case for the manifest parser
   (absence/present/unknown-bits/bad-schema); delete patch1 / efisp-
-  invariant tests (`062_efisp_scan_gate.sh` and any patch1 asserts).
+  invariant tests (`062_efisp_scan_gate.sh` and any patch1 asserts);
+  delete `abl-patcher --no-mode1` argv coverage in `083_abl_patcher_oem.sh`
+  (flag is gone — test reduces to `--oem` argv coverage only).
   `088_patch7_multi_abl.sh` rewires to the new path
   (`oem/oplus/bypass_warning.c`) but keeps its three-PE cross-build
   coverage.
@@ -240,7 +291,6 @@ Out of scope (deferred to PR2 or beyond):
   `crates/patch-engine`. The C files in PR1 keep their numbered patch
   name strings inside `kPatches[]` entries; only the file names and group
   directories change.
-- The `--no-mode1` polarity flip to opt-in.
 - Adding new OEM groups beyond `oplus`.
 
 Acceptance:
@@ -261,18 +311,21 @@ Scope is exactly the rust-consolidation design. Inheriting from PR1:
 - Manifest support in `crates/gblp1` from day one (entry type 0x0020,
   16-byte payload, same validation rules). 1:1 port of PR1's C parser.
 - `crates/patch-engine` ships with the renamed structure
-  (`fakelock_patches/`, `oem/oplus/`, `universal/`), file-per-patch.
+  (`abl_permissive/`, `oem/oplus/`, `retired/`), file-per-patch.
   Per-patch renames from numbered to descriptive names happen here
   inside the crate (e.g., the `kPatches[]` entries become `Patch`
   structs with names like `libavb_force_success`, `fastboot_lock_gates`,
   `bypass_warning`).
-- **`crates/patch-engine` is host-only.** `crate-type = ["rlib"]` only;
-  no `staticlib`, no `aarch64-unknown-uefi` target build. Reflects PR1's
-  removal of `DynamicPatchLib` from firmware link. One fewer crate in
-  the firmware staticlib set.
+- **`crates/patch-engine` builds for both `aarch64-unknown-uefi` and host
+  targets** (`crate-type = ["rlib", "staticlib"]`). The firmware staticlib
+  excludes the `oem/*` modules via `#[cfg(feature = "host")]` so the EFI
+  never compiles in OEM patches it can't safely apply (see §4 reasoning).
+  The `retired/` module is feature-gated `host` too — documentation only,
+  not in any patch table on either target.
 - `tools/gbl pack --manifest <bits>` (no oem suffix — matches PR1).
 - `tools/gbl inspect` pretty-prints the manifest's two bits.
-- `tools/gbl patch` carries `--no-libavb-bypass` alias from PR1.
+- `tools/gbl patch` drops `--no-mode1` / `--no-libavb-bypass` (matches
+  PR1 — `abl_permissive` always applied; only `--oem` remains).
 - `tools/gbl avb`, `mode2`, `unwrap`, `commit` as in the rust spec.
 
 Goldens captured after PR1 reaches feature-completeness on its branch
@@ -292,11 +345,14 @@ Items that must match across the two PRs:
    in `gbl inspect` output and Rust crate APIs.
 3. **Single-EFI assumption.** PR1 collapses 3→1; PR2's `scripts/build.sh`
    orchestrates one EDK2 build pass.
-4. **`DynamicPatchLib` is host-only.** PR1 removes its firmware `.inf`
-   builds; PR2's `crates/patch-engine` ships with no `aarch64-unknown-uefi`
-   target.
-5. **No on-device binary patching.** PR1 removes `RunDynamicPatchOnSlotAbl`;
-   PR2 carries no equivalent path.
+4. **`DynamicPatchLib` is split: `abl_permissive` builds for firmware +
+   host; `oem/*` is host-only.** PR1's `DynamicPatchLib.inf` `[Sources]`
+   excludes `oem/`; PR2's `crates/patch-engine` `#[cfg]`-gates `oem/*` for
+   `feature = "host"` only. Both PRs respect this split identically.
+5. **On-device binary patching applies `abl_permissive` only.** PR1's
+   `RunDynamicPatchOnSlotAbl` is restricted to the `SCOPE_ABL_PERMISSIVE`
+   group; PR2 mirrors that restriction in the firmware-target build of
+   `crates/patch-engine` (oem modules excluded by cfg).
 6. **Patch-group + file naming** locked in per §2. PR2 reproduces this
    structure inside `crates/patch-engine/src/`.
 
@@ -336,8 +392,7 @@ during plan execution if they start costing real time.
 Each original spec's "Out of scope" / "Deferred follow-ups" / "Open
 questions" lists are unchanged; this doc adds none. In particular:
 
-- `--no-mode1` polarity flip (deferred per engine-rework spec).
-- Adding non-OnePlus OEM groups beyond `oplus`.
+- Adding non-Oplus OEM groups (Xiaomi, Samsung, etc.).
 - `busybox-arm64` replacement (per rust spec).
 - Performance work on the Rust port (per rust spec).
 - Adding new mutations or behaviours beyond what the C code already
