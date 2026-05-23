@@ -77,12 +77,17 @@ ENV PATH=/opt/zig:$PATH
 RUN ln -sf "$(ls /usr/lib/llvm-*/bin/llvm-lipo | head -1)" /usr/local/bin/llvm-lipo
 
 # --- Rust toolchain ---
-# Stable Rust + six cross targets for the workspace at the repo root
+# Stable Rust + seven cross targets for the workspace at the repo root
 # (crates/* core libraries + tools/gbl multicall binary). Installed
 # system-wide under /opt/{rustup,cargo} so `--user` runtime invocations
-# still find cargo. The aarch64-unknown-uefi target produces the
-# staticlibs the EDK2 firmware links; the five host cross targets cover
-# the same release matrix as build-cross-tools.sh.
+# still find cargo. The aarch64-unknown-none target produces the ELF
+# staticlibs the EDK2 firmware GCC link path consumes (cargo's
+# aarch64-unknown-uefi target emits COFF/PE objects, which EDK2's GNU
+# ld backend cannot read — see GblChainloadPkg.dsc DLINK2_FLAGS for
+# the link-site detail). aarch64-unknown-uefi remains pre-installed
+# for Rust EFI applications and unit tests that link the host stack.
+# The five host cross targets cover the same release matrix as
+# build-cross-tools.sh.
 ARG RUST_VER=1.78.0
 ENV RUSTUP_HOME=/opt/rustup CARGO_HOME=/opt/cargo
 ENV PATH=/opt/cargo/bin:$PATH
@@ -91,6 +96,7 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
             -c clippy -c rustfmt \
  && /opt/cargo/bin/rustup target add \
         aarch64-unknown-uefi \
+        aarch64-unknown-none \
         aarch64-linux-android \
         x86_64-pc-windows-gnu \
         x86_64-apple-darwin \

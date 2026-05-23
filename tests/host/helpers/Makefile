@@ -1,12 +1,15 @@
 # tests/host/helpers/Makefile
 #
-# PR2 Task 3: test_pe_sanity + test_efisp_scan link the Rust pe-utils
-# staticlib (target/release/libpe_utils.a) instead of the deleted C
-# sources (PeSanity.c, efisp_scan.h).
+# PR2 Task 3: test_pe_sanity + test_efisp_scan link libpe_utils.a
+# (crates/pe-utils, Rust).
+# PR2 Task 4: test_crc32 + test_sha256 + test_manifest_parse +
+# parser_harness link libgblp1.a (crates/gblp1, Rust), replacing the
+# deleted Crc32.c / Sha256.c / PayloadParse.c.
 CC ?= gcc
 CFLAGS ?= -Wall -Wextra -Werror -O2 -std=c99
 PROJ := $(realpath ../../..)
 PE_UTILS_LIB := $(PROJ)/target/release/libpe_utils.a
+GBLP1_LIB    := $(PROJ)/target/release/libgblp1.a
 
 BINS = test_efisp_scan
 BINS += test_crc32
@@ -18,49 +21,38 @@ BINS += test_manifest_parse
 # staticlib rule when running bare `make`.
 all: $(BINS)
 
-.PHONY: all $(PE_UTILS_LIB)
+.PHONY: all $(PE_UTILS_LIB) $(GBLP1_LIB)
 
 $(PE_UTILS_LIB):
 	cd $(PROJ) && cargo build --release -p pe-utils
 
+$(GBLP1_LIB):
+	cd $(PROJ) && cargo build --release -p gblp1
+
 test_efisp_scan: test_efisp_scan.c $(PE_UTILS_LIB)
 	$(CC) $(CFLAGS) -o $@ test_efisp_scan.c $(PE_UTILS_LIB)
 
-test_crc32: test_crc32.c ../../../GblChainloadPkg/Library/GblPayloadLib/Crc32.c \
-            ../../../GblChainloadPkg/Library/GblPayloadLib/Internal/Crc32.h
-	$(CC) $(CFLAGS) -DGBL_HOST_BUILD=1 -o $@ test_crc32.c \
-	      ../../../GblChainloadPkg/Library/GblPayloadLib/Crc32.c
+test_crc32: test_crc32.c $(GBLP1_LIB)
+	$(CC) $(CFLAGS) -DGBL_HOST_BUILD=1 -o $@ test_crc32.c $(GBLP1_LIB)
 
-test_sha256: test_sha256.c ../../../GblChainloadPkg/Library/GblPayloadLib/Sha256.c \
-             ../../../GblChainloadPkg/Library/GblPayloadLib/Internal/Sha256.h
-	$(CC) $(CFLAGS) -DGBL_HOST_BUILD=1 -o $@ test_sha256.c \
-	      ../../../GblChainloadPkg/Library/GblPayloadLib/Sha256.c
+test_sha256: test_sha256.c $(GBLP1_LIB)
+	$(CC) $(CFLAGS) -DGBL_HOST_BUILD=1 -o $@ test_sha256.c $(GBLP1_LIB)
 
 test_pe_sanity: test_pe_sanity.c $(PE_UTILS_LIB)
 	$(CC) $(CFLAGS) -o $@ test_pe_sanity.c $(PE_UTILS_LIB)
 
 test_manifest_parse: test_manifest_parse.c \
-                     ../../../GblChainloadPkg/Library/GblPayloadLib/PayloadParse.c \
-                     ../../../GblChainloadPkg/Library/GblPayloadLib/Crc32.c \
-                     ../../../GblChainloadPkg/Library/GblPayloadLib/Sha256.c \
-                     ../../../GblChainloadPkg/Library/GblPayloadLib/Internal/PayloadParse.h \
-                     ../../../tools/shared/gblp1.h
-	$(CC) $(CFLAGS) -DGBL_HOST_BUILD=1 -o $@ test_manifest_parse.c \
-	      ../../../GblChainloadPkg/Library/GblPayloadLib/PayloadParse.c \
-	      ../../../GblChainloadPkg/Library/GblPayloadLib/Crc32.c \
-	      ../../../GblChainloadPkg/Library/GblPayloadLib/Sha256.c
+                     ../../../crates/gblp1/include/gblp1_ffi.h \
+                     ../../../tools/shared/gblp1.h \
+                     $(GBLP1_LIB)
+	$(CC) $(CFLAGS) -DGBL_HOST_BUILD=1 -o $@ test_manifest_parse.c $(GBLP1_LIB)
 
 BINS += parser_harness
 
-PARSER_SRCS = \
-  ../../../GblChainloadPkg/Library/GblPayloadLib/PayloadParse.c \
-  ../../../GblChainloadPkg/Library/GblPayloadLib/Crc32.c \
-  ../../../GblChainloadPkg/Library/GblPayloadLib/Sha256.c
-
-parser_harness: parser_harness.c $(PARSER_SRCS)
+parser_harness: parser_harness.c $(GBLP1_LIB)
 	$(CC) $(CFLAGS) -DGBL_HOST_BUILD=1 \
 	      -I../../../tools/shared \
-	      -o $@ parser_harness.c $(PARSER_SRCS)
+	      -o $@ parser_harness.c $(GBLP1_LIB)
 
 BINS += poison_byte
 

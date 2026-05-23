@@ -4,7 +4,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "../../../GblChainloadPkg/Library/GblPayloadLib/Internal/PayloadParse.h"
+/* PR2 Task 4: GBLP1 parser now ships in libgblp1.a (crates/gblp1). */
+#include "../../../crates/gblp1/include/gblp1_ffi.h"
 
 static int load_file(const char *path, uint8_t **out_buf, size_t *out_n) {
     FILE *f = fopen(path, "rb");

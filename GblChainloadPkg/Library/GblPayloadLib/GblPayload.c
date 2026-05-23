@@ -8,7 +8,7 @@
 #include <Library/DebugLib.h>
 #include <Library/GblLog.h>
 #include <Library/GblPayloadLib.h>
-#include "Internal/PayloadParse.h"
+#include "../../../crates/gblp1/include/gblp1_ffi.h"
 #include "Internal/Mode2Profile.h"
 #include "../../../tools/shared/gblp1.h"
 

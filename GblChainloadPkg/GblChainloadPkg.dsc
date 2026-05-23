@@ -152,6 +152,28 @@
 [BuildOptions.common]
   GCC:*_*_*_ARCHCC_FLAGS  = -Wno-shift-negative-value -fstack-protector-all -Wno-varargs -fno-common -Wno-misleading-indentation -Wno-unknown-warning-option
   GCC:*_*_*_DLINK_FLAGS = -Wl,-Ttext=0x0
+  # PR2 Task 4: link crates/gblp1's aarch64-unknown-uefi staticlib (built
+  # ahead of the EDK2 build by scripts/build-inside-docker.sh). This
+  # supplies gbl_payload_*, gbl_sha256*, and gbl_crc32 — the parser +
+  # hash + CRC API formerly hosted in GblPayloadLib's deleted C sources.
+  #
+  # DLINK2_FLAGS appears AFTER the --start-group/--end-group block in
+  # the GccBase link rule. We need the staticlib placed after that
+  # block so the linker has already collected the GBL_PAYLOAD_*
+  # references from GblPayload.c when it scans libgblp1.a. Putting
+  # this in DLINK_FLAGS (prepended) leaves the references unresolved
+  # because GblPayload.c hasn't been linked yet at that point.
+  #
+  # The target triple is `aarch64-unknown-none` (bare-metal ELF) — not
+  # `aarch64-unknown-uefi` — because EDK2's GCC build path links via
+  # aarch64-linux-gnu-ld (GNU ld), which only reads ELF. The UEFI
+  # target emits COFF/PE objects, which ld rejects with "file format
+  # not recognized". The crate's `#[panic_handler]` is gated on
+  # `target_os = "uefi"`, which `unknown-none` is NOT — but EDK2's
+  # build options include `-fno-builtin -fno-unwind-tables`, panics
+  # never get linked, and the unwind tables stay out of the final
+  # image anyway.
+  GCC:*_*_AARCH64_DLINK2_FLAGS = $(WORKSPACE)/target/aarch64-unknown-none/release/libgblp1.a
   GCC:*_*_*_CC_FLAGS = -DZ_SOLO
   GCC:*_*_*_CC_FLAGS = -DPRODUCT_NAME=\"$(BOARD_BOOTLOADER_PRODUCT_NAME)\"
   GCC:*_*_*_CC_FLAGS = -DGBL_CHAINLOAD_VERSION=\"$(GBL_CHAINLOAD_VERSION)\"

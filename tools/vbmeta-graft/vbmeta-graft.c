@@ -29,7 +29,10 @@
 # include <linux/fs.h>   /* BLKGETSIZE64 */
 #endif
 
-#include "Sha256.h"
+/* PR2 Task 4: streaming gbl_sha256_ctx + single-shot gbl_sha256 moved
+ * into crates/gblp1 (Rust). The opaque ctx blob in the new public C
+ * header is sized to fit the sha2 backend with safe headroom. */
+#include "../../crates/gblp1/include/gblp1_ffi.h"
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-function"

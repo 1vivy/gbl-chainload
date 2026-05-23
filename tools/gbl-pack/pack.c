@@ -9,8 +9,10 @@
 #include "pack.h"
 #include "../shared/gblp1.h"
 #include "../shared/gbl_mode2_profile.h"
-#include "../../GblChainloadPkg/Library/GblPayloadLib/Internal/Sha256.h"
-#include "../../GblChainloadPkg/Library/GblPayloadLib/Internal/Crc32.h"
+/* PR2 Task 4: gbl_sha256 + gbl_crc32 now ship in libgblp1.a (Rust crate
+ * `gblp1`). Internal/Sha256.h + Internal/Crc32.h are gone; include the
+ * single public C ABI header instead. */
+#include "../../crates/gblp1/include/gblp1_ffi.h"
 
 /* PR2 Task 3: `gbl_pe_sanity` now lives in `crates/pe-utils` (Rust). The
    numeric values of the status enum match the old C `gbl_pe_status`

@@ -20,8 +20,10 @@
 #include <string.h>
 #include <stdint.h>
 #include "../shared/gblp1.h"
-#include "Internal/Sha256.h"
-#include "Internal/Crc32.h"
+/* PR2 Task 4: gbl_sha256 + gbl_crc32 moved into crates/gblp1 (Rust).
+ * The single public C header replaces both Internal/Sha256.h and
+ * Internal/Crc32.h. */
+#include "../../crates/gblp1/include/gblp1_ffi.h"
 
 static int slurp(const char *path, uint8_t **out, size_t *out_size) {
     FILE *f = fopen(path, "rb");

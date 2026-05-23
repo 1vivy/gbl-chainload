@@ -69,6 +69,20 @@ set -u
 
 export GCC5_AARCH64_PREFIX=/usr/bin/aarch64-linux-gnu-
 
+# PR2 Task 4: GblPayloadLib's parser / SHA-256 / CRC-32 now live in the
+# crates/gblp1 Rust staticlib. EDK2's GCC link path (via aarch64-linux-
+# gnu-ld) wants ELF objects, so we target `aarch64-unknown-none`
+# (bare-metal ELF) — not `aarch64-unknown-uefi`, which emits COFF/PE
+# and fails with "file format not recognized" at link time. The crate
+# is fully no_std under target_os = "uefi" (which `unknown-none` is
+# not), so we also need the host-style cfg to NOT activate the panic
+# handler — but the panic handler is target_os = "uefi"-gated, which
+# is exactly what `unknown-none` is NOT, so the crate compiles
+# cleanly. The `--no-default-features` flag disables the
+# `alloc`-gated `pack()` function (firmware never packs).
+echo ">>> cargo build: crates/gblp1 (aarch64-unknown-none ELF staticlib)"
+cargo build --release --target aarch64-unknown-none -p gblp1 --no-default-features
+
 echo ">>> build: $TOOLCHAIN_TAG / $ARCH / $BUILD_TARGET / name=$GBL_BUILD_NAME auto=$GBL_AUTO debug=$GBL_DEBUG verbose=$GBL_VERBOSE"
 build \
   -p GblChainloadPkg/GblChainloadPkg.dsc \

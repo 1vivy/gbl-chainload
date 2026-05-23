@@ -9,7 +9,9 @@
 #include <errno.h>
 #include "vendor/tomlc99/toml.h"
 #include "../shared/gbl_mode2_profile.h"
-#include "Internal/Sha256.h"
+/* PR2 Task 4: gbl_sha256 moved into crates/gblp1 (Rust). Public C ABI
+ * header replaces the deleted Internal/Sha256.h. */
+#include "../../crates/gblp1/include/gblp1_ffi.h"
 /* AvbBigEndian.h must come before AvbParseLib.h — it defines UEFI type shims
    (UINT8/UINT32/UINT64/EFI_STATUS etc.) for __HOST_BUILD__. */
 #include "AvbBigEndian.h"

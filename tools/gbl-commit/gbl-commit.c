@@ -16,7 +16,9 @@
 static inline int fsync(int fd) { return _commit(fd); }
 static inline void sync(void) {}
 #endif
-#include "../../GblChainloadPkg/Library/GblPayloadLib/Internal/Sha256.h"
+/* PR2 Task 4: gbl_sha256 moved into crates/gblp1 (Rust). Public C ABI
+ * header replaces the deleted Internal/Sha256.h. */
+#include "../../crates/gblp1/include/gblp1_ffi.h"
 
 static int read_file(const char *p, uint8_t **out, size_t *out_size) {
     int fd = open(p, O_RDONLY);
