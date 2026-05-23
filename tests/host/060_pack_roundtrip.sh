@@ -14,22 +14,23 @@ export SOURCE_DATE_EPOCH
 PE=tests/images/pe/infiniti-EU-16.0.5.703.efi
 [ -f "$PE" ] || { echo "SKIP: $PE missing — run scripts/extract-pe-from-fv.sh first" >&2; exit 0; }
 
-make -s -C tools/abl-patcher
-make -s -C tools/gbl-pack
+# PR2 Task 8: the 7 host C tools became `gbl <sub>` subcommands of a
+# single Rust multicall binary. Build it once and prepend to PATH.
+cargo build --release --quiet -p gbl
+PATH="$PWD/target/release:$PATH"; export PATH
 make -s -C tests/host/helpers parser_harness
 
 OUT=tests/host/.last/060
 mkdir -p "$OUT"
 
-# Pre-patch the fixture so it passes gbl-pack's efisp-scan gate.
-# abl-patcher uses --in and --out flags.
-tools/abl-patcher/abl-patcher --in "$PE" --out "$OUT/patched.efi" >"$OUT/patcher.log" 2>&1 \
-  || { echo "FAIL: abl-patcher failed"; cat "$OUT/patcher.log"; exit 1; }
+# Pre-patch the fixture so it passes gbl pack's efisp-scan gate.
+gbl patch --in "$PE" --out "$OUT/patched.efi" >"$OUT/patcher.log" 2>&1 \
+  || { echo "FAIL: gbl patch failed"; cat "$OUT/patcher.log"; exit 1; }
 
-tools/gbl-pack/gbl-pack \
+gbl pack \
   --cached-abl "$OUT/patched.efi" --source "$PE" --extracted "$PE" \
   --out "$OUT/payload.bin" 2>"$OUT/pack.log" \
-  || { echo "FAIL: gbl-pack failed"; cat "$OUT/pack.log"; exit 1; }
+  || { echo "FAIL: gbl pack failed"; cat "$OUT/pack.log"; exit 1; }
 
 # Parse via parser_harness — header validation
 tests/host/helpers/parser_harness parse-header "$OUT/payload.bin" >"$OUT/parse-header.log"

@@ -19,7 +19,7 @@
 
 /* Read up to 16 MiB starting at the partition's first LBA.  The header
    parser walks PE end -> GBLP1 magic; we don't need more than that.
-   Matches GBLP1_TOTAL_SIZE_CAP in tools/shared/gblp1.h. */
+   Matches GBLP1_TOTAL_SIZE_CAP in crates/gblp1/include/gblp1_ffi.h. */
 #define EFISP_READ_CAP  (16u * 1024u * 1024u)
 
 /**

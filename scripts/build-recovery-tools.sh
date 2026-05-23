@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-# scripts/build-recovery-tools.sh — build all aarch64-Android recovery
-# tools inside the docker build image. Outputs to dist/recovery/.
+# scripts/build-recovery-tools.sh — build the aarch64-Android recovery
+# binary inside the docker build image. Outputs dist/recovery/gbl.
+#
+# PR2 Task 8: the 7 host C tools collapsed into the `gbl` multicall
+# binary, so this script now builds one Rust target.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -12,12 +15,9 @@ mkdir -p dist/recovery
 
 docker run --rm -v "$PWD:/work" -w /work gbl-chainload-build:latest bash -c '
   set -e
-  for t in fv-unwrap abl-patcher gbl-pack gbl-commit vbmeta-graft mode2-profile gblp1-inspect; do
-    make -C tools/$t clean
-    make -C tools/$t android
-    install -Dm755 tools/$t/$t-android dist/recovery/$t
-  done
-  cd dist/recovery && sha256sum * > SHA256SUMS
+  cargo build --release --locked --target aarch64-linux-android -p gbl
+  install -Dm755 target/aarch64-linux-android/release/gbl dist/recovery/gbl
+  cd dist/recovery && sha256sum gbl > SHA256SUMS
 '
 
 ls -la dist/recovery/

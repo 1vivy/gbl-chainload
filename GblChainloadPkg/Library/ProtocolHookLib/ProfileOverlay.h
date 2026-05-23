@@ -8,7 +8,7 @@
 
 #include <Uefi.h>
 
-#include "../../../tools/shared/gbl_mode2_profile.h"
+#include "../../../crates/mode2-profile-core/include/mode2_profile_ffi.h"
 
 /* Store a validated profile. Copies *Profile into module state and
    sets the internal gMode2HasProfile flag. Called once by BootFlow. */

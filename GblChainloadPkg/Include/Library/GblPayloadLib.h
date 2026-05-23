@@ -12,7 +12,7 @@ GblPayload_LoadCachedAbl (IN  EFI_HANDLE  ImageHandle,
 VOID EFIAPI
 GblPayload_LogProvenance (IN EFI_HANDLE  ImageHandle);
 
-#include "../../../tools/shared/gbl_mode2_profile.h"
+#include "../../../crates/mode2-profile-core/include/mode2_profile_ffi.h"
 
 /* Locate the GBLP1 overlay, find the mode2_profile (0x0010) entry, and
    parse it. Returns:

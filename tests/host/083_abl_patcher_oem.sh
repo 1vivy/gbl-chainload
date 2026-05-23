@@ -18,14 +18,15 @@ cd "$(dirname "$0")/../.."
 PE=tests/images/pe/infiniti-EU-16.0.5.703.efi
 [ -f "$PE" ] || { echo "SKIP: $PE missing — run scripts/extract-pe-from-fv.sh first" >&2; exit 0; }
 
-make -s -C tools/abl-patcher
-PATCHER=tools/abl-patcher/abl-patcher
+cargo build --release --quiet -p gbl
+PATH="$PWD/target/release:$PATH"; export PATH
+PATCHER=(gbl patch)
 
 OUT=tests/host/.last/083
 mkdir -p "$OUT"
 
 # ---- Case 1: --oem oplus (canonical) -----------------------------------------
-"$PATCHER" --in "$PE" --oem oplus --out "$OUT/oplus.efi" >"$OUT/oplus.log" 2>&1 \
+"${PATCHER[@]}" --in "$PE" --oem oplus --out "$OUT/oplus.efi" >"$OUT/oplus.log" 2>&1 \
     || { echo "FAIL: abl-patcher --oem oplus returned non-zero"; cat "$OUT/oplus.log"; exit 1; }
 if ! grep -qE 'patch7-orange-screen .* -> OK' "$OUT/oplus.log"; then
     echo "FAIL: oem patch7 not applied (-> OK) under --oem oplus"
@@ -45,7 +46,7 @@ fi
 echo "  ok: --oem oplus applies patch7 + abl_permissive patches"
 
 # ---- Case 2: --oem oneplus (deprecation alias) -------------------------------
-"$PATCHER" --in "$PE" --oem oneplus --out "$OUT/oneplus.efi" >"$OUT/oneplus.log" 2>&1 \
+"${PATCHER[@]}" --in "$PE" --oem oneplus --out "$OUT/oneplus.efi" >"$OUT/oneplus.log" 2>&1 \
     || { echo "FAIL: abl-patcher --oem oneplus returned non-zero"; cat "$OUT/oneplus.log"; exit 1; }
 if ! grep -qF 'abl-patcher: --oem oneplus is deprecated; use --oem oplus' "$OUT/oneplus.log"; then
     echo "FAIL: deprecation message missing under --oem oneplus"
@@ -60,7 +61,7 @@ fi
 echo "  ok: --oem oneplus prints deprecation msg, still maps to oplus"
 
 # ---- Case 3: plain invocation always applies abl_permissive ------------------
-"$PATCHER" --in "$PE" --out "$OUT/plain.efi" >"$OUT/plain.log" 2>&1 \
+"${PATCHER[@]}" --in "$PE" --out "$OUT/plain.efi" >"$OUT/plain.log" 2>&1 \
     || { echo "FAIL: plain abl-patcher returned non-zero"; cat "$OUT/plain.log"; exit 1; }
 if ! grep -qE 'patch10-libavb-force-avb-success .* -> OK' "$OUT/plain.log"; then
     echo "FAIL: abl_permissive patch10 absent from plain run"
@@ -82,7 +83,7 @@ echo "  ok: plain invocation always applies abl_permissive (no OEM scope)"
 
 # ---- Case 4: --oem bad rejected with exit code 2 -----------------------------
 set +e
-"$PATCHER" --in "$PE" --oem bad_oem_name --out "$OUT/bad.efi" >"$OUT/bad.log" 2>&1
+"${PATCHER[@]}" --in "$PE" --oem bad_oem_name --out "$OUT/bad.efi" >"$OUT/bad.log" 2>&1
 rc=$?
 set -e
 if [ "$rc" -eq 0 ]; then

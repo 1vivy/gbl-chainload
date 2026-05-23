@@ -9,10 +9,11 @@
  *   - gbl_mode2_profile_compile()  (TOML -> 120 bytes)
  *   - gbl_mode2_profile_derive()   (stock vbmeta -> wire profile)
  *
- * The 120-byte payload layout (`struct gbl_mode2_profile`) still lives
- * in tools/shared/gbl_mode2_profile.h until PR2 Task 8 collapses the
- * host tools into the `gbl` multicall binary. Include both headers
- * where you need both surfaces.
+ * Post-PR2-Task-8: this header is the SOLE C-side source of truth for
+ * the 120-byte mode-2 profile wire layout (constants + struct). The
+ * legacy `tools/shared/gbl_mode2_profile.h` is gone — the host C tool
+ * that consumed it was folded into `gbl mode2`, and the firmware
+ * (`ProtocolHookLib`) consumes the definitions from here too.
  *
  * Backed by crates/mode2-profile-core (Rust). Symbols are exported by
  * the libmode2_profile_core.a staticlib that cargo builds; each host
@@ -33,15 +34,54 @@
    typedef UINT32 uint32_t;
    typedef INT32  int32_t;
 # endif
+/* EDK2 toolchain leaves <stddef.h> off the include path, so size_t isn't
+ * provided by default. avb_sysdeps.h / QcBcc.h in QcomModulePkg also do
+ * `typedef UINTN size_t;` — match that exact typedef so the firmware
+ * translation units that pull both this header and an avb header don't
+ * see a redefinition. _SIZE_T is the libc convention; both UEFI and host
+ * libcs respect it. */
 # ifndef _SIZE_T
 #  define _SIZE_T
-   typedef __SIZE_TYPE__ size_t;
+   typedef UINTN size_t;
 # endif
 #endif
 
-/* The wire `struct gbl_mode2_profile` definition lives in the shared
- * header; pull it in so callers only need to include this one. */
-#include "../../../tools/shared/gbl_mode2_profile.h"
+/* ---- Wire constants (formerly tools/shared/gbl_mode2_profile.h) -------
+ *
+ * The 120-byte mode-2 profile payload rides in a GBLP1 0x0010 entry.
+ * All multi-byte scalars are little-endian; the struct below is
+ * `packed` so existing C consumers can memcpy it 1:1 with the on-disk
+ * bytes.
+ */
+#define GBL_M2P_MAGIC        "GM2P"
+#define GBL_M2P_MAGIC_SIZE   4u
+#define GBL_M2P_VERSION      0x0001u
+#define GBL_M2P_SIZE         120u
+
+/* color field values (KMBootState.Color domain) */
+#define GBL_M2P_COLOR_GREEN  0u
+#define GBL_M2P_COLOR_YELLOW 1u
+#define GBL_M2P_COLOR_ORANGE 2u
+#define GBL_M2P_COLOR_RED    3u
+
+/* On-disk profile — packed, little-endian. */
+struct gbl_mode2_profile {
+    uint8_t  magic[4];          /* "GM2P"                         off 0  */
+    uint16_t version;           /* 1                              off 4  */
+    uint16_t reserved;          /* 0                              off 6  */
+    uint32_t is_unlocked;       /* 0 (locked) — SET_BOOT_STATE    off 8  */
+    uint32_t color;             /* 0 = GREEN — SET_BOOT_STATE     off 12 */
+    uint32_t system_version;    /* bootloader-domain OS version   off 16 */
+    uint32_t system_spl;        /* bootloader-domain SPL          off 20 */
+    uint8_t  rot_digest[32];    /* SET_ROT RotDigest              off 24 */
+    uint8_t  pubkey_digest[32]; /* SET_BOOT_STATE PublicKey       off 56 */
+    uint8_t  vbh[32];           /* SET_VBH Vbh                    off 88 */
+} __attribute__((packed));
+
+#ifndef MODE2_PROFILE_FFI_NO_STATIC_ASSERTS
+_Static_assert(sizeof(struct gbl_mode2_profile) == GBL_M2P_SIZE,
+               "gbl_mode2_profile must be 120 bytes packed");
+#endif
 
 #ifdef __cplusplus
 extern "C" {

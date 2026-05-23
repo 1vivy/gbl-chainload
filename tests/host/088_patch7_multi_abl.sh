@@ -26,10 +26,10 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-make -s -C tools/fv-unwrap
-make -s -C tools/abl-patcher
-FV=tools/fv-unwrap/fv-unwrap
-PATCHER=tools/abl-patcher/abl-patcher
+cargo build --release --quiet -p gbl
+PATH="$PWD/target/release:$PATH"; export PATH
+FV=(gbl unwrap)
+PATCHER=(gbl patch)
 
 OUT=tests/host/.last/088
 mkdir -p "$OUT"
@@ -49,7 +49,7 @@ ran=0
 
 # unwrap <img> <out-pe>  — abort on failure.
 unwrap() {
-  "$FV" "$1" "$2" >"$OUT/$(basename "$1").unwrap.log" 2>&1 \
+  "${FV[@]}" "$1" "$2" >"$OUT/$(basename "$1").unwrap.log" 2>&1 \
       || { echo "FAIL: fv-unwrap $1"; cat "$OUT/$(basename "$1").unwrap.log"; exit 1; }
 }
 
@@ -62,7 +62,7 @@ for img in "${OPLUS_ABLS[@]}"; do
   unwrap "$img" "$pe"
 
   # 1. first application: patch7 (oem) + patch10 + patch6 must all -> OK
-  "$PATCHER" --in "$pe" --out "$p1" --oem oplus \
+  "${PATCHER[@]}" --in "$pe" --out "$p1" --oem oplus \
       >"$OUT/$name.p1.log" 2>&1 \
       || { echo "FAIL: $name abl-patcher (pass 1)"; cat "$OUT/$name.p1.log"; exit 1; }
   for need in 'patch7-orange-screen .* -> OK' \
@@ -78,7 +78,7 @@ for img in "${OPLUS_ABLS[@]}"; do
   #    abl-patcher process itself exits non-zero — that's expected here.  The
   #    invariant we're locking in is "patch7 sees its already-rewritten guard
   #    and reports OK again" (no double-mutation, no spurious MISS).
-  "$PATCHER" --in "$p1" --oem oplus \
+  "${PATCHER[@]}" --in "$p1" --oem oplus \
       >"$OUT/$name.p2.log" 2>&1 \
       || true
   if ! grep -qE 'patch7-orange-screen .* -> OK' "$OUT/$name.p2.log"; then
@@ -94,7 +94,7 @@ for img in "${NONOPLUS_ABLS[@]}"; do
   name=$(basename "$img" .img)
   pe="$OUT/$name.pe.efi"
   unwrap "$img" "$pe"
-  "$PATCHER" --in "$pe" --out "$OUT/$name.p.efi" --oem oplus \
+  "${PATCHER[@]}" --in "$pe" --out "$OUT/$name.p.efi" --oem oplus \
       >"$OUT/$name.log" 2>&1 \
       || { echo "FAIL: $name abl-patcher returned non-zero"; cat "$OUT/$name.log"; exit 1; }
   # patch7 must MISS on non-oplus (no false positive on the oem anchor).

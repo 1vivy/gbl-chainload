@@ -14,16 +14,16 @@ export SOURCE_DATE_EPOCH
 PE=tests/images/pe/infiniti-EU-16.0.5.703.efi
 [ -f "$PE" ] || { echo "SKIP: $PE missing"; exit 0; }
 
-make -s -C tools/abl-patcher
-make -s -C tools/gbl-pack
+cargo build --release --quiet -p gbl
+PATH="$PWD/target/release:$PATH"; export PATH
 make -s -C tests/host/helpers parser_harness
 
 OUT=tests/host/.last/069
 mkdir -p "$OUT"
 
 # Pre-patch + pack a real GBLP1 payload.
-tools/abl-patcher/abl-patcher --in "$PE" --out "$OUT/patched.efi" 2>/dev/null
-tools/gbl-pack/gbl-pack --cached-abl "$OUT/patched.efi" --source "$PE" \
+gbl patch --in "$PE" --out "$OUT/patched.efi" 2>/dev/null
+gbl pack --cached-abl "$OUT/patched.efi" --source "$PE" \
   --extracted "$PE" --out "$OUT/payload.bin" 2>/dev/null
 
 # Build a stand-in "PE" prefix that DELIBERATELY contains the GBLP1 magic,

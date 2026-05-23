@@ -10,18 +10,18 @@ export SOURCE_DATE_EPOCH
 PE=tests/images/pe/infiniti-EU-16.0.5.703.efi
 [ -f "$PE" ] || { echo "SKIP: $PE missing"; exit 0; }
 
-make -s -C tools/abl-patcher
-make -s -C tools/gbl-pack
+cargo build --release --quiet -p gbl
+PATH="$PWD/target/release:$PATH"; export PATH
 make -s -C tests/host/helpers parser_harness poison_byte
 
 OUT=tests/host/.last/061
 mkdir -p "$OUT"
 
-# Pre-patch the fixture so gbl-pack accepts it.
-tools/abl-patcher/abl-patcher --in "$PE" --out "$OUT/patched.efi" 2>"$OUT/patcher.log"
+# Pre-patch the fixture so gbl pack accepts it.
+gbl patch --in "$PE" --out "$OUT/patched.efi" 2>"$OUT/patcher.log"
 
 # Pack a clean container.
-tools/gbl-pack/gbl-pack --cached-abl "$OUT/patched.efi" --source "$PE" --extracted "$PE" \
+gbl pack --cached-abl "$OUT/patched.efi" --source "$PE" --extracted "$PE" \
   --out "$OUT/clean.bin" 2>/dev/null
 
 # Each (offset, xor, expected_status_label) — values must match

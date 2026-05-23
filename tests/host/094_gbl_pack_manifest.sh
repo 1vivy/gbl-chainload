@@ -12,10 +12,11 @@ cd "$(dirname "$0")/../.."
 : "${SOURCE_DATE_EPOCH:=0}"
 export SOURCE_DATE_EPOCH
 
-make -s -C tools/gbl-pack
+cargo build --release --quiet -p gbl
+PATH="$PWD/target/release:$PATH"; export PATH
 make -s -C tests/host/helpers parser_harness
 
-GP=tools/gbl-pack/gbl-pack
+GP=(gbl pack)
 H=tests/host/helpers/parser_harness
 OUT=tests/host/.last/094
 mkdir -p "$OUT"
@@ -30,7 +31,7 @@ open(sys.argv[1], "wb").write(b)
 PY
 
 # --- AC1: --manifest 0x01 emits a manifest entry the parser sees. -------
-"$GP" --mode2-profile "$OUT/profile.bin" --manifest 0x01 \
+"${GP[@]}" --mode2-profile "$OUT/profile.bin" --manifest 0x01 \
       --out "$OUT/with-manifest.bin" 2>"$OUT/with.log" \
   || { echo "FAIL: gbl-pack --manifest 0x01 returned non-zero"; cat "$OUT/with.log"; exit 1; }
 
@@ -44,7 +45,7 @@ grep -q 'bits=0x0001' "$OUT/with-find.log" \
   || { echo "FAIL: manifest cap_bits != 0x0001"; cat "$OUT/with-find.log"; exit 1; }
 
 # Decimal form of --manifest is equally accepted (cap_bits=0x0002).
-"$GP" --mode2-profile "$OUT/profile.bin" --manifest 2 \
+"${GP[@]}" --mode2-profile "$OUT/profile.bin" --manifest 2 \
       --out "$OUT/dec-manifest.bin" 2>"$OUT/dec.log" \
   || { echo "FAIL: gbl-pack --manifest 2 (decimal) returned non-zero"; cat "$OUT/dec.log"; exit 1; }
 "$H" find-manifest "$OUT/dec-manifest.bin" >"$OUT/dec-find.log" 2>&1 \
@@ -53,7 +54,7 @@ grep -q 'bits=0x0002' "$OUT/dec-find.log" \
   || { echo "FAIL: manifest cap_bits != 0x0002 for decimal '2'"; cat "$OUT/dec-find.log"; exit 1; }
 
 # --- AC2: absence — no --manifest flag => present=0 (no entry). ---------
-"$GP" --mode2-profile "$OUT/profile.bin" \
+"${GP[@]}" --mode2-profile "$OUT/profile.bin" \
       --out "$OUT/no-manifest.bin" 2>"$OUT/no.log" \
   || { echo "FAIL: gbl-pack (no --manifest) returned non-zero"; cat "$OUT/no.log"; exit 1; }
 
@@ -66,7 +67,7 @@ grep -q 'present=0' "$OUT/no-find.log" \
 
 # --- AC3: reserved-bit rejection at packing time. ------------------------
 set +e
-"$GP" --mode2-profile "$OUT/profile.bin" --manifest 0x04 \
+"${GP[@]}" --mode2-profile "$OUT/profile.bin" --manifest 0x04 \
       --out "$OUT/bad.bin" 2>"$OUT/bad.log"
 rc=$?
 set -e

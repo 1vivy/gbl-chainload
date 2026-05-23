@@ -8,9 +8,10 @@ cd "$(dirname "$0")/../.."
 : "${SOURCE_DATE_EPOCH:=0}"
 export SOURCE_DATE_EPOCH
 
-make -s -C tools/gbl-pack
+cargo build --release --quiet -p gbl
+PATH="$PWD/target/release:$PATH"; export PATH
 make -s -C tests/host/helpers parser_harness
-GP=tools/gbl-pack/gbl-pack
+GP=(gbl pack)
 H=tests/host/helpers/parser_harness
 OUT=tests/host/.last/081
 mkdir -p "$OUT"
@@ -25,14 +26,14 @@ open(sys.argv[1], "wb").write(b)
 PY
 
 # Profile-only container.
-"$GP" --mode2-profile "$OUT/profile.bin" --out "$OUT/overlay.bin" 2>"$OUT/pack.log" \
+"${GP[@]}" --mode2-profile "$OUT/profile.bin" --out "$OUT/overlay.bin" 2>"$OUT/pack.log" \
   || { echo "FAIL: gbl-pack --mode2-profile failed"; cat "$OUT/pack.log"; exit 1; }
 "$H" find-mode2-profile "$OUT/overlay.bin" | grep -q 'status=0' \
   || { echo "FAIL: 0x0010 entry not locatable in profile-only container"; exit 1; }
 
 # Wrong-size profile -> rejected.
 head -c 119 "$OUT/profile.bin" > "$OUT/short.bin"
-"$GP" --mode2-profile "$OUT/short.bin" --out "$OUT/bad.bin" >/dev/null 2>&1 \
+"${GP[@]}" --mode2-profile "$OUT/short.bin" --out "$OUT/bad.bin" >/dev/null 2>&1 \
   && { echo "FAIL: gbl-pack accepted a 119-byte profile"; exit 1; } || true
 
 # Bad magic -> rejected.
@@ -41,11 +42,11 @@ import sys
 b = bytearray(open(sys.argv[2],"rb").read()); b[0]=ord('X')
 open(sys.argv[1],"wb").write(b)
 PY
-"$GP" --mode2-profile "$OUT/badmagic.bin" --out "$OUT/bad.bin" >/dev/null 2>&1 \
+"${GP[@]}" --mode2-profile "$OUT/badmagic.bin" --out "$OUT/bad.bin" >/dev/null 2>&1 \
   && { echo "FAIL: gbl-pack accepted a bad-magic profile"; exit 1; } || true
 
 # Neither input -> usage error.
-"$GP" --out "$OUT/bad.bin" >/dev/null 2>&1 \
+"${GP[@]}" --out "$OUT/bad.bin" >/dev/null 2>&1 \
   && { echo "FAIL: gbl-pack accepted no inputs"; exit 1; } || true
 
 # Combined path: cached_abl + source_meta + mode2_profile (ec=3).
@@ -55,12 +56,11 @@ PE=tests/images/pe/infiniti-EU-16.0.5.703.efi
 if [ ! -f "$PE" ]; then
   echo "SKIP: $PE missing — combined ec=3 sub-case skipped (rest of 081 passed)"
 else
-  make -s -C tools/abl-patcher
-  tools/abl-patcher/abl-patcher --in "$PE" --out "$OUT/patched.efi" \
+  gbl patch --in "$PE" --out "$OUT/patched.efi" \
     >"$OUT/patcher.log" 2>&1 \
-    || { echo "FAIL: abl-patcher failed for ec=3 sub-case"; cat "$OUT/patcher.log"; exit 1; }
+    || { echo "FAIL: gbl patch failed for ec=3 sub-case"; cat "$OUT/patcher.log"; exit 1; }
 
-  "$GP" --cached-abl "$OUT/patched.efi" --source "$PE" --extracted "$OUT/patched.efi" \
+  "${GP[@]}" --cached-abl "$OUT/patched.efi" --source "$PE" --extracted "$OUT/patched.efi" \
     --mode2-profile "$OUT/profile.bin" --out "$OUT/combined.bin" \
     2>"$OUT/combined-pack.log" \
     || { echo "FAIL: gbl-pack ec=3 combined path failed"; cat "$OUT/combined-pack.log"; exit 1; }

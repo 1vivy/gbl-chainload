@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 """efisp-package.py — build a ready-to-flash EFISP payload off-device.
 
-Chains the host-side tools into a single `<base>.efi + GBLP1 overlay`
-image, the off-device equivalent of the install ZIP's build_payload:
+PR2 Task 8 consolidated the 7 host C tools into a single `gbl`
+multicall binary; this script now chains its subcommands:
 
-    fv-unwrap  <abl.img>             -> extracted.efi
-    abl-patcher (--oem, optional)    -> patched.efi
-    mode2-profile derive+compile     -> profile.bin     (mode 2 only)
-    gbl-pack    (overlay, --manifest 0x0N) -> payload.bin
-    cat <base>.efi payload.bin       -> <out>
+    gbl unwrap <abl.img> <extracted.efi>
+    gbl patch  --in <extracted.efi> --out <patched.efi> [--oem ID]
+    gbl mode2 derive <vbmeta> -o <toml>      (mode 2 only)
+    gbl mode2 compile <toml>  -o <profile.bin>
+    gbl pack   --cached-abl <patched.efi> --source <abl.img>
+               --extracted <extracted.efi> [--mode2-profile <bin>]
+               --manifest 0x0N --out <payload.bin>
+    cat <base>.efi payload.bin -> <out>
 
 Post-Task-13 the base EFI is the single `gbl-chainload.efi`; the script
 is name-agnostic — any path the user passes to `--efi` is accepted and
@@ -27,7 +30,7 @@ import tempfile
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-TOOLS = ("fv-unwrap", "abl-patcher", "gbl-pack", "mode2-profile")
+TOOLS = ("gbl",)
 
 
 def die(msg):
@@ -135,10 +138,7 @@ def main():
         die("--stock-vbmeta is only valid for --mode 2")
     # --oem is allowed for any mode; abl-patcher always applies abl_permissive.
 
-    fv     = _resolve_tool("fv-unwrap", args.bin_dir)
-    patch  = _resolve_tool("abl-patcher", args.bin_dir)
-    pack   = _resolve_tool("gbl-pack", args.bin_dir)
-    m2p    = _resolve_tool("mode2-profile", args.bin_dir) if args.mode == "2" else None
+    gbl_bin = _resolve_tool("gbl", args.bin_dir)
 
     out = args.out or os.path.join(
         "dist", "efisp-payload",
@@ -152,22 +152,24 @@ def main():
         payload   = os.path.join(tmp, "payload.bin")
 
         # 1. unwrap the ABL PE out of the partition image
-        run([fv, args.abl, extracted], "fv-unwrap")
+        run([gbl_bin, "unwrap", args.abl, extracted], "gbl unwrap")
 
-        # 2. patch — abl-patcher always applies abl_permissive; --oem is
-        # passed through for any mode (decoupled from --mode post-Task-13).
-        patch_argv = [patch, "--in", extracted, "--out", patched]
+        # 2. patch — abl_permissive is always applied; --oem is passed
+        # through for any mode (decoupled from --mode post-Task-13).
+        patch_argv = [gbl_bin, "patch", "--in", extracted, "--out", patched]
         if args.oem:
             patch_argv += ["--oem", args.oem]
-        run(patch_argv, "abl-patcher")
+        run(patch_argv, "gbl patch")
 
-        # 3. mode 2: derive + compile the mode2 profile
+        # 3. mode 2: derive + compile the mode2 profile via `gbl mode2`.
         pack_extra = []
         if args.mode == "2":
             toml = os.path.join(tmp, "profile.toml")
             pbin = os.path.join(tmp, "profile.bin")
-            run([m2p, "derive", args.stock_vbmeta, "-o", toml], "mode2-profile derive")
-            run([m2p, "compile", toml, "-o", pbin], "mode2-profile compile")
+            run([gbl_bin, "mode2", "derive", args.stock_vbmeta, "-o", toml],
+                "gbl mode2 derive")
+            run([gbl_bin, "mode2", "compile", toml, "-o", pbin],
+                "gbl mode2 compile")
             pack_extra = ["--mode2-profile", pbin]
 
         # 4. pack the GBLP1 overlay — manifest bits derived from --mode.
@@ -175,11 +177,12 @@ def main():
         #   mode 1 → 0x01 WANT_FAKELOCK_HOOK
         #   mode 2 → 0x02 WANT_PROFILE_SPOOF
         manifest_bits = {"0": "0x00", "1": "0x01", "2": "0x02"}[args.mode]
-        run([pack, "--cached-abl", patched, "--source", args.abl,
+        run([gbl_bin, "pack",
+             "--cached-abl", patched, "--source", args.abl,
              "--extracted", extracted, *pack_extra,
              "--manifest", manifest_bits,
              "--out", payload],
-            "gbl-pack")
+            "gbl pack")
 
         # 5. concatenate base EFI + overlay -> the output payload
         os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)

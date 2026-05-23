@@ -3,7 +3,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-make -s -C tools/vbmeta-graft
+cargo build --release --quiet -p gbl
 
 OUT=tests/host/.last/091
 rm -rf "$OUT"; mkdir -p "$OUT"
@@ -11,11 +11,13 @@ rm -rf "$OUT"; mkdir -p "$OUT"
 FX=tests/images/grafted-recovery.img
 [ -f "$FX" ] || { echo "SKIP: $FX absent"; exit 0; }
 
-VG=tools/vbmeta-graft/vbmeta-graft
+# PR2 Task 8: scripts/vbmeta-graft.py now resolves `gbl` (former
+# `vbmeta-graft`) via --bin-dir / --tools-dir, then dispatches the
+# `avb graft` / `avb check` subcommands.
 WRAP=scripts/vbmeta-graft.py
 TMPTOOLS="$OUT/tools"
 mkdir -p "$TMPTOOLS"
-cp "$VG" "$TMPTOOLS/"
+cp "$PWD/target/release/gbl" "$TMPTOOLS/"
 
 PSZ=$(stat -c%s "$FX")
 SMALL="$OUT/custom-small.img"
@@ -27,7 +29,7 @@ head -c 200000 /dev/urandom > "$SMALL"
   || { echo "FAIL: default-size graft exited nonzero"; cat "$OUT/default.log"; exit 1; }
 [ "$(stat -c%s "$OUT/default.img")" = "$PSZ" ] \
   || { echo "FAIL: default-size output not fixture-sized"; exit 1; }
-"$TMPTOOLS/vbmeta-graft" list "$OUT/default.img" > "$OUT/default-list.txt" 2>&1 \
+"$TMPTOOLS/gbl" avb list "$OUT/default.img" > "$OUT/default-list.txt" 2>&1 \
   || { echo "FAIL: default-size output does not parse"; cat "$OUT/default-list.txt"; exit 1; }
 
 # 2) Bare custom small image: --size-from should drive part-size.
@@ -36,7 +38,7 @@ head -c 200000 /dev/urandom > "$SMALL"
   || { echo "FAIL: size-from graft exited nonzero"; cat "$OUT/size-from.log"; exit 1; }
 [ "$(stat -c%s "$OUT/size-from.img")" = "$PSZ" ] \
   || { echo "FAIL: size-from output not fixture-sized"; exit 1; }
-"$TMPTOOLS/vbmeta-graft" list "$OUT/size-from.img" > "$OUT/size-from-list.txt" 2>&1 \
+"$TMPTOOLS/gbl" avb list "$OUT/size-from.img" > "$OUT/size-from-list.txt" 2>&1 \
   || { echo "FAIL: size-from output does not parse"; cat "$OUT/size-from-list.txt"; exit 1; }
 cmp -n 200000 "$SMALL" "$OUT/size-from.img" \
   || { echo "FAIL: bare custom content not preserved at offset 0"; exit 1; }

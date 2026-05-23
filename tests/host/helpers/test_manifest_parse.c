@@ -9,7 +9,6 @@
  * (crates/gblp1). One header replaces the three deleted
  * Internal/PayloadParse.h, Internal/Sha256.h, Internal/Crc32.h. */
 #include "../../../crates/gblp1/include/gblp1_ffi.h"
-#include "../../../tools/shared/gblp1.h"
 
 static void wle16(uint8_t *p, uint16_t v) { p[0]=v; p[1]=v>>8; }
 static void wle32(uint8_t *p, uint32_t v) {

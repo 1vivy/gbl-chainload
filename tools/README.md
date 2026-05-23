@@ -1,5 +1,35 @@
 # gbl-chainload host-side tools
 
+> **PR2 Task 8 (May 2026):** the seven small C utilities described below
+> collapsed into a single Rust multicall binary at `tools/gbl/`. Each
+> former tool is now a subcommand of `gbl`:
+>
+> | Old binary       | New invocation       |
+> |------------------|----------------------|
+> | `abl-patcher`    | `gbl patch`          |
+> | `gbl-commit`     | `gbl commit`         |
+> | `gbl-pack`       | `gbl pack`           |
+> | `gblp1-inspect`  | `gbl inspect`        |
+> | `fv-unwrap`      | `gbl unwrap`         |
+> | `mode2-profile`  | `gbl mode2 {derive,compile,build}` |
+> | `vbmeta-graft`   | `gbl avb {list,check,graft,list-hash}` |
+>
+> Argv shape, exit codes, and byte-for-byte outputs are preserved (golden
+> tests under `tests/host/goldens/` pass against the new binary). The
+> `--no-mode1` patch flag is gone (PR1 Task 12); `--oem oneplus` still
+> works as a deprecation alias for `--oem oplus`. Build with
+> `cargo build --release -p gbl`; the binary lands at
+> `target/release/gbl`.
+>
+> The Python parity tools (`scripts/mode2-profile.py`,
+> `scripts/vbmeta-graft.py`) still exist as reference / convenience
+> wrappers and are unchanged.
+>
+> The rest of this document was written against the per-tool C surface;
+> it is being rewritten in a follow-up doc task to reflect the multicall
+> shape. Until then, treat `tools/<name>/<binary>` references below as
+> `gbl <sub>` equivalents.
+
 Seven small C utilities (plus Python wrappers) for turning a dumped ABL
 partition image into a ready-to-stage EFISP payload, then optionally writing
 it to disk. Some workflows also consume additional inputs; for example, a

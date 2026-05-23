@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""vbmeta-graft.py — convenience wrapper for bin/vbmeta-graft.
+"""vbmeta-graft.py — convenience wrapper for `gbl avb`.
 
-The C tool intentionally takes an explicit --part-size. For released host-tool
-bundles, this wrapper handles the common case: a full custom partition image is
-the image the user intends to write, so the final partition size is that custom
-file's size. Use --part-size or --size-from when that is not true.
+PR2 Task 8 collapsed the standalone vbmeta-graft binary into
+`gbl avb {list,check,graft,list-hash}`. This wrapper keeps the
+common-case ergonomics: a full custom partition image is the image
+the user intends to write, so the final partition size is that custom
+file's size — we infer --part-size from it and call `gbl avb graft`.
+Use --part-size or --size-from when that is not true.
 """
 import argparse
 import os
@@ -126,7 +128,7 @@ def main() -> None:
     size.add_argument("--size-from", help="derive final target partition size from this image/device")
     ap.add_argument("--main-vbmeta", help="optional main vbmeta.img for post-graft check")
     ap.add_argument("--partition", help="partition name for --main-vbmeta post-graft check")
-    ap.add_argument("--bin-dir", "--tools-dir", dest="bin_dir", help="directory containing vbmeta-graft")
+    ap.add_argument("--bin-dir", "--tools-dir", dest="bin_dir", help="directory containing the gbl multicall binary")
     ap.add_argument("--dry-run", action="store_true", help="print resolved command but do not run it")
     ap.add_argument("--version", action="store_true", help="print the gbl-chainload version and exit")
     args = ap.parse_args()
@@ -159,9 +161,13 @@ def main() -> None:
     if part_size <= 0:
         die(f"resolved non-positive part size from {source}")
 
-    vg = _resolve_tool("vbmeta-graft", args.bin_dir)
+    # PR2 Task 8: the standalone `vbmeta-graft` binary became `gbl avb <sub>`.
+    # Keep the wrapper API identical (--bin-dir / --tools-dir overrides)
+    # but locate `gbl` instead of `vbmeta-graft` and prepend `avb`.
+    vg = _resolve_tool("gbl", args.bin_dir)
     graft_cmd = [
         vg,
+        "avb",
         "graft",
         "--stock",
         args.stock,
@@ -172,7 +178,11 @@ def main() -> None:
         "--out",
         args.out,
     ]
-    check_cmd = [vg, "check", args.out, args.main_vbmeta, args.partition] if args.main_vbmeta else None
+    check_cmd = (
+        [vg, "avb", "check", args.out, args.main_vbmeta, args.partition]
+        if args.main_vbmeta
+        else None
+    )
 
     print(f"vbmeta-graft.py: part-size={part_size} ({source})")
     if args.dry_run:

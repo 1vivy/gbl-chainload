@@ -1,13 +1,17 @@
 #!/usr/bin/env bash
-# scripts/build-cross-tools.sh — cross-compile the host-side tools for
-# Windows, macOS, and/or Linux inside the docker build image. Outputs to
-# dist/windows/ (<tool>.exe), dist/macos/ (universal <tool>), and
-# dist/linux/ (static x86_64 ELF <tool>).
+# scripts/build-cross-tools.sh — cross-compile the `gbl` multicall binary
+# for Windows, macOS, and/or Linux inside the docker build image. Outputs
+# to dist/windows/gbl.exe, dist/macos/gbl (universal), and dist/linux/gbl
+# (static x86_64 ELF).
 #
 #   build-cross-tools.sh windows | macos | linux | all
 #
 # Sibling of build-recovery-tools.sh (which builds the aarch64 Android
-# tools). dist/ is git-ignored — these binaries are built on demand.
+# target). dist/ is git-ignored — these binaries are built on demand.
+#
+# PR2 Task 8: the 7 host C tools collapsed into the `gbl` multicall, so
+# this script now builds one Rust target per platform rather than seven
+# C executables.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -21,40 +25,30 @@ esac
 # avoids the desktop.exe credstore lookup that fails under WSL.
 export DOCKER_CONFIG="${DOCKER_CONFIG:-$(mktemp -d)}"
 
-TOOLS="fv-unwrap abl-patcher gbl-pack gbl-commit vbmeta-graft mode2-profile gblp1-inspect"
-
 docker run --rm -v "$PWD:/work" -w /work gbl-chainload-build:latest bash -c '
   set -e
   OS="'"$OS"'"
-  TOOLS="'"$TOOLS"'"
   if [ "$OS" = windows ] || [ "$OS" = all ]; then
+    cargo build --release --locked --target x86_64-pc-windows-gnu -p gbl
     mkdir -p dist/windows
-    for t in $TOOLS; do
-      make -C tools/$t clean
-      make -C tools/$t windows
-      install -Dm755 tools/$t/$t.exe dist/windows/$t.exe
-    done
+    install -Dm755 target/x86_64-pc-windows-gnu/release/gbl.exe dist/windows/gbl.exe
     ( cd dist/windows && sha256sum *.exe > SHA256SUMS )
   fi
   if [ "$OS" = macos ] || [ "$OS" = all ]; then
+    cargo build --release --locked --target x86_64-apple-darwin -p gbl
+    cargo build --release --locked --target aarch64-apple-darwin -p gbl
     mkdir -p dist/macos
-    for t in $TOOLS; do
-      make -C tools/$t clean
-      make -C tools/$t macos-x64
-      make -C tools/$t macos-arm64
-      llvm-lipo -create -output dist/macos/$t \
-        tools/$t/$t-macos-x64 tools/$t/$t-macos-arm64
-    done
-    ( cd dist/macos && sha256sum $TOOLS > SHA256SUMS )
+    llvm-lipo -create -output dist/macos/gbl \
+      target/x86_64-apple-darwin/release/gbl \
+      target/aarch64-apple-darwin/release/gbl
+    chmod +x dist/macos/gbl
+    ( cd dist/macos && sha256sum gbl > SHA256SUMS )
   fi
   if [ "$OS" = linux ] || [ "$OS" = all ]; then
+    cargo build --release --locked --target x86_64-unknown-linux-musl -p gbl
     mkdir -p dist/linux
-    for t in $TOOLS; do
-      make -C tools/$t clean
-      make -C tools/$t linux
-      install -Dm755 tools/$t/$t-linux dist/linux/$t
-    done
-    ( cd dist/linux && sha256sum $TOOLS > SHA256SUMS )
+    install -Dm755 target/x86_64-unknown-linux-musl/release/gbl dist/linux/gbl
+    ( cd dist/linux && sha256sum gbl > SHA256SUMS )
   fi
 '
 

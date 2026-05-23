@@ -17,13 +17,28 @@ fi
   echo "SKIP: 086 — zip/base/gbl-chainload.efi absent"; exit 0;
 }
 
-# Build native tools (used via PATH inside diag.sh).
-make -s -C tools/gblp1-inspect
-make -s -C tools/vbmeta-graft
-make -s -C tools/fv-unwrap
+# Build the multicall binary (zip-side diag.sh in PR2 Task 9 will call
+# `gbl <sub>` directly; until then we shim the legacy names so this
+# test stays untouched by the zip rewrite).
+cargo build --release --quiet -p gbl
 
 OUT=tests/host/.last/086
 rm -rf "$OUT"; mkdir -p "$OUT"
+
+# Stage shims that translate `gblp1-inspect/fv-unwrap/vbmeta-graft <args>`
+# into `gbl <sub> <args>` for the still-untouched zip/modes/diag.sh.
+SHIM_DIR="$OUT/shims"
+mkdir -p "$SHIM_DIR"
+GBL_BIN="$PWD/target/release/gbl"
+for entry in 'gblp1-inspect:inspect' 'fv-unwrap:unwrap' 'vbmeta-graft:avb'; do
+  name="${entry%%:*}"
+  sub="${entry##*:}"
+  cat > "$SHIM_DIR/$name" <<EOF
+#!/usr/bin/env bash
+exec "$GBL_BIN" $sub "\$@"
+EOF
+  chmod +x "$SHIM_DIR/$name"
+done
 
 run_one() {
   local scenario="$1" expect="$2"
@@ -45,10 +60,9 @@ run_one() {
   exec 9>"$envdir/screen.txt"
   export OUTFD=9
 
-  # PATH so diag.sh can call tools by bare name.
-  local tool_path
-  tool_path="$PWD/tools/gblp1-inspect:$PWD/tools/vbmeta-graft:$PWD/tools/fv-unwrap"
-  export PATH="$tool_path:$PATH"
+  # PATH so diag.sh can call tools by bare name. The shims in
+  # $SHIM_DIR map gblp1-inspect/fv-unwrap/vbmeta-graft -> gbl <sub>.
+  export PATH="$SHIM_DIR:$PATH"
 
   # Source diag.sh and call mode_main in a sub-shell that carries all
   # exported env.  We define stub functions for the recovery core

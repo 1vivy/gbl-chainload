@@ -28,12 +28,12 @@ FIXTURES_DIR="${FIXTURES_DIR:-tests/images}"
 echo "== cargo test -p patch-engine =="
 cargo test --release -p patch-engine --features host
 
-# 2. Build the host abl-patcher binary.
-echo "== tools/abl-patcher build =="
-make -C tools/abl-patcher clean >/dev/null
-make -C tools/abl-patcher
+# 2. Build the gbl multicall binary (former tools/abl-patcher is now
+# `gbl patch`).
+echo "== gbl multicall build =="
+cargo build --release --quiet -p gbl
 
-ABL_PATCHER=tools/abl-patcher/abl-patcher
+ABL_PATCHER=(./target/release/gbl patch)
 
 # 3. Anchor-uniqueness check.
 #
@@ -53,7 +53,7 @@ shopt -u nullglob
 FAIL=0
 for fix in "${PE_FIXTURES[@]}"; do
   echo "== anchor-uniqueness (mandatory): $fix =="
-  if ! "$ABL_PATCHER" --in "$fix" --check-anchors-only; then
+  if ! "${ABL_PATCHER[@]}" --in "$fix" --check-anchors-only; then
     echo "FAIL: anchor-uniqueness on $fix"
     FAIL=1
   fi
@@ -61,7 +61,7 @@ done
 
 for fix in "${FV_FIXTURES[@]}"; do
   echo "== anchor-uniqueness (informational, raw FV): $fix =="
-  "$ABL_PATCHER" --in "$fix" --check-anchors-only || \
+  "${ABL_PATCHER[@]}" --in "$fix" --check-anchors-only || \
     echo "INFO: anchor-uniqueness MISS on $fix (raw FV — non-fatal; needs PE extraction)"
 done
 

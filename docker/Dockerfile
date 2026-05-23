@@ -88,7 +88,7 @@ RUN ln -sf "$(ls /usr/lib/llvm-*/bin/llvm-lipo | head -1)" /usr/local/bin/llvm-l
 # for Rust EFI applications and unit tests that link the host stack.
 # The five host cross targets cover the same release matrix as
 # build-cross-tools.sh.
-ARG RUST_VER=1.78.0
+ARG RUST_VER=1.85.0
 ENV RUSTUP_HOME=/opt/rustup CARGO_HOME=/opt/cargo
 ENV PATH=/opt/cargo/bin:$PATH
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \

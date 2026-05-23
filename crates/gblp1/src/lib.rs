@@ -454,7 +454,7 @@ pub fn pack(inputs: &PackInputs<'_>) -> Result<Vec<u8>, PackError> {
         // owns that check and the Rust packer is the caller's
         // responsibility to feed valid bytes. Replicate the size check
         // only — it's structural for the container.
-        const GBL_M2P_SIZE: usize = 256; // see tools/shared/gbl_mode2_profile.h
+        const GBL_M2P_SIZE: usize = 120; // see tools/shared/gbl_mode2_profile.h
         if p.len() != GBL_M2P_SIZE {
             return Err(PackError::ProfileBad);
         }

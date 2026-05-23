@@ -49,7 +49,6 @@ test_pe_sanity: test_pe_sanity.c $(PE_UTILS_LIB)
 
 test_manifest_parse: test_manifest_parse.c \
                      ../../../crates/gblp1/include/gblp1_ffi.h \
-                     ../../../tools/shared/gblp1.h \
                      $(GBLP1_LIB)
 	$(CC) $(CFLAGS) -DGBL_HOST_BUILD=1 -o $@ test_manifest_parse.c $(GBLP1_LIB)
 
@@ -57,7 +56,6 @@ BINS += parser_harness
 
 parser_harness: parser_harness.c $(GBLP1_LIB)
 	$(CC) $(CFLAGS) -DGBL_HOST_BUILD=1 \
-	      -I../../../tools/shared \
 	      -o $@ parser_harness.c $(GBLP1_LIB)
 
 BINS += poison_byte
