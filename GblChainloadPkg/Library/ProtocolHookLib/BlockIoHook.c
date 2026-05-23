@@ -34,6 +34,7 @@ typedef struct {
   CHAR16                  PartitionName[36];
   CHAR8                   PartitionNameAscii[37];
   BOOLEAN                 IsOplusReserve1;
+  BOOLEAN                 IsEfisp;
   BOOLEAN                 Active;
 } BLOCK_IO_HOOK_RECORD;
 
@@ -224,6 +225,14 @@ HookedReadBlocks (
     return EFI_INVALID_PARAMETER;
   }
 
+  if (Record->IsEfisp) {
+    GBL_INFO ("blockio: refused %a on EFISP (lba=0x%Lx, bytes=%u)\n",
+              "read",
+              (UINT64)Lba,
+              (UINT32)BufferSize);
+    return EFI_NO_MEDIA;
+  }
+
   TopLevel = HookEnter (&gBlockIoGuard);
   Status = Record->OriginalReadBlocks (This, MediaId, Lba, BufferSize, Buffer);
 
@@ -257,6 +266,14 @@ HookedWriteBlocks (
   Record = FindRecordByBlockIo (This);
   if (Record == NULL || Record->OriginalWriteBlocks == NULL) {
     return EFI_INVALID_PARAMETER;
+  }
+
+  if (Record->IsEfisp) {
+    GBL_INFO ("blockio: refused %a on EFISP (lba=0x%Lx, bytes=%u)\n",
+              "write",
+              (UINT64)Lba,
+              (UINT32)BufferSize);
+    return EFI_NO_MEDIA;
   }
 
   TopLevel = HookEnter (&gBlockIoGuard);
@@ -361,6 +378,7 @@ InstallBlockIoHook (VOID)
       gBlockIoRecords[gBlockIoRecordCount].LastBlockAtInstall   = (BlockIo->Media != NULL) ? BlockIo->Media->LastBlock : 0;
       gBlockIoRecords[gBlockIoRecordCount].BlockSizeAtInstall   = (BlockIo->Media != NULL) ? BlockIo->Media->BlockSize : 0;
       gBlockIoRecords[gBlockIoRecordCount].IsOplusReserve1      = IsReserve;
+      gBlockIoRecords[gBlockIoRecordCount].IsEfisp              = PartitionNameMatches (PartEntry->PartitionName, L"efisp");
       gBlockIoRecords[gBlockIoRecordCount].Active               = TRUE;
       CopyPartitionName36 (gBlockIoRecords[gBlockIoRecordCount].PartitionName,
                            gBlockIoRecords[gBlockIoRecordCount].PartitionNameAscii,
