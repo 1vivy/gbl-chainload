@@ -3,7 +3,7 @@ CFLAGS  ?= -O1 -g -Wall -Wextra -Wno-unused-parameter -std=c11
 PROJ    := $(realpath ../..)
 DPL     := $(PROJ)/GblChainloadPkg/Library/DynamicPatchLib
 
-CFLAGS += -D__HOST_BUILD__ -DGBL_MODE=1 \
+CFLAGS += -D__HOST_BUILD__ \
           -I$(PROJ)/GblChainloadPkg/Include/Library \
           -I$(DPL)/Internal
 
@@ -28,7 +28,7 @@ clean:
 
 # --- Windows / macOS cross-compile (zig cc) ---
 XCFLAGS = -O2 -Wall -Wextra -Wno-unused-parameter -std=c11 \
-          -D__HOST_BUILD__ -DGBL_MODE=1 \
+          -D__HOST_BUILD__ \
           -I$(PROJ)/GblChainloadPkg/Include/Library -I$(DPL)/Internal
 
 windows:     abl-patcher.exe
@@ -58,7 +58,7 @@ test: abl-patcher
 NDK     ?= $(ANDROID_NDK)
 NDK_CC   = $(NDK)/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android31-clang
 NDK_CFLAGS = -static -O2 -Wall -Wextra -Wno-unused-parameter -std=c11 \
-             -D__HOST_BUILD__ -DGBL_MODE=1 \
+             -D__HOST_BUILD__ \
              -I$(PROJ)/GblChainloadPkg/Include/Library \
              -I$(DPL)/Internal
 

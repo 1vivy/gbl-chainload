@@ -238,15 +238,16 @@ partition image, or to produce a pre-patched PE for the GBLP1 cache.
 ```
 abl-patcher --in <abl.bin> [--out <patched.bin>]
 abl-patcher --check-anchors-only --in <abl.bin>
-abl-patcher --oem <id> [--no-mode1] --in <abl.bin> [--out <patched.bin>]
+abl-patcher --oem <id> --in <abl.bin> [--out <patched.bin>]
 ```
 
 Flags:
 
-- `--oem <id>` — OEM patch group (e.g. `oneplus`). Default `GBL_OEM_NONE`,
-  i.e. universal + `mode_1` patches only.
-- `--no-mode1` — exclude `mode_1` patches (used by the mode-2 profile path,
-  which keeps ABL honest).
+- `--oem <id>` — OEM patch group. `<id>` is one of `{ oplus, none }`. Default
+  `none` (no OEM group). `oneplus` is accepted as a deprecation alias for
+  `oplus` (still maps to `GBL_OEM_OPLUS`; will be removed in a future release).
+  `abl_permissive` patches are always applied at host packing time — the
+  on-device manifest decides at runtime whether they take effect.
 
 ```
 abl-patcher --check-anchors-only --in extracted.efi
