@@ -83,6 +83,14 @@ export GCC5_AARCH64_PREFIX=/usr/bin/aarch64-linux-gnu-
 echo ">>> cargo build: crates/gblp1 (aarch64-unknown-none ELF staticlib)"
 cargo build --release --target aarch64-unknown-none -p gblp1 --no-default-features
 
+# PR2 Task 5: same pattern as crates/gblp1 — the firmware-side
+# mode2_profile parser (formerly Mode2Profile.c) lives in the Rust
+# `crates/mode2-profile-core` staticlib. `--no-default-features`
+# strips the host-only `compile` + `derive` paths (and their `toml` /
+# `serde` deps) so the firmware staticlib is the parser only.
+echo ">>> cargo build: crates/mode2-profile-core (aarch64-unknown-none ELF staticlib)"
+cargo build --release --target aarch64-unknown-none -p mode2-profile-core --no-default-features
+
 echo ">>> build: $TOOLCHAIN_TAG / $ARCH / $BUILD_TARGET / name=$GBL_BUILD_NAME auto=$GBL_AUTO debug=$GBL_DEBUG verbose=$GBL_VERBOSE"
 build \
   -p GblChainloadPkg/GblChainloadPkg.dsc \

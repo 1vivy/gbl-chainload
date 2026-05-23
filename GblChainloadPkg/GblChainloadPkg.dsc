@@ -173,7 +173,20 @@
   # build options include `-fno-builtin -fno-unwind-tables`, panics
   # never get linked, and the unwind tables stay out of the final
   # image anyway.
+  # PR2 Task 5: --allow-multiple-definition lets the two Rust staticlibs
+  # (libgblp1.a + libmode2_profile_core.a) coexist at link time even
+  # though both define `rust_begin_unwind` (rustc lowers every
+  # `#[panic_handler]` to that strong symbol; we have one per no_std
+  # staticlib). Both panic handlers are identical `loop {}` bodies so
+  # the choice is irrelevant; the linker keeps the first.
+  GCC:*_*_AARCH64_DLINK_FLAGS = -Wl,--allow-multiple-definition
   GCC:*_*_AARCH64_DLINK2_FLAGS = $(WORKSPACE)/target/aarch64-unknown-none/release/libgblp1.a
+  # PR2 Task 5: libmode2_profile_core.a supplies gbl_mode2_profile_parse()
+  # (the Rust port of the deleted Mode2Profile.c). Built with
+  # --no-default-features so the host-only `compile` + `derive` paths
+  # and their `toml` / `serde` dependencies are excluded from the
+  # firmware staticlib.
+  GCC:*_*_AARCH64_DLINK2_FLAGS = $(WORKSPACE)/target/aarch64-unknown-none/release/libmode2_profile_core.a
   GCC:*_*_*_CC_FLAGS = -DZ_SOLO
   GCC:*_*_*_CC_FLAGS = -DPRODUCT_NAME=\"$(BOARD_BOOTLOADER_PRODUCT_NAME)\"
   GCC:*_*_*_CC_FLAGS = -DGBL_CHAINLOAD_VERSION=\"$(GBL_CHAINLOAD_VERSION)\"

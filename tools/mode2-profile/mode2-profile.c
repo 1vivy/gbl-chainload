@@ -1,95 +1,81 @@
 /* tools/mode2-profile/mode2-profile.c — C mode-2 profile tool.
-   derive: vbmeta.img -> profile.toml   (Task 3)
-   compile: profile.toml -> 120-byte gbl_mode2_profile binary. */
+   derive:  vbmeta.img -> profile.toml
+   compile: profile.toml -> 120-byte gbl_mode2_profile binary.
+
+   PR2 Task 5: parse/compile/derive moved to crates/mode2-profile-core
+   (Rust). The `compile` path here is a thin wrapper around
+   gbl_mode2_profile_compile() — read the input file, call into Rust,
+   write the output. `derive` stays C-side because the captured TOML
+   golden (tools/mode2-profile/tests/baseline.toml.golden) locks the
+   exact textual format (PosixPath comment, raw os_version string, …)
+   and the C tool already produces byte-identical output to the Python
+   reference. Task 8 collapses both paths into the `gbl` multicall. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <errno.h>
-#include "vendor/tomlc99/toml.h"
 #include "../shared/gbl_mode2_profile.h"
-/* PR2 Task 4: gbl_sha256 moved into crates/gblp1 (Rust). Public C ABI
- * header replaces the deleted Internal/Sha256.h. */
+/* PR2 Task 4: gbl_sha256 moved into crates/gblp1 (Rust). */
 #include "../../crates/gblp1/include/gblp1_ffi.h"
+/* PR2 Task 5: gbl_mode2_profile_compile/parse moved into
+ * crates/mode2-profile-core (Rust). */
+#include "../../crates/mode2-profile-core/include/mode2_profile_ffi.h"
 /* AvbBigEndian.h must come before AvbParseLib.h — it defines UEFI type shims
    (UINT8/UINT32/UINT64/EFI_STATUS etc.) for __HOST_BUILD__. */
 #include "AvbBigEndian.h"
 #include "AvbParseLib.h"
 
-static void wle16(uint8_t *p, uint16_t v){p[0]=v;p[1]=v>>8;}
-static void wle32(uint8_t *p, uint32_t v){p[0]=v;p[1]=v>>8;p[2]=v>>16;p[3]=v>>24;}
-
-/* hexkey: read a TOML string key, require exactly 64 lowercase-hex, decode
-   into out[32]. */
-static void hexkey(toml_table_t *t, const char *key, uint8_t out[32]) {
-    toml_datum_t d = toml_string_in(t, key);
-    if (!d.ok) { fprintf(stderr,"error: '%s' missing or not a string\n",key); exit(1); }
-    if (strlen(d.u.s) != 64) { free(d.u.s);
-        fprintf(stderr,"error: '%s' must be 64 hex chars\n",key); exit(1); }
-    for (int i=0;i<32;i++){
-        int hi=d.u.s[2*i], lo=d.u.s[2*i+1];
-        if(!( (hi>='0'&&hi<='9')||(hi>='a'&&hi<='f') ) ||
-           !( (lo>='0'&&lo<='9')||(lo>='a'&&lo<='f') )) { free(d.u.s);
-            fprintf(stderr,"error: '%s' contains non-lowercase-hex\n",key); exit(1); }
-        out[i] = (uint8_t)((( hi<='9'?hi-'0':hi-'a'+10)<<4)|(lo<='9'?lo-'0':lo-'a'+10));
-    }
-    free(d.u.s);
-}
-
-/* intkey: read a TOML integer key, enforce [lo,hi]. */
-static int64_t intkey(toml_table_t *t, const char *key, int64_t lo, int64_t hi) {
-    toml_datum_t d = toml_int_in(t, key);
-    if (!d.ok) { fprintf(stderr,"error: '%s' missing or not an integer\n",key); exit(1); }
-    if (d.u.i < lo || d.u.i > hi) {
-        fprintf(stderr,"error: '%s' out of range %lld..%lld (got %lld)\n",
-                key,(long long)lo,(long long)hi,(long long)d.u.i); exit(1); }
-    return d.u.i;
-}
-
 static int do_compile(const char *in, const char *out) {
     FILE *f = fopen(in,"r");
     if (!f) { fprintf(stderr,"error: cannot open %s: %s\n",in,strerror(errno)); return 1; }
-    char errbuf[200];
-    toml_table_t *t = toml_parse_file(f, errbuf, sizeof errbuf);
-    fclose(f);
-    if (!t) { fprintf(stderr,"error: malformed profile TOML: %s\n",errbuf); return 1; }
-
-    /* reject unknown keys */
-    static const char *known[] = {"version","is_unlocked","color","system_version",
-        "system_spl","rot_digest","pubkey_digest","vbh"};
-    for (int i=0;; i++) {
-        const char *k = toml_key_in(t, i);
-        if (!k) break;
-        int ok=0; for (unsigned j=0;j<sizeof known/sizeof*known;j++)
-            if(!strcmp(k,known[j])) ok=1;
-        if(!ok){ fprintf(stderr,"error: unknown key '%s' in profile\n",k);
-                 toml_free(t); return 1; }
+    if (fseek(f, 0, SEEK_END) != 0) {
+        fprintf(stderr,"error: fseek %s: %s\n", in, strerror(errno)); fclose(f); return 1;
     }
-
-    intkey(t,"version",1,1);
-    uint32_t is_unlocked    = (uint32_t)intkey(t,"is_unlocked",0,1);
-    uint32_t color          = (uint32_t)intkey(t,"color",0,3);
-    uint32_t system_version = (uint32_t)intkey(t,"system_version",0,0xFFFFFFFFLL);
-    uint32_t system_spl     = (uint32_t)intkey(t,"system_spl",0,0xFFFFFFFFLL);
-    uint8_t rot[32], pk[32], vbh[32];
-    hexkey(t,"rot_digest",rot);
-    hexkey(t,"pubkey_digest",pk);
-    hexkey(t,"vbh",vbh);
-    toml_free(t);
+    long fsz = ftell(f);
+    if (fsz < 0) {
+        fprintf(stderr,"error: ftell %s: %s\n", in, strerror(errno)); fclose(f); return 1;
+    }
+    rewind(f);
+    /* +1 for the NUL terminator — gbl_mode2_profile_compile wants a
+       C string, not a length-prefixed buffer. */
+    char *toml_str = (char *)malloc((size_t)fsz + 1);
+    if (!toml_str) {
+        fprintf(stderr,"error: out of memory\n"); fclose(f); return 1;
+    }
+    if ((long)fread(toml_str, 1, (size_t)fsz, f) != fsz) {
+        fprintf(stderr,"error: read %s failed\n", in); free(toml_str); fclose(f); return 1;
+    }
+    fclose(f);
+    toml_str[fsz] = '\0';
 
     uint8_t b[GBL_M2P_SIZE];
-    memset(b,0,sizeof b);
-    memcpy(b+0, GBL_M2P_MAGIC, 4);
-    wle16(b+4, GBL_M2P_VERSION);
-    /* b+6 reserved = 0 */
-    wle32(b+8,  is_unlocked);
-    wle32(b+12, color);
-    wle32(b+16, system_version);
-    wle32(b+20, system_spl);
-    memcpy(b+24, rot, 32);
-    memcpy(b+56, pk,  32);
-    memcpy(b+88, vbh, 32);
+    size_t out_size = 0;
+    int rc = gbl_mode2_profile_compile(toml_str, b, &out_size);
+    free(toml_str);
+    if (rc != 0) {
+        switch (rc) {
+            case GBL_M2P_COMPILE_MALFORMED_TOML:
+                fprintf(stderr,"error: malformed profile TOML\n"); break;
+            case GBL_M2P_COMPILE_MISSING_OR_TYPE:
+                fprintf(stderr,"error: missing key or wrong type in profile\n"); break;
+            case GBL_M2P_COMPILE_OUT_OF_RANGE:
+                fprintf(stderr,"error: integer key out of range in profile\n"); break;
+            case GBL_M2P_COMPILE_BAD_DIGEST:
+                fprintf(stderr,"error: digest field is not 64 lowercase-hex chars\n"); break;
+            case GBL_M2P_COMPILE_UNKNOWN_KEY:
+                fprintf(stderr,"error: unknown key in profile\n"); break;
+            default:
+                fprintf(stderr,"error: compile failed (status=%d)\n", rc); break;
+        }
+        return 1;
+    }
+    if (out_size != GBL_M2P_SIZE) {
+        fprintf(stderr,"error: compile produced %zu bytes (expected %u)\n",
+                out_size, (unsigned)GBL_M2P_SIZE);
+        return 1;
+    }
 
     FILE *o = fopen(out,"wb");
     if (!o) { fprintf(stderr,"error: cannot open %s: %s\n",out,strerror(errno)); return 1; }

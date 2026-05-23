@@ -12,7 +12,6 @@
   LIBRARY_CLASS                  = GblPayloadLib
 
 [Sources]
-  Mode2Profile.c
   LocateOverlay.c
   EfispBlockIo.c
   GblPayload.c
@@ -33,6 +32,13 @@
   # libgblp1.a is built by cargo from scripts/build-inside-docker.sh
   # and linked into the final EFI via the DLINK_FLAGS entry in
   # GblChainloadPkg.dsc (`[BuildOptions.common]`).
+  #
+  # PR2 Task 5: Mode2Profile.c moved into the `crates/mode2-profile-core`
+  # Rust crate. GblPayload.c calls gbl_mode2_profile_parse() via the C
+  # ABI declared in crates/mode2-profile-core/include/mode2_profile_ffi.h;
+  # the aarch64-unknown-none libmode2_profile_core.a is built ahead of
+  # EDK2 by scripts/build-inside-docker.sh and linked via DLINK2_FLAGS in
+  # GblChainloadPkg.dsc.
 
 [Packages]
   MdePkg/MdePkg.dec
