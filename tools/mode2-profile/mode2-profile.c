@@ -22,10 +22,12 @@
 /* PR2 Task 5: gbl_mode2_profile_compile/parse moved into
  * crates/mode2-profile-core (Rust). */
 #include "../../crates/mode2-profile-core/include/mode2_profile_ffi.h"
-/* AvbBigEndian.h must come before AvbParseLib.h — it defines UEFI type shims
-   (UINT8/UINT32/UINT64/EFI_STATUS etc.) for __HOST_BUILD__. */
-#include "AvbBigEndian.h"
-#include "AvbParseLib.h"
+/* PR2 Task 7: AvbParseLib's C ABI now lives in the crates/avb-parse
+ * FFI header — including it provides EDK2 type shims under
+ * __HOST_BUILD__, the GBL_AVB_* struct/enum/magic definitions, the
+ * AvbParse_* entry-point decls, AND the inline AvbReadU{32,64}Be
+ * helpers we still call directly below. */
+#include "../../crates/avb-parse/include/avb_parse_ffi.h"
 
 static int do_compile(const char *in, const char *out) {
     FILE *f = fopen(in,"r");

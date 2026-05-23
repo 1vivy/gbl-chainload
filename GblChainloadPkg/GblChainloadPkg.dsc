@@ -194,6 +194,13 @@
   # staticlib — only `abl_permissive` (patch6 + patch10) ships in the
   # device EFI.
   GCC:*_*_AARCH64_DLINK2_FLAGS = $(WORKSPACE)/target/aarch64-unknown-none/release/libpatch_engine.a
+  # PR2 Task 7: libavb_parse.a supplies every AvbParse_* entry point
+  # the firmware + host tools call into (the Rust port of the deleted
+  # AvbParse.c + Internal/AvbBigEndian.h). Built with
+  # --no-default-features so the no_std panic_handler is wired in;
+  # the EDK2 link line's --allow-multiple-definition already lets it
+  # coexist with the other staticlibs' identical `loop {}` bodies.
+  GCC:*_*_AARCH64_DLINK2_FLAGS = $(WORKSPACE)/target/aarch64-unknown-none/release/libavb_parse.a
   GCC:*_*_*_CC_FLAGS = -DZ_SOLO
   GCC:*_*_*_CC_FLAGS = -DPRODUCT_NAME=\"$(BOARD_BOOTLOADER_PRODUCT_NAME)\"
   GCC:*_*_*_CC_FLAGS = -DGBL_CHAINLOAD_VERSION=\"$(GBL_CHAINLOAD_VERSION)\"

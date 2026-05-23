@@ -6,12 +6,11 @@
  *                          --part-size <bytes> --out <grafted-img>
  *   vbmeta-graft list-hash <active-vbmeta-img> <byname-dir>
  *
- * Reuses GblChainloadPkg/Library/AvbParseLib for AVB structure parsing
- * (compiled with -D__HOST_BUILD__; the Makefile builds AvbParse.c too).
- *
- * AvbBigEndian.h (internal) defines all EDK2 type shims when __HOST_BUILD__
- * is set. Include it before AvbParseLib.h so the public header's UINT8/
- * UINT32/UINT64/EFI_STATUS etc. resolve. The Makefile sets -I$(AVB)/Internal.
+ * PR2 Task 7: AVB structure parsing now lives in crates/avb-parse
+ * (Rust). The Makefile links libavb_parse.a; the public C header
+ * `crates/avb-parse/include/avb_parse_ffi.h` declares the same
+ * AvbParse_* entry points + struct layouts + inline AvbReadU{32,64}Be
+ * helpers the deleted `Internal/AvbBigEndian.h` carried.
  *
  * _POSIX_C_SOURCE: expose fileno() and fstat() under -std=c11.
  */
@@ -34,11 +33,10 @@
  * header is sized to fit the sha2 backend with safe headroom. */
 #include "../../crates/gblp1/include/gblp1_ffi.h"
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-function"
-#include "AvbBigEndian.h"
-#pragma GCC diagnostic pop
-#include "../../GblChainloadPkg/Include/Library/AvbParseLib.h"
+/* PR2 Task 7: AvbParseLib's public ABI is re-exported from the Rust
+ * crate's FFI header (it also brings in EDK2 type shims under
+ * __HOST_BUILD__ and the inline AvbReadU{32,64}Be helpers). */
+#include "../../crates/avb-parse/include/avb_parse_ffi.h"
 
 /* slurp: read a whole file into a malloc'd buffer. */
 static uint8_t *slurp(const char *path, size_t *len_out)
