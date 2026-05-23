@@ -32,7 +32,7 @@ static void test_engine_all_ok (void) {
 static void test_engine_optional_miss (void) {
   static CONST PATCH_DESC table[] = {
     { "p1", SCOPE_UNIVERSAL,   TRUE,  StubOk   },
-    { "p2", SCOPE_OEM_ONEPLUS, FALSE, StubMiss },  /* optional miss */
+    { "p2", SCOPE_OEM_OPLUS, FALSE, StubMiss },  /* optional miss */
   };
   gPatchTable    = table;
   gPatchTableLen = 2;

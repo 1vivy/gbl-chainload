@@ -53,9 +53,9 @@ DynamicPatch_Apply (
         (O == PATCH_MISS)      ? "MISS"      :
         (O == PATCH_AMBIGUOUS) ? "AMBIGUOUS" : "?";
       CONST CHAR8  *ScopeName =
-        (P->Scope == SCOPE_UNIVERSAL)   ? "universal"   :
-        (P->Scope == SCOPE_OEM_ONEPLUS) ? "oem-oneplus" :
-        (P->Scope == SCOPE_MODE_1)      ? "mode-1"      : "unknown";
+        (P->Scope == SCOPE_UNIVERSAL)      ? "universal"      :
+        (P->Scope == SCOPE_OEM_OPLUS)      ? "oem-oplus"      :
+        (P->Scope == SCOPE_ABL_PERMISSIVE) ? "abl-permissive" : "unknown";
 #ifdef __HOST_BUILD__
       fprintf (stderr,
                "DynamicPatch: %s [%s, %s] -> %s\n",

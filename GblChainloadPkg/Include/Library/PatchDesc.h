@@ -10,10 +10,10 @@ typedef enum {
 } PATCH_OUTCOME;
 
 typedef enum {
-  SCOPE_UNIVERSAL     = 0,
-  SCOPE_OEM_ONEPLUS   = 1,
-  SCOPE_MODE_1        = 2,
-  /* SCOPE_MODE_2 and SCOPE_OEM_<other> can be added by later plans. */
+  SCOPE_UNIVERSAL       = 0,
+  SCOPE_OEM_OPLUS       = 1,
+  SCOPE_ABL_PERMISSIVE  = 2,
+  /* SCOPE_OEM_<other> groups can be added by later plans. */
 } PATCH_SCOPE;
 
 typedef PATCH_OUTCOME (*PATCH_APPLY)(UINT8 *Buf, UINT32 Size);

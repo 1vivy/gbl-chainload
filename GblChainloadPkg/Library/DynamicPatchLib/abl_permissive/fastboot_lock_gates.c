@@ -118,7 +118,7 @@ ApplyLockStateFastbootGate (
 CONST PATCH_DESC kAblPermissiveFastbootGatePatches[] = {
   {
     .Name      = "patch6-lock-state-fastboot-gate",
-    .Scope     = SCOPE_MODE_1,
+    .Scope     = SCOPE_ABL_PERMISSIVE,
     .Mandatory = TRUE,
     .Apply     = ApplyLockStateFastbootGate,
   },

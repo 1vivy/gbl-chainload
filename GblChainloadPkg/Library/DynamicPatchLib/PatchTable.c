@@ -1,12 +1,15 @@
-/** @file PatchTable.c — assembles the runtime patch table for the active GBL_MODE.
+/** @file PatchTable.c — assembles the runtime patch table.
 
-    Order: universal first, then OEM, then mode-specific.
-    Called explicitly by EDK-II callers (BootFlow.c) via DynamicPatchLib_EnsureInit()
+    Firmware build: universal (retired) + abl_permissive groups, unconditionally.
+    Host build:     additionally links the OEM group(s) and exposes the runtime
+                    scope selector DynamicPatchLib_EnsureInitScoped() so tools
+                    (abl-patcher) can pick OEM and ABL-permissive inclusion at
+                    invocation time.  See PatchScope.h.
+
+    Order in either path: universal first, then OEM (host only), then
+    abl_permissive.  Called from BootFlow.c via DynamicPatchLib_EnsureInit()
     before DynamicPatch_Apply().  Host tests bypass this entirely by assigning
     gPatchTable directly.
-
-    Host callers (abl-patcher) use DynamicPatchLib_EnsureInitScoped() for
-    runtime patch-scope selection; see PatchScope.h.
 **/
 
 #include "../../../Include/Library/PatchDesc.h"
@@ -76,8 +79,7 @@ DynamicPatchLib_EnsureInit (VOID)
 /* Runtime scope aggregator for host callers (abl-patcher).
    Builds the table from: universal (retired patch1), then (if oem != NONE)
    the OEM group, then (if include_abl_permissive) the ABL-permissive groups.
-   Replaces the compile-time GBL_MODE aggregation for tools that serve
-   multiple modes from one binary. */
+   Lets one host binary serve any (oem, abl_permissive) combination. */
 void
 DynamicPatchLib_EnsureInitScoped (GBL_OEM oem, int include_abl_permissive)
 {
@@ -86,7 +88,7 @@ DynamicPatchLib_EnsureInitScoped (GBL_OEM oem, int include_abl_permissive)
 
   for (i = 0; i < kUniversalPatchesCount && n < MAX_PATCHES; ++i)
     gAggregated[n++] = kUniversalPatches[i];
-  if (oem == GBL_OEM_ONEPLUS)
+  if (oem == GBL_OEM_OPLUS)
     for (i = 0; i < kOemOplusPatchesCount && n < MAX_PATCHES; ++i)
       gAggregated[n++] = kOemOplusPatches[i];
   if (include_abl_permissive) {

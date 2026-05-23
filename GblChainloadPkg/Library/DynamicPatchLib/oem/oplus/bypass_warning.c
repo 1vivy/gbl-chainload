@@ -26,7 +26,7 @@
   Non-mandatory — cosmetic only; PATCH_MISS on non-matching ABLs is a clean
   no-op.
 
-  Scope: SCOPE_OEM_ONEPLUS.  Selected at host build time by
+  Scope: SCOPE_OEM_OPLUS.  Selected at host build time by
   `abl-patcher --oem oneplus`, and aggregated automatically by the EFI
   runtime patch table (mode-1 fakelocks the orange-state code path so the
   rewrite is dead code there; mode-2 keeps ABL honest and needs the rewrite
@@ -87,7 +87,7 @@ ApplyOrangeScreen (
 CONST PATCH_DESC kOemOplusPatches[] = {
   {
     .Name      = "patch7-orange-screen",
-    .Scope     = SCOPE_OEM_ONEPLUS,
+    .Scope     = SCOPE_OEM_OPLUS,
     .Mandatory = FALSE,
     .Apply     = ApplyOrangeScreen,
   },

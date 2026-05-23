@@ -126,7 +126,7 @@ ApplyAvbForceSuccess (
 CONST PATCH_DESC kAblPermissiveLibavbPatches[] = {
   {
     .Name      = "patch10-libavb-force-avb-success",
-    .Scope     = SCOPE_MODE_1,
+    .Scope     = SCOPE_ABL_PERMISSIVE,
     .Mandatory = TRUE,
     .Apply     = ApplyAvbForceSuccess,
   },

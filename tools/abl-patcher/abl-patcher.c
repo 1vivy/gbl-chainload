@@ -66,7 +66,7 @@ int main (int argc, char **argv) {
   GBL_OEM Oem = GBL_OEM_NONE;
   if (OemStr != NULL) {
     if (strcmp (OemStr, "oneplus") == 0) {
-      Oem = GBL_OEM_ONEPLUS;
+      Oem = GBL_OEM_OPLUS;
     } else {
       fprintf (stderr, "error: unknown --oem '%s'\n", OemStr);
       return 2;

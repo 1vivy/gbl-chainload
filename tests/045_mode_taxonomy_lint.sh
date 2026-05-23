@@ -10,25 +10,23 @@ PKG="GblChainloadPkg/Library/DynamicPatchLib"
 
 # 1. PatchTable.c exists. (Task 5 restructure: the firmware-side mode-1 gate
 #    was moved out; abl_permissive/* now compiles unconditionally and the OEM
-#    file is host-only via #ifdef __HOST_BUILD__. The GBL_MODE>=1 #if was
-#    dropped here as part of the rename; Task 6 will retire the enum
-#    SCOPE_MODE_1 value in favor of SCOPE_ABL_PERMISSIVE.)
+#    file is host-only via #ifdef __HOST_BUILD__. Task 6 renamed the scope
+#    enum to SCOPE_ABL_PERMISSIVE / SCOPE_OEM_OPLUS.)
 test -f "$PKG/PatchTable.c" || { echo "FAIL: missing PatchTable.c"; exit 1; }
 
 # 2. Universal (retired) patches use SCOPE_UNIVERSAL.
 grep -q 'SCOPE_UNIVERSAL' "$PKG/retired/block_efisp_recursion.c" \
   || { echo "FAIL: retired/block_efisp_recursion.c must declare SCOPE_UNIVERSAL"; exit 1; }
 
-# 3. OEM patches use SCOPE_OEM_ONEPLUS.  (Task 6 will rename → SCOPE_OEM_OPLUS.)
-grep -q 'SCOPE_OEM_ONEPLUS' "$PKG/oem/oplus/bypass_warning.c" \
-  || { echo "FAIL: oem/oplus/bypass_warning.c must declare SCOPE_OEM_ONEPLUS"; exit 1; }
+# 3. OEM patches use SCOPE_OEM_OPLUS.
+grep -q 'SCOPE_OEM_OPLUS' "$PKG/oem/oplus/bypass_warning.c" \
+  || { echo "FAIL: oem/oplus/bypass_warning.c must declare SCOPE_OEM_OPLUS"; exit 1; }
 
-# 4. ABL-permissive (formerly mode-1) patches use SCOPE_MODE_1 today.
-#    Task 6 will rename → SCOPE_ABL_PERMISSIVE.
-grep -q 'SCOPE_MODE_1' "$PKG/abl_permissive/libavb_force_success.c" \
-  || { echo "FAIL: abl_permissive/libavb_force_success.c must declare SCOPE_MODE_1"; exit 1; }
-grep -q 'SCOPE_MODE_1' "$PKG/abl_permissive/fastboot_lock_gates.c" \
-  || { echo "FAIL: abl_permissive/fastboot_lock_gates.c must declare SCOPE_MODE_1"; exit 1; }
+# 4. ABL-permissive patches use SCOPE_ABL_PERMISSIVE.
+grep -q 'SCOPE_ABL_PERMISSIVE' "$PKG/abl_permissive/libavb_force_success.c" \
+  || { echo "FAIL: abl_permissive/libavb_force_success.c must declare SCOPE_ABL_PERMISSIVE"; exit 1; }
+grep -q 'SCOPE_ABL_PERMISSIVE' "$PKG/abl_permissive/fastboot_lock_gates.c" \
+  || { echo "FAIL: abl_permissive/fastboot_lock_gates.c must declare SCOPE_ABL_PERMISSIVE"; exit 1; }
 
 # 5. ABL-permissive patches live under abl_permissive/, NOT in retired/ or oem/.
 #    patch10 (libavb force-AVB-success) lives in libavb_force_success.c;
