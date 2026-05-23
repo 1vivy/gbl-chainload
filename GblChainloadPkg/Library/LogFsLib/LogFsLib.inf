@@ -31,6 +31,3 @@
 
 [Protocols]
   gEfiSimpleFileSystemProtocolGuid
-
-[BuildOptions]
-  *_*_AARCH64_CC_FLAGS = -DGBL_MODE=$(GBL_MODE)

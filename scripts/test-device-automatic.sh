@@ -2,8 +2,8 @@
 # test-device-automatic.sh — automated end-to-end cycle for testing a
 # gbl-chainload EFI payload.
 #
-# Model (clean rewrite, 2026-05-10):
-#   * Device starts in OUR gbl-chainload FastbootLib (any GBL_MODE).
+# Model (clean rewrite, 2026-05-10; engine rework 2026-05-22):
+#   * Device starts in OUR gbl-chainload FastbootLib.
 #     The flashed/chainloaded EFI auto-boots into FastbootLib regardless of
 #     the boot reason — reaching it is a side-effect of `fastboot reboot
 #     bootloader` (or any reboot to fastboot). If you're in stock bootloader
@@ -40,10 +40,9 @@ source "$REPO_ROOT/scripts/device-monitor.sh"
 # Default payload — pick the first that exists.
 PAYLOAD=""
 for candidate in \
-  "$REPO_ROOT/dist/mode-debug.efi" \
-  "$REPO_ROOT/dist/mode-1-auto-debug-verbose.efi" \
-  "$REPO_ROOT/dist/mode-1-auto-debug.efi" \
-  "$REPO_ROOT/dist/mode-1.efi" \
+  "$REPO_ROOT/dist/gbl-chainload-auto-debug-verbose.efi" \
+  "$REPO_ROOT/dist/gbl-chainload-auto-debug.efi" \
+  "$REPO_ROOT/dist/gbl-chainload-debug.efi" \
   "$REPO_ROOT/dist/gbl-chainload.efi"; do
   if [[ -f "$candidate" ]]; then
     PAYLOAD="$candidate"
@@ -68,7 +67,7 @@ fi
 
 if [[ -z "$PAYLOAD" || ! -f "$PAYLOAD" ]]; then
   echo "error: no payload found. Pass a path or build a default first:" >&2
-  echo "       ./scripts/build.sh --mode 1 --auto --debug --verbose" >&2
+  echo "       ./scripts/build.sh --auto --debug --verbose" >&2
   exit 1
 fi
 
@@ -85,24 +84,24 @@ echo "  return   : $RETURN_TO_FASTBOOT"
 echo "======================================================================"
 
 echo
-echo ">>> [1/4] confirming device is in our FastbootLib (via getvar build-name)"
+echo ">>> [1/4] confirming device is in our FastbootLib (via getvar gbl-chainload_build)"
 if ! device_monitor_in_fastboot_quick; then
   echo "error: no fastboot device detected. Power on into bootloader and rerun." >&2
   exit 1
 fi
 DEVICE_BUILD_NAME="$(device_monitor_build_name)"
 if [[ -z "$DEVICE_BUILD_NAME" ]]; then
-  echo "error: device responded but is NOT our FastbootLib (getvar build-name)" >&2
+  echo "error: device responded but is NOT our FastbootLib (getvar gbl-chainload_build" >&2
   echo "       returned nothing recognizable). Recovery options:" >&2
   echo "         1) \`fastboot reboot bootloader\` — our flashed chainloader EFI" >&2
   echo "            should auto-boot into FastbootLib." >&2
-  echo "         2) If our EFI isn't flashed: flash a mode-* build to uefi_a/uefi_b" >&2
-  echo "            and try again." >&2
+  echo "         2) If our EFI isn't flashed: flash a gbl-chainload build to" >&2
+  echo "            uefi_a/uefi_b and try again." >&2
   exit 1
 fi
 
-# Log dir derives its label from the device's build-name (single source of
-# truth). version from git for traceability.
+# Log dir derives its label from the device's gbl-chainload_build (single
+# source of truth). version from git for traceability.
 LABEL="$DEVICE_BUILD_NAME"
 VERSION=$(git -C "$REPO_ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)
 LOG_DIR="$REPO_ROOT/logs/${TS}_auto_${LABEL}_v${VERSION}"
@@ -251,7 +250,7 @@ if device_monitor_wait_for_fastboot 90; then
   if [[ -n "$POST_NAME" ]]; then
     echo "    back in our FastbootLib: $POST_NAME."
   else
-    echo "    fastboot is up but not our FastbootLib (build-name missing). May be stock." >&2
+    echo "    fastboot is up but not our FastbootLib (gbl-chainload_build missing). May be stock." >&2
   fi
 else
   echo "error: fastboot did not come back within 90s — device may need manual recovery." >&2

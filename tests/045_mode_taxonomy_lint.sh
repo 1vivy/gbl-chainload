@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# 045_mode_taxonomy_lint.sh — assert mode_1 patches are gated behind GBL_MODE==1
-# in the aggregator, and that the universal/oem/mode_1 patch tables exist with
-# the expected scope assignment.
+# 045_mode_taxonomy_lint.sh — assert the patch scope tables exist and use the
+# expected SCOPE_* enum tags. After Task 11 there is no compile-time GBL_MODE
+# gate anywhere; activation is manifest-driven at runtime. This lint guards
+# the directory layout and scope-tag invariants the runtime relies on.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -87,9 +88,11 @@ test -f GblChainloadPkg/Library/ProtocolHookLib/ProtocolHookLib.inf \
 test -f GblChainloadPkg/Include/Library/ProtocolHookLib.h \
   || { echo "FAIL: missing public ProtocolHookLib.h"; exit 1; }
 
-# 10. Mode-3 is dropped from user-facing mode taxonomy. Keep this scoped to
-# gbl-chainload-controlled surfaces so unrelated upstream EDK2 "mode 3" text
-# does not trip the lint.
+# 10. Mode-3 is dropped from user-facing mode taxonomy. Task 11 also dropped
+# GBL_MODE entirely, so an active `GBL_MODE == 3` reference would itself be
+# a regression — keep the lint anchored to the mode-3 string forms too.
+# Scoped to gbl-chainload-controlled surfaces so unrelated upstream EDK2
+# "mode 3" text does not trip the lint.
 if grep -RnE --exclude=045_mode_taxonomy_lint.sh \
     'GBL_MODE[[:space:]]*==[[:space:]]*3|mode-3|SCOPE_MODE_3' \
     GblChainloadPkg scripts tests \
@@ -99,8 +102,18 @@ if grep -RnE --exclude=045_mode_taxonomy_lint.sh \
   exit 1
 fi
 
-# 11. build.sh accepts --mode 2.
-grep -q '0|1|2)' scripts/build.sh \
-  || { echo "FAIL: build.sh must accept --mode 2"; exit 1; }
+# 11. Task 11 collapse: no -DGBL_MODE=, no DEFINE GBL_MODE, no $(GBL_MODE),
+#     no env GBL_MODE, no -D GBL_MODE in the build descriptor or scripts.
+#     The literal token "GBL_MODE" is allowed in comments and in unrelated
+#     include guards (GBL_MODE2_PROFILE_PARSE_H_), so be specific about the
+#     forms that would actually re-enable a per-mode compile.
+if grep -RnE -- '-D[[:space:]]*GBL_MODE[=[:space:]]|DEFINE[[:space:]]+GBL_MODE[[:space:]]|\$\(GBL_MODE\)|^[[:space:]]*GBL_MODE=|^[[:space:]]*export[[:space:]]+GBL_MODE\b|-e[[:space:]]+GBL_MODE=' \
+    GblChainloadPkg/GblChainloadPkg.dsc \
+    GblChainloadPkg/Application \
+    GblChainloadPkg/Library \
+    scripts/build.sh scripts/build-inside-docker.sh 2>/dev/null; then
+  echo "FAIL: GBL_MODE residue in build system — Task 11 collapse incomplete"
+  exit 1
+fi
 
 echo "ok 045_mode_taxonomy_lint"

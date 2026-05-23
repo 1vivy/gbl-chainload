@@ -1,9 +1,11 @@
 ## @file
-#  GblChainload platform description — v2, modes 0 and 1.
+#  GblChainload platform description.
 #
 #  Library mappings mirror QcomModulePkg.dsc so we get the same dep graph as
-#  LinuxLoader.efi. Feature flags are passed as integer PCDs via GBL_MODE /
-#  GBL_AUTO / GBL_DEBUG / GBL_VERBOSE env vars from scripts/build.sh.
+#  LinuxLoader.efi. Build-tuning flags (GBL_AUTO / GBL_DEBUG / GBL_VERBOSE)
+#  are passed via -D from scripts/build-inside-docker.sh. Activation of
+#  fakelock / profile-spoof is manifest-driven at runtime — there is no
+#  per-mode compile flag.
 ##
 
 [Defines]
@@ -58,17 +60,19 @@
   # BootLib's UpdateCmdLine.c hard-references INIT_BIN; value is cosmetic.
   DEFINE INIT_BIN                         = /init
 
-  # v2 mode flags — overridden at build time via -D from build-inside-docker.sh.
-  # These are integer flags, not legacy mode-name strings.
-  DEFINE GBL_MODE                         = 1
+  # Build-tuning flags — overridden at build time via -D from
+  # build-inside-docker.sh. Activation of fakelock / profile-spoof is NOT
+  # here; it is decided at runtime from the GBLP1 manifest baked into the
+  # EFISP overlay.
   DEFINE GBL_AUTO                         = 0
   DEFINE GBL_DEBUG                        = 0
   DEFINE GBL_VERBOSE                      = 0
 
   # Build name — single string identifier substituted into log banner,
-  # FastbootMenu display, and the build-name getvar. build-inside-docker.sh
-  # constructs the suffixed form (e.g. mode-1-auto-debug-verbose).
-  DEFINE GBL_BUILD_NAME                   = mode-unknown
+  # FastbootMenu display, and the gbl-chainload_build getvar.
+  # build-inside-docker.sh constructs the suffixed form
+  # (e.g. gbl-chainload-auto-debug-verbose).
+  DEFINE GBL_BUILD_NAME                   = gbl-chainload
 
 ################################################################################
 # Library mappings — mirrors QcomModulePkg.dsc [LibraryClasses.*]
@@ -152,8 +156,8 @@
   GCC:*_*_*_CC_FLAGS = -DPRODUCT_NAME=\"$(BOARD_BOOTLOADER_PRODUCT_NAME)\"
   GCC:*_*_*_CC_FLAGS = -DGBL_CHAINLOAD_VERSION=\"$(GBL_CHAINLOAD_VERSION)\"
 
-  # v2 mode flags — integer-based, no legacy mode strings.
-  GCC:*_*_*_CC_FLAGS = -DGBL_MODE=$(GBL_MODE)
+  # Build-tuning flags — manifest-driven activation handles per-profile
+  # behavior at runtime, so no compile-time mode flag here.
   GCC:*_*_*_CC_FLAGS = -DGBL_AUTO=$(GBL_AUTO)
   GCC:*_*_*_CC_FLAGS = -DGBL_DEBUG=$(GBL_DEBUG)
   GCC:*_*_*_CC_FLAGS = -DGBL_VERBOSE=$(GBL_VERBOSE)
