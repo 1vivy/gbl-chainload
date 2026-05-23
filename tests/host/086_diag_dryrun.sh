@@ -17,28 +17,20 @@ fi
   echo "SKIP: 086 — zip/base/gbl-chainload.efi absent"; exit 0;
 }
 
-# Build the multicall binary (zip-side diag.sh in PR2 Task 9 will call
-# `gbl <sub>` directly; until then we shim the legacy names so this
-# test stays untouched by the zip rewrite).
+# Build the multicall binary. PR2 Task 9 rewrote zip/modes/diag.sh to
+# call `gbl <sub>` directly (no shims needed); we stage `gbl` itself
+# onto PATH for this dry-run.
 cargo build --release --quiet -p gbl
 
 OUT=tests/host/.last/086
 rm -rf "$OUT"; mkdir -p "$OUT"
 
-# Stage shims that translate `gblp1-inspect/fv-unwrap/vbmeta-graft <args>`
-# into `gbl <sub> <args>` for the still-untouched zip/modes/diag.sh.
-SHIM_DIR="$OUT/shims"
+# Stage the gbl multicall on a per-test PATH dir. diag.sh calls
+# `gbl inspect / gbl unwrap / gbl avb {list,list-hash}` directly
+# post Task 9.
+SHIM_DIR="$OUT/bin"
 mkdir -p "$SHIM_DIR"
-GBL_BIN="$PWD/target/release/gbl"
-for entry in 'gblp1-inspect:inspect' 'fv-unwrap:unwrap' 'vbmeta-graft:avb'; do
-  name="${entry%%:*}"
-  sub="${entry##*:}"
-  cat > "$SHIM_DIR/$name" <<EOF
-#!/usr/bin/env bash
-exec "$GBL_BIN" $sub "\$@"
-EOF
-  chmod +x "$SHIM_DIR/$name"
-done
+cp "$PWD/target/release/gbl" "$SHIM_DIR/gbl"
 
 run_one() {
   local scenario="$1" expect="$2"
@@ -60,8 +52,8 @@ run_one() {
   exec 9>"$envdir/screen.txt"
   export OUTFD=9
 
-  # PATH so diag.sh can call tools by bare name. The shims in
-  # $SHIM_DIR map gblp1-inspect/fv-unwrap/vbmeta-graft -> gbl <sub>.
+  # PATH so diag.sh can call `gbl` by bare name (the staged binary
+  # lives in $SHIM_DIR; legacy per-tool shims are gone after PR2 Task 9).
   export PATH="$SHIM_DIR:$PATH"
 
   # Source diag.sh and call mode_main in a sub-shell that carries all
