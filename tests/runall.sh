@@ -13,6 +13,8 @@ echo "== 046_mode1_protocol_hook_lint =="
 bash tests/046_mode1_protocol_hook_lint.sh
 echo "== 047_cleanup_lint =="
 bash tests/047_cleanup_lint.sh
+echo "== 048_hook_registry_lint =="
+bash tests/048_hook_registry_lint.sh
 echo "== 042_dynamic_patch_harness =="
 bash tests/042_dynamic_patch_harness.sh
 echo "== 051_gbl_root_canoe_regression =="

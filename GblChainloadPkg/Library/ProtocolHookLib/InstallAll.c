@@ -25,6 +25,101 @@
 
 #include "HookCommon.h"
 
+#define GBL_HOOK_REGISTRY_MAGIC    SIGNATURE_32 ('G', 'B', 'H', 'K')
+#define GBL_HOOK_REGISTRY_VERSION  1u
+
+typedef struct {
+  UINT32  Magic;
+  UINT32  Version;
+  VOID   *Owner;
+  UINT32  Mode;
+} GBL_HOOK_REGISTRY;
+
+STATIC EFI_GUID  mGblHookRegistryGuid = {
+  0x67c2eab0, 0x792f, 0x46aa,
+  { 0x9d, 0x2f, 0x3e, 0x1d, 0x84, 0x12, 0x5c, 0x91 }
+};
+STATIC GBL_HOOK_REGISTRY  mGblHookRegistry = {
+  GBL_HOOK_REGISTRY_MAGIC,
+  GBL_HOOK_REGISTRY_VERSION,
+  NULL,
+  0
+};
+
+STATIC VOID *
+HookOwnerToken (VOID)
+{
+  return (VOID *)&mGblHookRegistry;
+}
+
+STATIC GBL_HOOK_REGISTRY *
+FindHookRegistry (VOID)
+{
+  UINTN Index;
+
+  if (gST == NULL) {
+    return NULL;
+  }
+
+  for (Index = 0; Index < gST->NumberOfTableEntries; Index++) {
+    if (CompareGuid (&gST->ConfigurationTable[Index].VendorGuid,
+                     &mGblHookRegistryGuid)) {
+      GBL_HOOK_REGISTRY *Registry;
+
+      Registry = (GBL_HOOK_REGISTRY *)gST->ConfigurationTable[Index].VendorTable;
+      if (Registry != NULL &&
+          Registry->Magic == GBL_HOOK_REGISTRY_MAGIC &&
+          Registry->Version == GBL_HOOK_REGISTRY_VERSION &&
+          Registry->Owner != NULL) {
+        return Registry;
+      }
+      return NULL;
+    }
+  }
+
+  return NULL;
+}
+
+STATIC EFI_STATUS
+CheckNoExistingHooks (VOID)
+{
+  GBL_HOOK_REGISTRY *Existing;
+
+  Existing = FindHookRegistry ();
+  if (Existing == NULL) {
+    return EFI_SUCCESS;
+  }
+
+  if (Existing->Mode != (UINT32)GBL_MODE) {
+    Print (L"ProtocolHookLib: FATAL — existing hook mode %u mismatches current mode %u\n",
+           Existing->Mode,
+           (UINT32)GBL_MODE);
+  } else {
+    Print (L"ProtocolHookLib: FATAL — hooks already active for mode %u; hard reset before re-running boot-efi\n",
+           Existing->Mode);
+  }
+  return EFI_ALREADY_STARTED;
+}
+
+STATIC EFI_STATUS
+RegisterHookMarker (VOID)
+{
+  EFI_STATUS Status;
+
+  mGblHookRegistry.Owner = HookOwnerToken ();
+  mGblHookRegistry.Mode  = (UINT32)GBL_MODE;
+
+  /* Detect-only marker: this image-static record is valid for normal use
+     because successful StartImage() and fallback FastbootLib keep the current
+     GBL image resident.  It is deliberately not a heap/runtime object; hard
+     reset is the recovery boundary for stale Qualcomm UEFI session state. */
+  Status = gBS->InstallConfigurationTable (&mGblHookRegistryGuid, &mGblHookRegistry);
+  if (EFI_ERROR (Status)) {
+    mGblHookRegistry.Owner = NULL;
+  }
+  return Status;
+}
+
 EFI_STATUS
 EFIAPI
 ProtocolHook_InstallAll (
@@ -37,6 +132,18 @@ ProtocolHook_InstallAll (
     return EFI_INVALID_PARAMETER;
   }
   ZeroMem (Result, sizeof (*Result));
+
+  Status = CheckNoExistingHooks ();
+  if (EFI_ERROR (Status)) {
+    return Status;
+  }
+
+  Status = RegisterHookMarker ();
+  if (EFI_ERROR (Status)) {
+    Print (L"ProtocolHookLib: FATAL — hook registry install failed (%r), aborting chain-load\n",
+           Status);
+    return Status;
+  }
 
   /* 1. VerifiedBoot -- required for mode-1 fakelock/persistence overlay;
         optional observation-only wrapper in mode-0. */
