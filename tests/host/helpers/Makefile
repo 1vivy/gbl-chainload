@@ -6,6 +6,7 @@ BINS = test_efisp_scan
 BINS += test_crc32
 BINS += test_sha256
 BINS += test_pe_sanity
+BINS += test_manifest_parse
 
 all: $(BINS)
 
@@ -26,6 +27,17 @@ test_pe_sanity: test_pe_sanity.c ../../../GblChainloadPkg/Library/GblPayloadLib/
                 ../../../GblChainloadPkg/Library/GblPayloadLib/Internal/PeSanity.h
 	$(CC) $(CFLAGS) -DGBL_HOST_BUILD=1 -o $@ test_pe_sanity.c \
 	      ../../../GblChainloadPkg/Library/GblPayloadLib/PeSanity.c
+
+test_manifest_parse: test_manifest_parse.c \
+                     ../../../GblChainloadPkg/Library/GblPayloadLib/PayloadParse.c \
+                     ../../../GblChainloadPkg/Library/GblPayloadLib/Crc32.c \
+                     ../../../GblChainloadPkg/Library/GblPayloadLib/Sha256.c \
+                     ../../../GblChainloadPkg/Library/GblPayloadLib/Internal/PayloadParse.h \
+                     ../../../tools/shared/gblp1.h
+	$(CC) $(CFLAGS) -DGBL_HOST_BUILD=1 -o $@ test_manifest_parse.c \
+	      ../../../GblChainloadPkg/Library/GblPayloadLib/PayloadParse.c \
+	      ../../../GblChainloadPkg/Library/GblPayloadLib/Crc32.c \
+	      ../../../GblChainloadPkg/Library/GblPayloadLib/Sha256.c
 
 BINS += parser_harness
 

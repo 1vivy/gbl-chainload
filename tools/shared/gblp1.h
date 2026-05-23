@@ -18,6 +18,17 @@
 #define GBLP1_TYPE_CACHED_ABL    0x0001u
 #define GBLP1_TYPE_SOURCE_META   0x0002u
 #define GBLP1_TYPE_MODE2_PROFILE 0x0010u  /* mode-2 profile (GM2P) */
+#define GBLP1_TYPE_MANIFEST      0x0020u  /* engine capability manifest (GMAN) */
+
+/* Manifest payload (16 bytes; little-endian).
+   Layout: magic[4] | schema_version u16 | cap_bits u16 | reserved_pad[8] */
+#define GBLP1_MANIFEST_MAGIC                "GMAN"
+#define GBLP1_MANIFEST_MAGIC_SIZE           4u
+#define GBLP1_MANIFEST_SIZE                 16u
+#define GBLP1_MANIFEST_SCHEMA_VERSION       1u
+#define GBLP1_MANIFEST_BIT_FAKELOCK_HOOK    0x0001u
+#define GBLP1_MANIFEST_BIT_PROFILE_SPOOF    0x0002u
+#define GBLP1_MANIFEST_BITS_RESERVED_MASK   0xFFFCu  /* bits 2..15 must be 0 */
 
 #define GBLP1_ENTRY_SIZE     48u
 

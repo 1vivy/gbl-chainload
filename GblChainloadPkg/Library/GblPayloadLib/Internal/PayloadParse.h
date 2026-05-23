@@ -37,7 +37,12 @@ enum gbl_payload_status {
     GBL_PAYLOAD_ENTRY_BAD_SIZE,
     GBL_PAYLOAD_ENTRY_SHA_MISMATCH,
     GBL_PAYLOAD_NO_CACHED_ABL,
-    GBL_PAYLOAD_NO_MODE2_PROFILE
+    GBL_PAYLOAD_NO_MODE2_PROFILE,
+    GBL_PAYLOAD_NO_MANIFEST,
+    GBL_PAYLOAD_BAD_MANIFEST_MAGIC,
+    GBL_PAYLOAD_BAD_MANIFEST_SCHEMA,
+    GBL_PAYLOAD_BAD_MANIFEST_RESERVED,
+    GBL_PAYLOAD_BAD_MANIFEST_SIZE
 };
 
 /* Validates only the GBLP1 header + footer layout. Does NOT walk
@@ -75,5 +80,20 @@ gbl_payload_find_mode2_profile(const uint8_t *bytes, size_t size,
 enum gbl_payload_status
 gbl_payload_scan_cached_abl(const uint8_t *bytes, size_t size,
                             const uint8_t **out_pe, size_t *out_pe_size);
+
+/* Engine capability manifest. cap_bits is the raw bit field from the
+   wire, validated against GBLP1_MANIFEST_BITS_RESERVED_MASK but otherwise
+   passed through — callers should compare against the
+   GBLP1_MANIFEST_BIT_* constants. */
+struct gbl_manifest { uint16_t cap_bits; };
+
+/* Locate + validate the unique GBLP1_TYPE_MANIFEST entry. On
+   GBL_PAYLOAD_OK with *out_present == 1: *out is filled. On
+   *out_present == 0: no manifest entry exists in the container
+   (NOT an error; caller treats as all-zero capabilities). On any
+   other return: parse or validation failed; *out is undefined. */
+enum gbl_payload_status
+gbl_payload_find_manifest(const uint8_t *bytes, size_t size,
+                          struct gbl_manifest *out, int *out_present);
 
 #endif
