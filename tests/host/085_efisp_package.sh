@@ -9,6 +9,11 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
+# Reproducible gbl-pack output (see 060_pack_roundtrip.sh) — the shim chain
+# inherits this env into the real gbl-pack invoked by efisp-package.py.
+: "${SOURCE_DATE_EPOCH:=0}"
+export SOURCE_DATE_EPOCH
+
 # Build the host tools and the parser harness this test needs.
 make -s -C tools/fv-unwrap
 make -s -C tools/abl-patcher
@@ -129,5 +134,13 @@ python3 scripts/efisp-package.py \
   --tools-dir "$OUT/tools" --out "$OUT/mode0-oem2.efi" \
   >/dev/null 2>&1 \
   || { echo "FAIL: --oem rejected on mode 0 (old mode-2-only gate still firing)"; exit 1; }
+
+# Golden parity assertion (frozen C-tool output).  Locks all three positive
+# cases: per-mode efisp package = base.efi || GBLP1 container.  The two
+# extra negative-gate runs above don't produce assertable files.
+for g in mode0.efi mode1.efi mode0-oem.efi mode0-oem2.efi; do
+  cmp -s "$OUT/$g" "tests/host/goldens/085/$g" \
+    || { echo "FAIL 085 golden: $g diverged from frozen C-tool output"; exit 1; }
+done
 
 echo "PASS: 085 efisp package"

@@ -52,4 +52,11 @@ echo "check rc=$rc" >> "$OUT/check.log"
 # here (the fixture predates the project's key); a hard fail is rc 1.
 [ "$rc" != 1 ] || { echo "FAIL: check could not parse the fixture"; cat "$OUT/check.log"; exit 1; }
 
+# Golden parity assertion (frozen C-tool output).  custom.img / grafted.img
+# use /dev/urandom and are non-deterministic.  grafted-footered.img IS
+# deterministic but ~100 MB (the partition-sized fixture grafted onto
+# itself), too heavy for an in-tree golden; tracked but not asserted here.
+diff -u tests/host/goldens/074/list.txt "$OUT/list.txt" \
+  || { echo "FAIL 074 golden: list.txt diverged from frozen C-tool output"; exit 1; }
+
 echo "PASS: 074 vbmeta-graft"

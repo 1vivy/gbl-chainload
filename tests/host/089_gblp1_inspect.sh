@@ -3,6 +3,10 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
+# Reproducible gbl-pack output (see 060_pack_roundtrip.sh).
+: "${SOURCE_DATE_EPOCH:=0}"
+export SOURCE_DATE_EPOCH
+
 PE=tests/images/pe/infiniti-EU-16.0.5.703.efi
 [ -f "$PE" ] || { echo "SKIP: $PE missing" >&2; exit 0; }
 
@@ -87,5 +91,20 @@ tools/gbl-pack/gbl-pack --mode2-profile "$OUT/profile.bin" --manifest 0x02 \
 tools/gblp1-inspect/gblp1-inspect "$OUT/manifest2.bin" > "$OUT/manifest2.txt"
 grep -q 'fakelock_hook=no profile_spoof=yes' "$OUT/manifest2.txt" \
   || { echo "FAIL: manifest 0x02 capability bits wrong"; cat "$OUT/manifest2.txt"; exit 1; }
+
+# Golden parity assertion (frozen C-tool output).  prefix.bin / efisp-like.img
+# / corrupt.bin / random.bin all use /dev/urandom and are excluded.
+cmp -s "$OUT/payload.bin"   tests/host/goldens/089/payload.bin \
+  || { echo "FAIL 089 golden: payload.bin diverged from frozen C-tool output"; exit 1; }
+diff -u tests/host/goldens/089/ok.txt        "$OUT/ok.txt" \
+  || { echo "FAIL 089 golden: ok.txt diverged from frozen C-tool output"; exit 1; }
+cmp -s "$OUT/manifest.bin"  tests/host/goldens/089/manifest.bin \
+  || { echo "FAIL 089 golden: manifest.bin diverged from frozen C-tool output"; exit 1; }
+diff -u tests/host/goldens/089/manifest.txt  "$OUT/manifest.txt" \
+  || { echo "FAIL 089 golden: manifest.txt diverged from frozen C-tool output"; exit 1; }
+cmp -s "$OUT/manifest2.bin" tests/host/goldens/089/manifest2.bin \
+  || { echo "FAIL 089 golden: manifest2.bin diverged from frozen C-tool output"; exit 1; }
+diff -u tests/host/goldens/089/manifest2.txt "$OUT/manifest2.txt" \
+  || { echo "FAIL 089 golden: manifest2.txt diverged from frozen C-tool output"; exit 1; }
 
 echo "PASS: 089 gblp1-inspect"

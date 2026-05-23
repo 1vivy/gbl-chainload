@@ -7,6 +7,10 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
+# Reproducible gbl-pack output (see 060_pack_roundtrip.sh).
+: "${SOURCE_DATE_EPOCH:=0}"
+export SOURCE_DATE_EPOCH
+
 PE=tests/images/pe/infiniti-EU-16.0.5.703.efi
 [ -f "$PE" ] || { echo "SKIP: $PE missing"; exit 0; }
 
@@ -41,5 +45,11 @@ fi
 tests/host/helpers/parser_harness scan-cached-abl "$OUT/full.bin" >"$OUT/scan.log" 2>&1
 grep -q 'status=0' "$OUT/scan.log" \
   || { echo "FAIL: scan-cached-abl did not find the real container"; cat "$OUT/scan.log"; exit 1; }
+
+# Golden parity assertion (frozen C-tool output).  full.bin embeds the
+# parser_harness binary as a prefix, which varies with the build toolchain,
+# so only payload.bin is frozen here.
+cmp -s "$OUT/payload.bin" tests/host/goldens/069/payload.bin \
+  || { echo "FAIL 069 golden: payload.bin diverged from frozen C-tool output"; exit 1; }
 
 echo "PASS: 069 full-buffer scan (embedded-magic tolerant)"

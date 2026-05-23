@@ -50,4 +50,11 @@ grep -q "part-size=$PSZ (custom image size)" "$OUT/dry-run.log" \
   || { echo "FAIL: dry-run did not report custom-image part-size"; cat "$OUT/dry-run.log"; exit 1; }
 [ ! -e "$DRYOUT" ] || { echo "FAIL: dry-run unexpectedly created output"; exit 1; }
 
+# Golden parity assertion (frozen C-tool output). $SMALL uses /dev/urandom
+# so size-from.img / size-from-list.txt are excluded.  default.img grafts
+# the fixture onto itself and IS deterministic, but ~100 MB — too heavy for
+# an in-tree golden; tracked but not asserted here.
+diff -u tests/host/goldens/091/default-list.txt "$OUT/default-list.txt" \
+  || { echo "FAIL 091 golden: default-list.txt diverged from frozen C-tool output"; exit 1; }
+
 echo "PASS: 091 vbmeta-graft.py"

@@ -4,6 +4,10 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
+# Reproducible gbl-pack output (see 060_pack_roundtrip.sh).
+: "${SOURCE_DATE_EPOCH:=0}"
+export SOURCE_DATE_EPOCH
+
 make -s -C tools/gbl-pack
 make -s -C tests/host/helpers parser_harness
 GP=tools/gbl-pack/gbl-pack
@@ -66,6 +70,14 @@ else
 
   "$H" find-mode2-profile "$OUT/combined.bin" | grep -q 'status=0' \
     || { echo "FAIL: find-mode2-profile failed on ec=3 combined container"; exit 1; }
+
+  # Golden parity: combined ec=3 container (depends on the PE fixture).
+  cmp -s "$OUT/combined.bin" tests/host/goldens/081/combined.bin \
+    || { echo "FAIL 081 golden: combined.bin diverged from frozen C-tool output"; exit 1; }
 fi
+
+# Golden parity assertion (frozen C-tool output).
+cmp -s "$OUT/overlay.bin" tests/host/goldens/081/overlay.bin \
+  || { echo "FAIL 081 golden: overlay.bin diverged from frozen C-tool output"; exit 1; }
 
 echo "PASS: 081 gbl-pack mode2 profile"

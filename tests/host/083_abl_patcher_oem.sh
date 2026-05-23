@@ -102,6 +102,12 @@ if ! grep -qF "abl-patcher: unknown --oem 'bad_oem_name'" "$OUT/bad.log"; then
 fi
 echo "  ok: --oem bad_oem_name rejected with exit 2 + clear message"
 
+# Golden parity assertion (frozen C-tool output).
+for g in oplus.efi oneplus.efi plain.efi; do
+  cmp -s "$OUT/$g" "tests/host/goldens/083/$g" \
+    || { echo "FAIL 083 golden: $g diverged from frozen C-tool output"; exit 1; }
+done
+
 # ---- Regression gate ---------------------------------------------------------
 # Run sibling tests so a breakage in roundtrip / mode taxonomy surfaces here
 # too.  Each test exits 0 on SKIP (missing fixture) already.

@@ -98,4 +98,8 @@ else
   echo "  derive parity: SKIP (fixture or avbtool absent)"
 fi
 
+# Golden parity assertion: lock the compile output to the frozen byte string.
+cmp -s "$OUT/c.bin" tests/host/goldens/082/c.bin \
+  || { echo "FAIL 082 golden: c.bin diverged from frozen C-tool output"; exit 1; }
+
 echo "PASS: 082 mode2-profile parity"

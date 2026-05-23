@@ -4,6 +4,10 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
+# Reproducible gbl-pack output (see 060_pack_roundtrip.sh).
+: "${SOURCE_DATE_EPOCH:=0}"
+export SOURCE_DATE_EPOCH
+
 make -s -C tools/abl-patcher
 make -s -C tools/gbl-pack
 make -s -C tests/host/helpers parser_harness
@@ -28,6 +32,11 @@ for pe in "${fixtures[@]}"; do
     >"$OUT/$name.parse.log" 2>&1
   grep -q 'status=0' "$OUT/$name.parse.log" \
     || { echo "FAIL: $name parse"; cat "$OUT/$name.parse.log"; exit 1; }
+  # Golden parity: per-fixture .bin + .patched.efi outputs are frozen.
+  for g in "$name.bin" "$name.patched.efi"; do
+    cmp -s "$OUT/$g" "tests/host/goldens/064/$g" \
+      || { echo "FAIL 064 golden: $g diverged from frozen C-tool output"; exit 1; }
+  done
   echo "  ok: $name"
 done
 

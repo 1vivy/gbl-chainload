@@ -110,7 +110,23 @@ int main(int argc, char **argv)
 
     in.packer_version = "gbl-pack " GBL_TOOL_VERSION;
     char ts[32];
-    time_t now = time(NULL);
+    /* SOURCE_DATE_EPOCH support — reproducible-builds.org convention.
+       Lets goldens (tests/host/goldens/) capture byte-exact output. */
+    time_t now;
+    const char *sde = getenv("SOURCE_DATE_EPOCH");
+    if (sde && *sde) {
+        errno = 0;
+        char *end = NULL;
+        unsigned long long v = strtoull(sde, &end, 10);
+        if (errno != 0 || !end || *end != '\0' || end == sde) {
+            fprintf(stderr,
+                "gbl-pack: bad SOURCE_DATE_EPOCH (not a non-negative integer)\n");
+            return 2;
+        }
+        now = (time_t)v;
+    } else {
+        now = time(NULL);
+    }
     struct tm tm;
     gmtime_r(&now, &tm);
     strftime(ts, sizeof(ts), "%Y-%m-%dT%H:%M:%SZ", &tm);

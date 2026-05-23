@@ -3,6 +3,10 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
+# Reproducible gbl-pack output (see 060_pack_roundtrip.sh).
+: "${SOURCE_DATE_EPOCH:=0}"
+export SOURCE_DATE_EPOCH
+
 PE=tests/images/pe/infiniti-EU-16.0.5.703.efi
 [ -f "$PE" ] || { echo "SKIP: $PE missing"; exit 0; }
 
@@ -45,5 +49,10 @@ fuzz 24 0xFF 8 "header_crc32"
 # Footer at total_size-8 (read total from header bytes [16..20))
 TOTAL=$(od -An -tu4 -N4 -j16 "$OUT/clean.bin" | tr -d ' ')
 fuzz $((TOTAL - 8)) 0xFF 9 "footer"
+
+# Golden parity assertion: the unpoisoned packed container is the C tool's
+# canonical output; the Rust port must produce the same bytes.
+cmp -s "$OUT/clean.bin" tests/host/goldens/061/clean.bin \
+  || { echo "FAIL 061 golden: clean.bin diverged from frozen C-tool output"; exit 1; }
 
 echo "PASS: 061 parser fuzz"
