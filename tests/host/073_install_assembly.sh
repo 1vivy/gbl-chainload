@@ -23,7 +23,7 @@ for n in 0 1 2; do
            "modes/$MODE.conf" "modes/$MODE.sh" \
            bin/fv-unwrap bin/abl-patcher bin/gbl-pack bin/gbl-commit \
            bin/busybox-arm64 \
-            "base/mode-$n.efi" SHA256SUMS)
+            "base/gbl-chainload.efi" SHA256SUMS)
   if [ "$n" = 1 ]; then
     common_expected+=(modes/graft-common.sh bin/vbmeta-graft)
   fi
@@ -38,10 +38,11 @@ for n in 0 1 2; do
   if grep -qE 'modes/(diag|graft)\.' "$OUT/$MODE.list"; then
     echo "FAIL: $ZIP carries diag/graft mode files"; exit 1
   fi
-  # No other install mode's .sh/.conf or base EFI.
+  # No other install mode's .sh/.conf (the base EFI is now a single shared
+  # gbl-chainload.efi, asserted above; no per-mode base/ paths to police).
   for o in 0 1 2; do
     [ "$o" = "$n" ] && continue
-    if grep -qE "(modes/mode-$o-install\.|base/mode-$o\.efi)" "$OUT/$MODE.list"; then
+    if grep -qE "modes/mode-$o-install\." "$OUT/$MODE.list"; then
       echo "FAIL: $ZIP carries mode-$o files"; exit 1
     fi
   done
