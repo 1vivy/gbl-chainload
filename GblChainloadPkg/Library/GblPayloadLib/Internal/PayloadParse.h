@@ -38,6 +38,8 @@ enum gbl_payload_status {
     GBL_PAYLOAD_ENTRY_SHA_MISMATCH,
     GBL_PAYLOAD_NO_CACHED_ABL,
     GBL_PAYLOAD_NO_MODE2_PROFILE,
+    /* Reserved; not currently returned. gbl_payload_find_manifest()
+       signals absence via GBL_PAYLOAD_OK + *out_present=0. */
     GBL_PAYLOAD_NO_MANIFEST,
     GBL_PAYLOAD_BAD_MANIFEST_MAGIC,
     GBL_PAYLOAD_BAD_MANIFEST_SCHEMA,

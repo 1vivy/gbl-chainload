@@ -20,14 +20,18 @@ static uint32_t rle32(const uint8_t *p) {
 }
 
 /* Build a minimal valid GBLP1 container with one manifest entry whose
-   payload bytes are caller-supplied. Returns alloc'd buffer + size;
-   caller frees. */
-static uint8_t *make_container(const uint8_t *payload, size_t payload_size,
-                               size_t *out_size) {
+   payload bytes are caller-supplied. `entry_size` is the size recorded
+   in the entry header (and used to bound the SHA + memcpy) — pass 16
+   for spec-conformant manifests; other values exercise the
+   BAD_MANIFEST_SIZE path. `payload_buf_size` is how many bytes the
+   caller supplied (only used to clamp the memcpy). Returns alloc'd
+   buffer + size; caller frees. */
+static uint8_t *make_container(const uint8_t *payload, size_t payload_buf_size,
+                               size_t entry_size, size_t *out_size) {
     uint32_t entries_end = GBLP1_HEADER_SIZE + GBLP1_ENTRY_SIZE;
     uint32_t off = (entries_end + GBLP1_PAYLOAD_ALIGN - 1)
                    & ~(GBLP1_PAYLOAD_ALIGN - 1);
-    uint32_t total = off + (uint32_t)payload_size + GBLP1_FOOTER_SIZE;
+    uint32_t total = off + (uint32_t)entry_size + GBLP1_FOOTER_SIZE;
     /* Align footer for cleanliness. */
     total = (total + GBLP1_PAYLOAD_ALIGN - 1) & ~(GBLP1_PAYLOAD_ALIGN - 1);
     uint8_t *buf = calloc(1, total);
@@ -40,9 +44,10 @@ static uint8_t *make_container(const uint8_t *payload, size_t payload_size,
     uint8_t *e = buf + GBLP1_HEADER_SIZE;
     wle16(e + 0,  GBLP1_TYPE_MANIFEST);
     wle32(e + 4,  off);
-    wle32(e + 8,  (uint32_t)payload_size);
-    if (payload) memcpy(buf + off, payload, payload_size);
-    gbl_sha256(buf + off, payload_size, e + 16);
+    wle32(e + 8,  (uint32_t)entry_size);
+    size_t copy = payload_buf_size < entry_size ? payload_buf_size : entry_size;
+    if (payload && copy) memcpy(buf + off, payload, copy);
+    gbl_sha256(buf + off, entry_size, e + 16);
     memcpy(buf + total - GBLP1_FOOTER_SIZE, GBLP1_FOOTER, GBLP1_FOOTER_SIZE);
     wle32(buf + 24, gbl_crc32(buf, 24));
     *out_size = total;
@@ -62,7 +67,7 @@ static void make_payload(uint8_t *out16, uint16_t cap_bits, uint16_t schema_ver,
 #define CASE(label, expected_status, expected_present, expected_bits, \
              bits, schema, bad_magic, bad_pad) do { \
     uint8_t pl[16]; make_payload(pl, (bits), (schema), (bad_magic), (bad_pad)); \
-    size_t n; uint8_t *b = make_container(pl, sizeof(pl), &n); \
+    size_t n; uint8_t *b = make_container(pl, sizeof(pl), sizeof(pl), &n); \
     struct gbl_manifest m = {0}; int present = -1; \
     enum gbl_payload_status s = gbl_payload_find_manifest(b, n, &m, &present); \
     if (s != (expected_status) || \
@@ -100,7 +105,7 @@ int main(void) {
     /* Absence: container with a non-manifest entry (cached-ABL). */
     {
         uint8_t pl[16] = {0};
-        size_t n; uint8_t *b = make_container(pl, 16, &n);
+        size_t n; uint8_t *b = make_container(pl, 16, 16, &n);
         uint8_t *e = b + GBLP1_HEADER_SIZE;
         wle16(e + 0, GBLP1_TYPE_CACHED_ABL);   /* re-type to non-manifest */
         uint32_t off = rle32(e + 4);
@@ -117,6 +122,22 @@ int main(void) {
         free(b); pass++;
     }
 
-    printf("093_manifest_parse: OK (%d/8)\n", pass);
-    return pass == 8 ? 0 : 1;
+    /* Bad manifest size: entry recorded as 15 bytes (spec requires 16). */
+    {
+        uint8_t pl[16] = {0};
+        make_payload(pl, 0x0000, 1, 0, 0);
+        size_t n; uint8_t *b = make_container(pl, sizeof(pl), 15, &n);
+        struct gbl_manifest m = {0}; int present = -1;
+        enum gbl_payload_status s =
+            gbl_payload_find_manifest(b, n, &m, &present);
+        if (s != GBL_PAYLOAD_BAD_MANIFEST_SIZE) {
+            fprintf(stderr, "FAIL bad-size: status=%d present=%d\n",
+                    (int)s, present);
+            free(b); return 1;
+        }
+        free(b); pass++;
+    }
+
+    printf("093_manifest_parse: OK (%d/9)\n", pass);
+    return pass == 9 ? 0 : 1;
 }
