@@ -291,24 +291,36 @@ The 084 SKIP guard auto-detects dlltool presence — no test change needed
 once the image is refreshed. macOS cross-build (also exercised by 084)
 already works on the current image via the zig wrapper scripts.
 
-### Real-device fixtures marked `[user-provides]`
+### Real-device fixtures
 
-From Task 2's `tests/host/goldens/MANIFEST` (`Missing / [user-provides]`
-block at the bottom):
+What's in-tree (correction: the original Task 2 MANIFEST under-counted these):
 
-- **Stock OEM vbmeta of recent infiniti shipping ROM** — none in-tree.
-  The 16.0.7.201 dump (`tests/images/vbmeta-infiniti-IN-16.0.7.201.img`)
-  is present and exercises 079/082-derive/087, but adding 203/703-era
-  dumps would broaden the mode-2 derive coverage to more recent
-  shipping firmware.
+- **Stock OEM vbmeta**: `tests/images/vbmeta-infiniti-IN-16.0.7.201.img`
+  — wired into 079 / 082-derive / 087 (mode-2 derive parity).
+- **Stock recovery image**: `tests/images/recovery-infiniti-IN-16.0.7.201.img`
+  — present in tree; NOT yet wired into a golden test.
+- **Custom recovery image**: `tests/images/recovery-infiniti-OrangeFox.img`
+  — present in tree; NOT yet wired into a golden test.
+- **Grafted recovery output**: `tests/images/grafted-recovery.img`
+  — wired into 074 / 090 / 091 (vbmeta-graft descriptor walk + self-graft
+  round-trip).
+
+Genuinely missing (would broaden coverage further):
+
+- **vbmeta dumps from 203/703-era shipping ROMs** — would broaden the
+  mode-2 derive coverage beyond the 16.0.7.201 dump.
 - **Real post-install EFISP partition dump from a device** — none
   in-tree. The on-device EFISP-PE gate path (the one that aborted on
   blank EFISP per the `efisp_pe_gate_blocks_first_install` memory) is
   currently exercised only synthetically via `085_efisp_package.sh`'s
   end-to-end driver.
 
-Both are deferred from PR2 — operator-supplied fixtures the user can
-drop into `tests/images/` whenever convenient, no code change needed.
+Follow-up opportunity (not blocking): wire the two recovery images
+into an explicit `gbl avb graft` parity test — input = stock+OrangeFox
+recovery pair + stock vbmeta footer; assertion = descriptor-walk
+output matches a captured golden. Today 091 only exercises the
+self-graft round-trip (grafted-recovery → grafted-recovery); a true
+end-to-end graft from raw stock + custom recovery isn't covered.
 
 ## Reviewer notes (optional polish for follow-up)
 

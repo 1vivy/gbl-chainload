@@ -24,6 +24,9 @@ ARG DEBIAN_FRONTEND=noninteractive
 #   clang, lld, llvm                                             → CLANGPDB / CLANGDWARF toolchains
 #   gcc-aarch64-linux-gnu, binutils-aarch64-linux-gnu            → CLANG35 (legacy gbl_root_canoe path)
 #   xxd, zip, unzip, file                                        → packaging / smoke tests
+#   mingw-w64                                                    → x86_64-w64-mingw32-dlltool for windows-sys
+#                                                                  (Rust 1.85+ x86_64-pc-windows-gnu cross-build;
+#                                                                  zig cc alone is not enough)
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
         python3 \
@@ -40,6 +43,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         gcc-aarch64-linux-gnu \
         g++-aarch64-linux-gnu \
         binutils-aarch64-linux-gnu \
+        mingw-w64 \
         ca-certificates \
         curl \
         xxd \
@@ -75,17 +79,6 @@ ENV PATH=/opt/zig:$PATH
 # suffixed under /usr/lib/llvm-*/bin) onto PATH for the macOS
 # universal-binary merge step in build-cross-tools.sh.
 RUN ln -sf "$(ls /usr/lib/llvm-*/bin/llvm-lipo | head -1)" /usr/local/bin/llvm-lipo
-
-# TODO(PR2 Task 10 follow-up): the Rust 1.85 windows-sys crate invokes
-#   x86_64-w64-mingw32-dlltool during the x86_64-pc-windows-gnu cross
-#   build (zig alone is not enough). Adding `mingw-w64` here unblocks
-#   test 084's Windows leg — it currently SKIPs in 084_cross_build.sh
-#   when dlltool is absent.
-#
-#     apt-get update && apt-get install -y --no-install-recommends mingw-w64 \
-#       && rm -rf /var/lib/apt/lists/*
-#
-# Tracked in docs/superpowers/pr-evidence/2026-05-23-rust-consolidation-parity.md.
 
 # --- Rust toolchain ---
 # Stable Rust + seven cross targets for the workspace at the repo root
