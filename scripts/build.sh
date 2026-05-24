@@ -76,9 +76,9 @@ done
 # getvar gbl-chainload_build — scripts can identify what's running on device
 # without parsing the binary or filename.
 SUFFIX=""
-[[ $AUTO    -eq 1 ]] && SUFFIX+="-auto"
-[[ $DEBUG   -eq 1 ]] && SUFFIX+="-debug"
-[[ $VERBOSE -eq 1 ]] && SUFFIX+="-verbose"
+if [[ $AUTO    -eq 1 ]]; then SUFFIX+="-auto";    fi
+if [[ $DEBUG   -eq 1 ]]; then SUFFIX+="-debug";   fi
+if [[ $VERBOSE -eq 1 ]]; then SUFFIX+="-verbose"; fi
 BUILD_NAME="gbl-chainload${SUFFIX}"
 ARTIFACT="dist/${BUILD_NAME}.efi"
 
@@ -188,5 +188,5 @@ fi
 
 echo "==> done."
 echo "    firmware: $ARTIFACT"
-[[ $DO_RECOVERY -eq 1 ]] && echo "    recovery: dist/recovery/gbl"
-[[ $DO_HOST     -eq 1 ]] && echo "    host:     dist/host/gbl"
+if [[ $DO_RECOVERY -eq 1 ]]; then echo "    recovery: dist/recovery/gbl"; fi
+if [[ $DO_HOST     -eq 1 ]]; then echo "    host:     dist/host/gbl";     fi

@@ -30,9 +30,9 @@ fi
 # (display), and LogFsLib (banner).
 if [[ -z "${GBL_BUILD_NAME:-}" ]]; then
   GBL_BUILD_NAME_SUFFIX=""
-  [[ $GBL_AUTO    -eq 1 ]] && GBL_BUILD_NAME_SUFFIX+="-auto"
-  [[ $GBL_DEBUG   -eq 1 ]] && GBL_BUILD_NAME_SUFFIX+="-debug"
-  [[ $GBL_VERBOSE -eq 1 ]] && GBL_BUILD_NAME_SUFFIX+="-verbose"
+  if [[ $GBL_AUTO    -eq 1 ]]; then GBL_BUILD_NAME_SUFFIX+="-auto";    fi
+  if [[ $GBL_DEBUG   -eq 1 ]]; then GBL_BUILD_NAME_SUFFIX+="-debug";   fi
+  if [[ $GBL_VERBOSE -eq 1 ]]; then GBL_BUILD_NAME_SUFFIX+="-verbose"; fi
   GBL_BUILD_NAME="gbl-chainload${GBL_BUILD_NAME_SUFFIX}"
 fi
 

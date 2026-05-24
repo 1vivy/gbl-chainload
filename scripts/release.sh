@@ -112,6 +112,15 @@ else
   printf '  prepend section "## v%s — %s" to CHANGELOG.md\n' "$VER" "$TODAY"
 fi
 
+# --- parent commit FIRST (VERSION + CHANGELOG) ---
+# This MUST happen before update-tools.sh so the parent tree is clean
+# when the zip submodule's update-tools.sh probes it. Otherwise MANIFEST
+# gets stamped `parent-dirty: 1` and tests/host/071_zip_assembly's skew
+# guard fires (cf. release.yml `build-recovery-zip.sh` line 28-29).
+echo "==> committing VERSION + CHANGELOG on the release branch"
+run "git add VERSION CHANGELOG.md"
+run "git commit -m 'release: $VER'"
+
 # --- zip refresh ---
 # Submodule is typically in detached HEAD after a fresh clone / submodule
 # update. We need the commit to land on zip's main and reach origin/main
@@ -130,11 +139,13 @@ run "git -C zip commit -m 'release: $VER — refresh vendored artifacts'"
 echo "==> pushing zip's main so the new commit is reachable"
 run "git -C zip push origin main"
 
-# --- parent zip pointer ---
-echo "==> bumping parent's zip pointer + committing VERSION + CHANGELOG"
+# --- amend parent's release commit with the zip pointer ---
+# Fold the zip submodule pointer bump into the prior `release: $VER`
+# commit so the branch ends up with ONE focused commit. Reviewers see
+# VERSION + CHANGELOG + zip pointer in a single diff.
+echo "==> folding zip pointer bump into the release commit"
 run "git add zip"
-run "git add VERSION CHANGELOG.md"
-run "git commit -m 'release: $VER'"
+run "git commit --amend --no-edit"
 
 # --- push + PR ---
 echo "==> pushing branch + opening PR"
