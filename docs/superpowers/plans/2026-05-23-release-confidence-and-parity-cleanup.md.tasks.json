@@ -1,65 +1,15 @@
 {
   "planPath": "docs/superpowers/plans/2026-05-23-release-confidence-and-parity-cleanup.md",
-  "lastUpdated": "2026-05-23T00:50:00Z",
+  "lastUpdated": "2026-05-23T01:30:00Z",
   "tasks": [
-    {
-      "id": "33",
-      "subject": "Task 0: Commit pre-staged workflow + RELEASE_README changes",
-      "status": "pending",
-      "description": "**Goal:** Land the single-binary `build-host-tools` loop refactor and the RELEASE_README multicall rewrite that are already in the working tree.\n\n**Files:**\n- Modify: `.github/workflows/release.yml`\n- Modify: `tools/RELEASE_README.md`\n\n**Acceptance Criteria:**\n- Commit titled `release.yml: single-gbl build-host-tools + RELEASE_README multicall rewrite`\n- `git diff main HEAD` shows only the two files\n- release.yml parses as valid YAML\n\n**Verify:** `python3 -c 'import yaml; yaml.safe_load(open(\".github/workflows/release.yml\"))'` exits 0.\n\n```json:metadata\n{\"files\":[\".github/workflows/release.yml\",\"tools/RELEASE_README.md\"],\"verifyCommand\":\"python3 -c 'import yaml; yaml.safe_load(open(\\\".github/workflows/release.yml\\\"))'\",\"acceptanceCriteria\":[\"Commit titled correctly\",\"Only release.yml + RELEASE_README in diff\",\"YAML valid\"]}\n```"
-    },
-    {
-      "id": "34",
-      "subject": "Task 1: Retire all parity-contract goldens",
-      "status": "pending",
-      "description": "**Goal:** Delete `tests/host/goldens/` entirely; strip every `cmp -s ... goldens/...` / `diff -u ... goldens/...` line from 18 test scripts; replace 5 textual-golden assertions with inline `grep -qE` schema checks.\n\nSee plan doc Task 1 for full per-file replacement strings.\n\n```json:metadata\n{\"files\":[\"tests/host/goldens/\",\"tests/host/060_pack_roundtrip.sh\",\"tests/host/061_parser_fuzz.sh\",\"tests/host/064_e2e_fixtures.sh\",\"tests/host/067_blockio_reader_smoke.sh\",\"tests/host/069_full_buffer_scan.sh\",\"tests/host/072_fv_unwrap_exploit.sh\",\"tests/host/074_vbmeta_graft.sh\",\"tests/host/081_gbl_pack_mode2_profile.sh\",\"tests/host/082_mode2_profile_parity.sh\",\"tests/host/083_abl_patcher_oem.sh\",\"tests/host/085_efisp_package.sh\",\"tests/host/087_mode2_profile_regression.sh\",\"tests/host/088_patch7_multi_abl.sh\",\"tests/host/089_gblp1_inspect.sh\",\"tests/host/090_vbmeta_descriptor_hash.sh\",\"tests/host/091_vbmeta_graft_py.sh\",\"tests/host/094_gbl_pack_manifest.sh\",\"tests/host/096_recovery_graft_real.sh\"],\"verifyCommand\":\"for t in 060 061 064 067 069 072 074 081 082 083 085 087 088 089 090 091 094 096; do bash tests/host/${t}_*.sh >/dev/null 2>&1 && echo ok || echo FAIL; done\",\"acceptanceCriteria\":[\"goldens/ dir gone\",\"no stale goldens references\",\"all 18 tests pass\",\"textual replacements assert specific fields\"]}\n```"
-    },
-    {
-      "id": "35",
-      "subject": "Task 2: build-efi job — EFI + recovery-gbl parity checks vs zip",
-      "status": "pending",
-      "blockedBy": ["33"],
-      "description": "**Goal:** Extend build-efi to build both vendored artifacts (firmware EFI + recovery gbl multicall) and assert each is byte-identical to its zip counterpart. Replaces the squash-merge-fragile parent-commit SHA check.\n\nSee plan doc Task 2 for full YAML.\n\n```json:metadata\n{\"files\":[\".github/workflows/release.yml\"],\"verifyCommand\":\"python3 -c 'import yaml; j=yaml.safe_load(open(\\\".github/workflows/release.yml\\\"))[\\\"jobs\\\"]; names=[s.get(\\\"name\\\",\\\"\\\") for s in j[\\\"build-efi\\\"][\\\"steps\\\"]]; assert any(\\\"EFI parity\\\" in n for n in names); assert any(\\\"Build recovery gbl\\\" in n for n in names); assert any(\\\"Recovery gbl parity\\\" in n for n in names)'\",\"acceptanceCriteria\":[\"EFI parity step present\",\"Build recovery gbl step present\",\"Recovery gbl parity step present\",\"Both parity steps fail with recovery hint\",\"artifact + release-job wiring intact\"]}\n```"
-    },
-    {
-      "id": "36",
-      "subject": "Task 3: verify-job — submodule pointer reachability",
-      "status": "pending",
-      "blockedBy": ["33"],
-      "description": "**Goal:** Extend the verify job with submodule pointer reachability check. Parent-commit-matches-tag-SHA check dropped (squash-merge incompatible); Task 2's parity checks now catch the staleness failure mode.\n\nSee plan doc Task 3 for YAML.\n\n```json:metadata\n{\"files\":[\".github/workflows/release.yml\"],\"verifyCommand\":\"python3 -c 'import yaml; v=yaml.safe_load(open(\\\".github/workflows/release.yml\\\"))[\\\"jobs\\\"][\\\"verify\\\"]; names=[s.get(\\\"name\\\",\\\"\\\") for s in v[\\\"steps\\\"]]; assert any(\\\"reachability\\\" in n.lower() for n in names)'\",\"acceptanceCriteria\":[\"reachability step present\",\"fails with recovery hint\",\"verify outputs unchanged\"]}\n```"
-    },
-    {
-      "id": "37",
-      "subject": "Task 4: scripts/release.sh — one-command release prep",
-      "status": "pending",
-      "description": "**Goal:** Create scripts/release.sh X.Y.Z that scaffolds the release branch + commits + PR. Script must checkout zip's main + ff-merge BEFORE running update-tools.sh, and push zip's main AFTER committing so the parent's bumped pointer is reachable.\n\nSee plan doc Task 4 for full script body.\n\n```json:metadata\n{\"files\":[\"scripts/release.sh\"],\"verifyCommand\":\"bash scripts/release.sh --help && bash scripts/release.sh --dry-run 2.3.99 && [ -z \\\"$(git status --porcelain)\\\" ] && [ -x scripts/release.sh ] && echo OK\",\"acceptanceCriteria\":[\"--help exits 0\",\"--dry-run no state change\",\"executable\",\"EXIT trap rollback\",\"validates semver/clean/tag\",\"zip main checked out + pushed\"]}\n```"
-    },
-    {
-      "id": "38",
-      "subject": "Task 5: Cargo registry + git cache across workflows",
-      "status": "pending",
-      "blockedBy": ["33"],
-      "description": "**Goal:** `actions/cache@v4` for `~/.cargo/registry/{index,cache}` + `~/.cargo/git/db` in every cargo-touching job, keyed on Cargo.lock.\n\nSee plan doc Task 5.\n\n```json:metadata\n{\"files\":[\".github/workflows/release.yml\",\".github/workflows/ci.yml\",\".github/workflows/host-tools.yml\"],\"verifyCommand\":\"python3 -c \\\"import yaml, glob\\nfor path in glob.glob('.github/workflows/*.yml'):\\n  wf = yaml.safe_load(open(path))\\n  for jn, j in wf.get('jobs', {}).items():\\n    s = str(j.get('steps', []))\\n    if 'cargo' in s.lower() and not ('actions/cache' in s and '~/.cargo/registry' in s): print(f'MISSING: {path}::{jn}')\\nprint('done')\\\"\",\"acceptanceCriteria\":[\"every cargo job has cache\",\"key keyed on Cargo.lock\",\"restore-keys fallback\",\"no target/ in cache\"]}\n```"
-    },
-    {
-      "id": "39",
-      "subject": "Task 6: Concurrency groups in all workflows",
-      "status": "pending",
-      "blockedBy": ["33"],
-      "description": "**Goal:** Force-pushes cancel stale runs on feature branches; main never cancelled.\n\nSee plan doc Task 6.\n\n```json:metadata\n{\"files\":[\".github/workflows/release.yml\",\".github/workflows/ci.yml\",\".github/workflows/host-tools.yml\"],\"verifyCommand\":\"python3 -c \\\"import yaml, glob\\nfor path in glob.glob('.github/workflows/*.yml'):\\n  c = yaml.safe_load(open(path)).get('concurrency')\\n  assert c and c.get('group') == '\\\\${{ github.workflow }}-\\\\${{ github.ref }}'\\nprint('done')\\\"\",\"acceptanceCriteria\":[\"every workflow has top-level concurrency\",\"group = workflow-ref\",\"cancel-in-progress excludes main\",\"YAML valid\"]}\n```"
-    },
-    {
-      "id": "40",
-      "subject": "Task 7: CLAUDE.md — single-commit-PR flexibility + version bumps explicit",
-      "status": "pending",
-      "description": "**Goal:** Update 'Workflow: branch then PR' section per spec § Unit D.\n\nSee plan doc Task 7.\n\n```json:metadata\n{\"files\":[\"CLAUDE.md\"],\"verifyCommand\":\"grep -q 'scripts/release.sh' CLAUDE.md && grep -q 'Single-commit PRs are fine' CLAUDE.md && ! grep -q 'Hot-fix-style' CLAUDE.md && echo OK\",\"acceptanceCriteria\":[\"scripts/release.sh referenced\",\"flexibility text present\",\"old Hot-fix text gone\",\"no other section changes\"]}\n```"
-    },
-    {
-      "id": "41",
-      "subject": "Task 8: Finalize PR #46 — retitle, rebody, force-push",
-      "status": "pending",
-      "blockedBy": ["33", "34", "35", "36", "37", "38", "39", "40"],
-      "description": "**Goal:** Force-push consolidated branch; gh pr edit 46 with new title + body; watch CI to CLEAN. PR #46 merges via **merge commit, not squash** (per brainstorm follow-up — preserves spec/plan commit history on main for traceability).\n\nSee plan doc Task 8 for title + body.\n\n```json:metadata\n{\"files\":[],\"verifyCommand\":\"gh pr view 46 --json title,mergeable,mergeStateStatus\",\"acceptanceCriteria\":[\"new title set\",\"spec+plan+8 task commits on origin\",\"mergeStateStatus = CLEAN\",\"PR body notes 'merge commit, not squash'\",\"host-tools + CI workflows green\"]}\n```"
-    }
+    {"id": "33", "subject": "Task 0: Commit pre-staged workflow + RELEASE_README changes", "status": "completed"},
+    {"id": "34", "subject": "Task 1: Retire all parity-contract goldens", "status": "completed"},
+    {"id": "35", "subject": "Task 2: build-efi job — EFI + recovery-gbl parity checks vs zip", "status": "completed", "blockedBy": ["33"]},
+    {"id": "36", "subject": "Task 3: verify-job — submodule pointer reachability", "status": "completed", "blockedBy": ["33"]},
+    {"id": "37", "subject": "Task 4: scripts/release.sh — one-command release prep", "status": "completed"},
+    {"id": "38", "subject": "Task 5: Cargo registry + git cache (ci.yml only)", "status": "completed", "blockedBy": ["33"]},
+    {"id": "39", "subject": "Task 6: Concurrency groups in all workflows", "status": "completed", "blockedBy": ["33"]},
+    {"id": "40", "subject": "Task 7: CLAUDE.md — single-commit-PR flexibility + version bumps explicit", "status": "completed"},
+    {"id": "41", "subject": "Task 8: Finalize PR #46 — retitle, rebody, force-push", "status": "completed", "blockedBy": ["33", "34", "35", "36", "37", "38", "39", "40"]}
   ]
 }
