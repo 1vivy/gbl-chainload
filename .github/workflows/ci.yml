@@ -4,6 +4,13 @@ on:
     branches: [main]
   pull_request:
 
+concurrency:
+  # Force-pushes to feature branches cancel any in-flight run.
+  # Main is excluded so every commit landing on main records a full
+  # CI history (never cancelled by a subsequent commit).
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   test:
     runs-on: ubuntu-latest
