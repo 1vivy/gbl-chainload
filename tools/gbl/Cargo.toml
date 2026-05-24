@@ -1,0 +1,50 @@
+# tools/gbl/Cargo.toml — single multicall binary replacing the 7 C tools.
+#
+# PR2 Task 8 consolidates abl-patcher, gbl-commit, gbl-pack, gblp1-inspect,
+# fv-unwrap, mode2-profile (compile/derive only), and vbmeta-graft into one
+# Rust binary `gbl` with subcommands:
+#   gbl patch    — abl-patcher  (NO --no-mode1 post-PR1)
+#   gbl commit   — gbl-commit
+#   gbl pack     — gbl-pack     (--manifest <bits> from PR1 Task 3)
+#   gbl inspect  — gblp1-inspect (pretty-print manifest from PR1 Task 4)
+#   gbl unwrap   — fv-unwrap    (LZMA via lzma-rs, not C lzma)
+#   gbl mode2 {derive|compile|build}
+#   gbl avb {list|check|graft|list-hash}
+#
+# Every crate is consumed via the in-workspace Rust API (not the FFI shim) —
+# the multicall is the only Rust consumer that has direct access to the
+# typed APIs without having to link the staticlib.
+
+[package]
+name = "gbl"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "gbl"
+path = "src/main.rs"
+
+[dependencies]
+# All 5 in-workspace crates. Each is feature-pinned to the host surface
+# (std + alloc; patch-engine + avb-parse also need the `host` flag to
+# unlock the OEM scoping path + the parity-test helpers respectively).
+avb-parse          = { path = "../../crates/avb-parse",          features = ["std", "host"] }
+gblp1              = { path = "../../crates/gblp1",              features = ["std"] }
+mode2-profile-core = { path = "../../crates/mode2-profile-core", features = ["std"] }
+patch-engine       = { path = "../../crates/patch-engine",       features = ["std", "host"] }
+pe-utils           = { path = "../../crates/pe-utils" }
+
+# Host-side deps.
+clap      = { version = "4",   features = ["derive"] }
+sha2      = "0.10"
+crc32fast = "1.4"
+lzma-rs   = "0.3"
+
+# `posix_fadvise(DONTNEED)` for the gbl-commit uncached read-back. Unix
+# only; the binary doesn't target Windows.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

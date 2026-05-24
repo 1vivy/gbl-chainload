@@ -8,7 +8,8 @@
    here means producer and consumer hash identically. */
 #include <stdio.h>
 #include <string.h>
-#include "../../../GblChainloadPkg/Library/GblPayloadLib/Internal/Sha256.h"
+/* PR2 Task 4: gbl_sha256 now ships in libgblp1.a (crates/gblp1). */
+#include "../../../crates/gblp1/include/gblp1_ffi.h"
 
 struct kat {
     const char *name;

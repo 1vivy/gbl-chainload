@@ -1,0 +1,43 @@
+# crates/patch-engine/Cargo.toml — DynamicPatchLib inversion.
+#
+# Replaces every C source under
+# `GblChainloadPkg/Library/DynamicPatchLib/` (Internal/* + PatchTable.c +
+# abl_permissive/* + oem/oplus/* + retired/*). The on-device firmware
+# now links `libpatch_engine.a` (aarch64-unknown-none, no-default-features)
+# and the host abl-patcher links the host staticlib (--features host).
+#
+# Feature shape mirrors PR1:
+#   - `abl_permissive` module — always compiled (firmware + host).
+#   - `oem/oplus` module     — host-only via `#[cfg(feature = "host")]`.
+#   - `retired/*`            — host-only (reference impl, dead code).
+#
+# Builds as both an rlib (workspace consumers, parity tests) and a
+# staticlib (libpatch_engine.a) — same pattern as crates/gblp1 and
+# crates/mode2-profile-core.
+
+[package]
+name = "patch-engine"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+
+[lib]
+crate-type = ["rlib", "staticlib"]
+
+[features]
+# Default: host (std-on). The firmware build sets default-features = false
+# and enables nothing — abl_permissive is compiled unconditionally, oem
+# and retired modules drop out.
+#
+# The crate also provides its own no_std panic_handler when std is off.
+# The firmware link already passes -Wl,--allow-multiple-definition so
+# libpatch_engine.a + libgblp1.a + libmode2_profile_core.a can coexist
+# even though each defines `rust_begin_unwind`.
+default = ["std"]
+std = []
+# `host` implies `std` — the ensure_init_scoped path needs Vec for the
+# aggregated table and the FFI logging path needs eprintln.
+host = ["std"]

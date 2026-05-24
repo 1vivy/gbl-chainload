@@ -1,0 +1,6 @@
+header: magic=ok version=1 header_crc32=ok total_size=280 entry_count=2
+entry: type=0x0010 (MODE2_PROFILE) offset=0x80 size=120 sha256=ok
+entry: type=0x0020 (manifest) offset=0x100 size=16 sha256=ok
+  magic=GMAN schema=1 fakelock_hook=yes profile_spoof=no
+footer: GBLP1END=ok
+result: ok

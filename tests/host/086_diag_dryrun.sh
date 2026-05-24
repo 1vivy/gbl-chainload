@@ -17,13 +17,20 @@ fi
   echo "SKIP: 086 — zip/base/gbl-chainload.efi absent"; exit 0;
 }
 
-# Build native tools (used via PATH inside diag.sh).
-make -s -C tools/gblp1-inspect
-make -s -C tools/vbmeta-graft
-make -s -C tools/fv-unwrap
+# Build the multicall binary. PR2 Task 9 rewrote zip/modes/diag.sh to
+# call `gbl <sub>` directly (no shims needed); we stage `gbl` itself
+# onto PATH for this dry-run.
+cargo build --release --quiet -p gbl
 
 OUT=tests/host/.last/086
 rm -rf "$OUT"; mkdir -p "$OUT"
+
+# Stage the gbl multicall on a per-test PATH dir. diag.sh calls
+# `gbl inspect / gbl unwrap / gbl avb {list,list-hash}` directly
+# post Task 9.
+SHIM_DIR="$OUT/bin"
+mkdir -p "$SHIM_DIR"
+cp "$PWD/target/release/gbl" "$SHIM_DIR/gbl"
 
 run_one() {
   local scenario="$1" expect="$2"
@@ -45,10 +52,9 @@ run_one() {
   exec 9>"$envdir/screen.txt"
   export OUTFD=9
 
-  # PATH so diag.sh can call tools by bare name.
-  local tool_path
-  tool_path="$PWD/tools/gblp1-inspect:$PWD/tools/vbmeta-graft:$PWD/tools/fv-unwrap"
-  export PATH="$tool_path:$PATH"
+  # PATH so diag.sh can call `gbl` by bare name (the staged binary
+  # lives in $SHIM_DIR; legacy per-tool shims are gone after PR2 Task 9).
+  export PATH="$SHIM_DIR:$PATH"
 
   # Source diag.sh and call mode_main in a sub-shell that carries all
   # exported env.  We define stub functions for the recovery core

@@ -4,7 +4,8 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-make -C tools/fv-unwrap
+cargo build --release --quiet -p gbl
+PATH="$PWD/target/release:$PATH"; export PATH
 
 mkdir -p images/pe
 
@@ -19,7 +20,7 @@ for src in "${!FV_TO_PE[@]}"; do
   dest="${FV_TO_PE[$src]}"
   if [[ -f "$src" ]]; then
     echo "==> $src → $dest"
-    tools/fv-unwrap/fv-unwrap "$src" "$dest" || {
+    gbl unwrap "$src" "$dest" || {
       echo "WARN: failed to extract $src (FV may need LZMA decompression — out of scope)"; continue;
     }
     sha256sum "$dest"

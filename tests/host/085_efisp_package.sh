@@ -2,47 +2,49 @@
 # tests/host/085_efisp_package.sh — efisp-package.py chains the host-side
 # tools into a single-EFI + GBLP1 overlay the EDK2 parser can locate.
 #
-# Post-Task-13 invariants:
-#   * abl-patcher is invoked WITHOUT --no-mode1 (flag retired Task 12).
-#   * gbl-pack is invoked WITH --manifest 0x0N derived from --mode N.
+# Post-Task-13 invariants (PR1):
+#   * gbl patch is invoked WITHOUT --no-mode1 (flag retired Task 12).
+#   * gbl pack  is invoked WITH --manifest 0x0N derived from --mode N.
 #   * --oem is allowed for ANY mode (decoupled from --mode 2).
+#
+# PR2 Task 8: the 7 host C tools collapsed into the `gbl` multicall;
+# efisp-package.py now calls `gbl <sub>` rather than the standalone
+# binaries. The argv-recording shim below wraps `gbl` itself and
+# dispatches argv-capture per subcommand so we can assert what reached
+# each one.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-# Build the host tools and the parser harness this test needs.
-make -s -C tools/fv-unwrap
-make -s -C tools/abl-patcher
-make -s -C tools/gbl-pack
+# Reproducible gbl pack output (see 060_pack_roundtrip.sh) — the shim chain
+# inherits this env into the real gbl invoked by efisp-package.py.
+: "${SOURCE_DATE_EPOCH:=0}"
+export SOURCE_DATE_EPOCH
+
+cargo build --release --quiet -p gbl
 make -s -C tests/host/helpers parser_harness
 H=tests/host/helpers/parser_harness
 OUT=tests/host/.last/085
-mkdir -p "$OUT/tools"
+rm -rf "$OUT"; mkdir -p "$OUT/tools"
 
-# efisp-package.py locates tools via --tools-dir / dist/<platform>/ /
-# script-dir / PATH — a Linux host build (tools/<t>/<t>) is in none of
-# those, so stage the three needed binaries into one dir and pass it.
-cp tools/fv-unwrap/fv-unwrap tools/abl-patcher/abl-patcher \
-   tools/gbl-pack/gbl-pack "$OUT/tools/"
-
-# Install argv-recording shims for abl-patcher and gbl-pack so we can
-# assert the exact argv shape efisp-package.py passes. The shims forward
-# to the real binary after recording $@ on disk.
-REAL=$OUT/tools/real
+# Stage the real gbl multicall behind an argv-recording shim. The shim
+# splits on the first argument (the subcommand) and writes per-subcommand
+# argv files so the existing assertions ("--no-mode1" must not appear,
+# "--manifest" + "0x01" must appear, etc.) keep working without
+# subcommand-name changes.
+REAL="$OUT/tools/real"
 mkdir -p "$REAL"
-mv "$OUT/tools/abl-patcher" "$REAL/abl-patcher"
-mv "$OUT/tools/gbl-pack"    "$REAL/gbl-pack"
+cp "$PWD/target/release/gbl" "$REAL/gbl"
 
-cat > "$OUT/tools/abl-patcher" <<EOF
+cat > "$OUT/tools/gbl" <<EOF
 #!/usr/bin/env bash
-printf '%s\n' "\$@" > "$OUT/abl-patcher.argv"
-exec "$REAL/abl-patcher" "\$@"
+sub=\${1:-}
+shift || true
+# Capture argv per-subcommand so the assert_argv calls below can pin
+# what reached patch / pack / unwrap etc.
+printf '%s\n' "\$@" > "$OUT/\${sub}.argv"
+exec "$REAL/gbl" "\$sub" "\$@"
 EOF
-cat > "$OUT/tools/gbl-pack" <<EOF
-#!/usr/bin/env bash
-printf '%s\n' "\$@" > "$OUT/gbl-pack.argv"
-exec "$REAL/gbl-pack" "\$@"
-EOF
-chmod +x "$OUT/tools/abl-patcher" "$OUT/tools/gbl-pack"
+chmod +x "$OUT/tools/gbl"
 
 # An fv-unwrap input is a raw ABL partition (LZMA-FV wrapped). The
 # tests/images/ dir also holds non-ABL fixtures (grafted-recovery.img,
@@ -52,8 +54,6 @@ ABL=$(ls tests/images/*abl*.img 2>/dev/null | head -1 || true)
 
 # A throwaway base EFI: efisp-package.py just concatenates it, so any
 # small file with a PE 'MZ' header is enough for the structural check.
-# (Post-Task-12 this is a single gbl-chainload.efi; the script is
-# name-agnostic — verified by the "any path works" cases below.)
 printf 'MZ' > "$OUT/base.efi"
 head -c 4096 /dev/zero >> "$OUT/base.efi"
 
@@ -70,7 +70,7 @@ assert_no_argv() {
   fi
 }
 
-# mode 1 — plain abl-patcher (no --oem), gbl-pack gets --manifest 0x01.
+# mode 1 — plain gbl patch (no --oem), gbl pack gets --manifest 0x01.
 python3 scripts/efisp-package.py \
   --abl "$ABL" --mode 1 --efi "$OUT/base.efi" \
   --tools-dir "$OUT/tools" --out "$OUT/mode1.efi" \
@@ -78,12 +78,12 @@ python3 scripts/efisp-package.py \
   || { echo "FAIL: efisp-package.py mode 1 failed"; cat "$OUT/m1.log"; exit 1; }
 "$H" scan-cached-abl "$OUT/mode1.efi" | grep -q 'status=0' \
   || { echo "FAIL: mode-1 output has no locatable cached-ABL overlay"; exit 1; }
-assert_no_argv "$OUT/abl-patcher.argv" "--no-mode1" "mode 1 abl-patcher"
-assert_no_argv "$OUT/abl-patcher.argv" "--oem"      "mode 1 abl-patcher (no --oem)"
-assert_argv    "$OUT/gbl-pack.argv"    "--manifest" "mode 1 gbl-pack manifest flag"
-assert_argv    "$OUT/gbl-pack.argv"    "0x01"       "mode 1 gbl-pack manifest bits"
+assert_no_argv "$OUT/patch.argv" "--no-mode1" "mode 1 patch"
+assert_no_argv "$OUT/patch.argv" "--oem"      "mode 1 patch (no --oem)"
+assert_argv    "$OUT/pack.argv"  "--manifest" "mode 1 pack manifest flag"
+assert_argv    "$OUT/pack.argv"  "0x01"       "mode 1 pack manifest bits"
 
-# mode 0 — plain abl-patcher (no --oem, no --no-mode1), gbl-pack --manifest 0x00.
+# mode 0 — plain patch (no --oem, no --no-mode1), pack --manifest 0x00.
 python3 scripts/efisp-package.py \
   --abl "$ABL" --mode 0 --efi "$OUT/base.efi" \
   --tools-dir "$OUT/tools" --out "$OUT/mode0.efi" \
@@ -91,13 +91,13 @@ python3 scripts/efisp-package.py \
   || { echo "FAIL: efisp-package.py mode 0 failed"; cat "$OUT/m0.log"; exit 1; }
 "$H" scan-cached-abl "$OUT/mode0.efi" | grep -q 'status=0' \
   || { echo "FAIL: mode-0 output has no locatable cached-ABL overlay"; exit 1; }
-assert_no_argv "$OUT/abl-patcher.argv" "--no-mode1" "mode 0 abl-patcher"
-assert_no_argv "$OUT/abl-patcher.argv" "--oem"      "mode 0 abl-patcher (no --oem)"
-assert_argv    "$OUT/gbl-pack.argv"    "--manifest" "mode 0 gbl-pack manifest flag"
-assert_argv    "$OUT/gbl-pack.argv"    "0x00"       "mode 0 gbl-pack manifest bits"
+assert_no_argv "$OUT/patch.argv" "--no-mode1" "mode 0 patch"
+assert_no_argv "$OUT/patch.argv" "--oem"      "mode 0 patch (no --oem)"
+assert_argv    "$OUT/pack.argv"  "--manifest" "mode 0 pack manifest flag"
+assert_argv    "$OUT/pack.argv"  "0x00"       "mode 0 pack manifest bits"
 
-# mode 0 + --oem — now allowed (decoupled from --mode 2). abl-patcher must
-# receive --oem oplus; gbl-pack still gets --manifest 0x00.
+# mode 0 + --oem — now allowed (decoupled from --mode 2). patch must
+# receive --oem oplus; pack still gets --manifest 0x00.
 python3 scripts/efisp-package.py \
   --abl "$ABL" --mode 0 --efi "$OUT/base.efi" --oem oplus \
   --tools-dir "$OUT/tools" --out "$OUT/mode0-oem.efi" \
@@ -105,20 +105,22 @@ python3 scripts/efisp-package.py \
   || { echo "FAIL: efisp-package.py mode 0 + --oem failed"; cat "$OUT/m0oem.log"; exit 1; }
 "$H" scan-cached-abl "$OUT/mode0-oem.efi" | grep -q 'status=0' \
   || { echo "FAIL: mode-0-with-oem output has no locatable cached-ABL overlay"; exit 1; }
-assert_no_argv "$OUT/abl-patcher.argv" "--no-mode1" "mode 0+oem abl-patcher"
-assert_argv    "$OUT/abl-patcher.argv" "--oem"      "mode 0+oem abl-patcher --oem flag"
-assert_argv    "$OUT/abl-patcher.argv" "oplus"      "mode 0+oem abl-patcher --oem value"
-assert_argv    "$OUT/gbl-pack.argv"    "0x00"       "mode 0+oem gbl-pack manifest bits"
+assert_no_argv "$OUT/patch.argv" "--no-mode1" "mode 0+oem patch"
+assert_argv    "$OUT/patch.argv" "--oem"      "mode 0+oem patch --oem flag"
+assert_argv    "$OUT/patch.argv" "oplus"      "mode 0+oem patch --oem value"
+assert_argv    "$OUT/pack.argv"  "0x00"       "mode 0+oem pack manifest bits"
 
 # pre-flight gate: mode 2 without --stock-vbmeta must abort non-zero.
 python3 scripts/efisp-package.py \
   --abl "$ABL" --mode 2 --efi "$OUT/base.efi" --out "$OUT/bad.efi" \
+  --tools-dir "$OUT/tools" \
   >/dev/null 2>&1 \
   && { echo "FAIL: mode 2 accepted without --stock-vbmeta"; exit 1; } || true
 
 # pre-flight gate: --stock-vbmeta on mode 1 must abort non-zero.
 python3 scripts/efisp-package.py \
   --abl "$ABL" --mode 1 --efi "$OUT/base.efi" --stock-vbmeta "$ABL" \
+  --tools-dir "$OUT/tools" \
   --out "$OUT/bad.efi" >/dev/null 2>&1 \
   && { echo "FAIL: --stock-vbmeta accepted on mode 1"; exit 1; } || true
 
@@ -129,5 +131,13 @@ python3 scripts/efisp-package.py \
   --tools-dir "$OUT/tools" --out "$OUT/mode0-oem2.efi" \
   >/dev/null 2>&1 \
   || { echo "FAIL: --oem rejected on mode 0 (old mode-2-only gate still firing)"; exit 1; }
+
+# Golden parity assertion (frozen C-tool output).  Locks all three positive
+# cases: per-mode efisp package = base.efi || GBLP1 container.  The two
+# extra negative-gate runs above don't produce assertable files.
+for g in mode0.efi mode1.efi mode0-oem.efi mode0-oem2.efi; do
+  cmp -s "$OUT/$g" "tests/host/goldens/085/$g" \
+    || { echo "FAIL 085 golden: $g diverged from frozen C-tool output"; exit 1; }
+done
 
 echo "PASS: 085 efisp package"

@@ -152,6 +152,55 @@
 [BuildOptions.common]
   GCC:*_*_*_ARCHCC_FLAGS  = -Wno-shift-negative-value -fstack-protector-all -Wno-varargs -fno-common -Wno-misleading-indentation -Wno-unknown-warning-option
   GCC:*_*_*_DLINK_FLAGS = -Wl,-Ttext=0x0
+  # PR2 Task 4: link crates/gblp1's aarch64-unknown-uefi staticlib (built
+  # ahead of the EDK2 build by scripts/build-inside-docker.sh). This
+  # supplies gbl_payload_*, gbl_sha256*, and gbl_crc32 — the parser +
+  # hash + CRC API formerly hosted in GblPayloadLib's deleted C sources.
+  #
+  # DLINK2_FLAGS appears AFTER the --start-group/--end-group block in
+  # the GccBase link rule. We need the staticlib placed after that
+  # block so the linker has already collected the GBL_PAYLOAD_*
+  # references from GblPayload.c when it scans libgblp1.a. Putting
+  # this in DLINK_FLAGS (prepended) leaves the references unresolved
+  # because GblPayload.c hasn't been linked yet at that point.
+  #
+  # The target triple is `aarch64-unknown-none` (bare-metal ELF) — not
+  # `aarch64-unknown-uefi` — because EDK2's GCC build path links via
+  # aarch64-linux-gnu-ld (GNU ld), which only reads ELF. The UEFI
+  # target emits COFF/PE objects, which ld rejects with "file format
+  # not recognized". The crate's `#[panic_handler]` is gated on
+  # `target_os = "uefi"`, which `unknown-none` is NOT — but EDK2's
+  # build options include `-fno-builtin -fno-unwind-tables`, panics
+  # never get linked, and the unwind tables stay out of the final
+  # image anyway.
+  # PR2 Task 5: --allow-multiple-definition lets the two Rust staticlibs
+  # (libgblp1.a + libmode2_profile_core.a) coexist at link time even
+  # though both define `rust_begin_unwind` (rustc lowers every
+  # `#[panic_handler]` to that strong symbol; we have one per no_std
+  # staticlib). Both panic handlers are identical `loop {}` bodies so
+  # the choice is irrelevant; the linker keeps the first.
+  GCC:*_*_AARCH64_DLINK_FLAGS = -Wl,--allow-multiple-definition
+  GCC:*_*_AARCH64_DLINK2_FLAGS = $(WORKSPACE)/target/aarch64-unknown-none/release/libgblp1.a
+  # PR2 Task 5: libmode2_profile_core.a supplies gbl_mode2_profile_parse()
+  # (the Rust port of the deleted Mode2Profile.c). Built with
+  # --no-default-features so the host-only `compile` + `derive` paths
+  # and their `toml` / `serde` dependencies are excluded from the
+  # firmware staticlib.
+  GCC:*_*_AARCH64_DLINK2_FLAGS = $(WORKSPACE)/target/aarch64-unknown-none/release/libmode2_profile_core.a
+  # PR2 Task 6: libpatch_engine.a supplies DynamicPatch_Apply() +
+  # DynamicPatchLib_EnsureInit() (the Rust port of the deleted
+  # DynamicPatchLib C sources). Built with --no-default-features so the
+  # host-only `oem` + `retired` modules are excluded from the firmware
+  # staticlib — only `abl_permissive` (patch6 + patch10) ships in the
+  # device EFI.
+  GCC:*_*_AARCH64_DLINK2_FLAGS = $(WORKSPACE)/target/aarch64-unknown-none/release/libpatch_engine.a
+  # PR2 Task 7: libavb_parse.a supplies every AvbParse_* entry point
+  # the firmware + host tools call into (the Rust port of the deleted
+  # AvbParse.c + Internal/AvbBigEndian.h). Built with
+  # --no-default-features so the no_std panic_handler is wired in;
+  # the EDK2 link line's --allow-multiple-definition already lets it
+  # coexist with the other staticlibs' identical `loop {}` bodies.
+  GCC:*_*_AARCH64_DLINK2_FLAGS = $(WORKSPACE)/target/aarch64-unknown-none/release/libavb_parse.a
   GCC:*_*_*_CC_FLAGS = -DZ_SOLO
   GCC:*_*_*_CC_FLAGS = -DPRODUCT_NAME=\"$(BOARD_BOOTLOADER_PRODUCT_NAME)\"
   GCC:*_*_*_CC_FLAGS = -DGBL_CHAINLOAD_VERSION=\"$(GBL_CHAINLOAD_VERSION)\"

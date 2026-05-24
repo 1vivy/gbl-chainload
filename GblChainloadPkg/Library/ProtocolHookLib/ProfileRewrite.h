@@ -21,7 +21,7 @@
 # endif
 #endif
 
-#include "../../../tools/shared/gbl_mode2_profile.h"
+#include "../../../crates/mode2-profile-core/include/mode2_profile_ffi.h"
 
 /* KeyMaster wire sizes (KEYMASTER_UTILS_CMD_ID = 0x200 + N). */
 #define GBL_KM_CMD_SET_ROT          0x00000201u

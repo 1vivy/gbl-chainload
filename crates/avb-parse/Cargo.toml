@@ -1,0 +1,43 @@
+# crates/avb-parse/Cargo.toml — AvbParseLib inversion.
+#
+# Replaces:
+#   - GblChainloadPkg/Library/AvbParseLib/AvbParse.c
+#   - GblChainloadPkg/Library/AvbParseLib/Internal/AvbBigEndian.h
+#
+# Builds as both an rlib (workspace consumers, parity tests) and a
+# staticlib (libavb_parse.a). The firmware build links the
+# aarch64-unknown-none target's staticlib via DLINK2_FLAGS in
+# GblChainloadPkg.dsc; host C tools (vbmeta-graft, mode2-profile, the
+# tests/avb harness) link the host staticlib via their Makefiles.
+#
+# Wire-ABI commitment: the C ABI matches the deleted AvbParseLib.h
+# byte-for-byte; struct layouts (`GBL_AVB_FOOTER`,
+# `GBL_AVB_VBMETA_HEADER`), enum discriminants (`GblAvbDesc*Tag`,
+# `GblAvbChain*`), and EFI_STATUS return codes are all preserved.
+
+[package]
+name = "avb-parse"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+
+[lib]
+crate-type = ["rlib", "staticlib"]
+
+[features]
+# Default: std-on (host build). The firmware build sets
+# `default-features = false` — the no_std path provides its own
+# `#[panic_handler]`; the EDK2 link line already passes
+# `-Wl,--allow-multiple-definition` so this crate's panic handler
+# coexists with the other Rust staticlibs' identical `loop {}` bodies.
+default = ["std"]
+std = []
+# `host` is a convenience alias for the host C-tool builds that want
+# the parity tests + the descriptor iterator's allocation paths. Right
+# now `host` implies nothing beyond `std` — kept as a separate feature
+# so the `cargo test -p avb-parse --features host` invocation listed in
+# the plan is recognized.
+host = ["std"]

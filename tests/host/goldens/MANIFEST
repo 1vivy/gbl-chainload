@@ -1,0 +1,117 @@
+# tests/host/goldens/MANIFEST — frozen pre-migration C tool outputs.
+#
+# Each test in tests/host/0XX_*.sh that has a deterministic output checks
+# its produced artifacts against the golden(s) listed below. PR2 Tasks 3-7
+# replace the C tools with Rust ports; the Rust output must byte-match
+# these files (the parity contract).
+#
+# Format: <test>/<file>: <tool> against <fixture>
+# Lines starting with '#' are comments.
+#
+# Reproducibility: gbl-pack honors SOURCE_DATE_EPOCH (added in this commit)
+# to pin its embedded ISO timestamp. Tests that invoke gbl-pack set
+# SOURCE_DATE_EPOCH=0 at the top. The GBL_TOOL_VERSION embedded in
+# packer_version comes from the in-tree VERSION file, so it's branch-stable.
+
+# ---- gbl-pack + abl-patcher (core packing path) ----
+060/payload.bin:       gbl-pack against infiniti-EU-16.0.5.703 PE + its pre-patched form
+060/patched.efi:       abl-patcher against infiniti-EU-16.0.5.703 PE
+061/clean.bin:         gbl-pack against infiniti-EU-16.0.5.703 PE (pre-poison fuzz baseline)
+064/infiniti-EU-16.0.5.703.bin:         gbl-pack against the EU.703 PE fixture
+064/infiniti-EU-16.0.5.703.patched.efi: abl-patcher against the EU.703 PE fixture
+067/payload.bin:       gbl-pack against infiniti-EU-16.0.5.703 PE
+067/efisp.img:         patched.efi || payload.bin concat (synthetic raw EFISP)
+069/payload.bin:       gbl-pack against infiniti-EU-16.0.5.703 PE (full-buffer scan input)
+
+# ---- fv-unwrap (PE extraction from LZMA-FV-wrapped ABLs) ----
+072/703.efi:           fv-unwrap against op15-infiniti-703-abl.img (vulnerable ABL — UTF-16 efisp present)
+072/201.efi:           fv-unwrap against op15-infiniti-201-abl.img (clean ABL — UTF-16 efisp absent)
+
+# ---- vbmeta-graft (descriptor walk + recovery graft) ----
+074/list.txt:          vbmeta-graft list against grafted-recovery.img
+# 074/grafted-footered.img: vbmeta-graft graft of the fixture onto itself.
+#   deterministic but ~100 MB (partition-sized) — too heavy for an in-tree
+#   golden; the byte-exactness is structurally covered by 091's default-list
+#   roundtrip below.
+090/lh.txt:            vbmeta-graft list-hash against grafted-recovery.img (sane byname)
+090/lh-corrupt.txt:    vbmeta-graft list-hash against grafted-recovery.img (perturbed byname)
+091/default-list.txt:  vbmeta-graft list against vbmeta-graft.py graft output
+# 091/default.img: vbmeta-graft.py wrapper output of the fixture onto itself.
+#   deterministic but ~100 MB — same size reason as 074/grafted-footered.img.
+096/default-list.txt:  vbmeta-graft list against OrangeFox-onto-201 graft (real recovery pair)
+# 096/default.img: vbmeta-graft.py grafting recovery-infiniti-OrangeFox.img
+#   onto recovery-infiniti-IN-16.0.7.201.img's vbmeta. Deterministic but
+#   ~100 MB — same size reason as 074/091.
+
+# ---- mode2-profile compile (C tool parity baseline against Python) ----
+082/c.bin:             mode2-profile compile against a synthetic TOML (matches Python tool byte-for-byte; locked by 087)
+
+# ---- abl-patcher --oem matrix ----
+083/oplus.efi:         abl-patcher --oem oplus against infiniti-EU-16.0.5.703 PE
+083/oneplus.efi:       abl-patcher --oem oneplus (deprecation alias) against EU.703 PE
+083/plain.efi:         abl-patcher (no --oem) against EU.703 PE (abl_permissive only)
+
+# ---- efisp-package.py end-to-end (driving abl-patcher + gbl-pack) ----
+085/mode0.efi:         efisp-package.py --mode 0 against op15-infiniti-703-abl.img
+085/mode1.efi:         efisp-package.py --mode 1 against op15-infiniti-703-abl.img
+085/mode0-oem.efi:     efisp-package.py --mode 0 --oem oplus against op15-infiniti-703-abl.img
+085/mode0-oem2.efi:    efisp-package.py --mode 0 --oem oplus (gate regression case)
+
+# ---- 088: fv-unwrap + abl-patcher per real ABL fixture (mode/OEM matrix) ----
+088/op15-infiniti-703-abl.pe.efi:      fv-unwrap against op15-infiniti-703-abl.img
+088/op15-infiniti-703-abl.p1.efi:      abl-patcher --oem oplus on the .pe.efi above
+088/op15-infiniti-201-abl.pe.efi:      fv-unwrap against op15-infiniti-201-abl.img
+088/op15-infiniti-201-abl.p1.efi:      abl-patcher --oem oplus on the .pe.efi above
+088/op15t-fairlady-201-abl.pe.efi:     fv-unwrap against op15t-fairlady-201-abl.img
+088/op15t-fairlady-201-abl.p1.efi:     abl-patcher --oem oplus on the .pe.efi above
+088/xi17-pudding-44-abl.pe.efi:        fv-unwrap against xi17-pudding-44-abl.img (non-oplus)
+088/xi17-pudding-44-abl.p.efi:         abl-patcher --oem oplus on xi17-pudding PE (patch7 MISS path)
+
+# ---- gblp1-inspect (textual report) ----
+081/overlay.bin:       gbl-pack --mode2-profile (profile-only container)
+081/combined.bin:      gbl-pack --cached-abl + --mode2-profile (ec=3 combined container)
+089/payload.bin:       gbl-pack against infiniti-EU-16.0.5.703 (matches 060/payload.bin structurally; diff path)
+089/ok.txt:            gblp1-inspect against the 089/payload.bin above
+089/manifest.bin:      gbl-pack --mode2-profile --manifest 0x01 (synthetic profile + manifest)
+089/manifest.txt:      gblp1-inspect against 089/manifest.bin
+089/manifest2.bin:     gbl-pack --mode2-profile --manifest 0x02 (synthetic profile + manifest)
+089/manifest2.txt:     gblp1-inspect against 089/manifest2.bin
+
+# ---- gbl-pack --manifest matrix ----
+094/with-manifest.bin: gbl-pack --mode2-profile --manifest 0x01 (synthetic profile)
+094/dec-manifest.bin:  gbl-pack --mode2-profile --manifest 2 (decimal form, == 0x02)
+094/no-manifest.bin:   gbl-pack --mode2-profile (no --manifest; absence baseline)
+
+# ---- Tests with NO golden (skipped — non-deterministic or no checkable output) ----
+# 063_pe_sanity:               unit test, no byte output to assert
+# 065_patch_sig_parity:        source-tree lint (greps headers), no produced files
+# 066_dd_commit_atomic:        src/dst built from /dev/urandom
+# 068_config_table_override:   unit test, no byte output to assert
+# 070_crypto_conformance:      KAT unit tests, no produced files
+# 071_zip_assembly:            zip output embeds creation timestamps
+# 073_install_assembly:        zip output (same reason as 071)
+# 075_graft_assembly:          zip output (same reason as 071)
+# 076_mode2_profile_parse:     synthetic Python-built fixtures, no C-tool byte output
+# 077_gblp1_find_mode2_profile: synthetic Python-built fixtures
+# 078_profile_rewrite:         harness stdout (hex strings), no produced files
+# 079_mode2_profile_derive:    output covered by 087_mode2_profile_regression (in-tree fixture)
+# 080_mode2_profile_compile:   Python-tool byte output — 082 covers the C-tool byte parity
+# 084_cross_build:             cross-toolchain artifacts; byte output is toolchain-dependent
+# 086_diag_dryrun:             tarball name + report.txt embed timestamps
+# 087_mode2_profile_regression: ALREADY a regression fixture (tools/mode2-profile/tests/golden.toml)
+# 093_manifest_parse:          C helper unit test, no produced files
+
+# ---- Real-device fixture coverage (per PR2 plan Task 2 §6) ----
+# Present in tests/images/:
+#   tests/images/pe/infiniti-EU-16.0.5.703.efi    — used by 060/061/064/067/069/083/089
+#   tests/images/op15-infiniti-703-abl.img        — used by 072/088
+#   tests/images/op15-infiniti-201-abl.img        — used by 072/088
+#   tests/images/op15t-fairlady-201-abl.img       — used by 088
+#   tests/images/xi17-pudding-44-abl.img          — used by 088 (non-oplus MISS path)
+#   tests/images/grafted-recovery.img             — used by 074/090/091
+#   tests/images/vbmeta-infiniti-IN-16.0.7.201.img — used by 079/082-derive/087
+#   tests/images/recovery-infiniti-IN-16.0.7.201.img — used by 096 (--stock for real recovery graft)
+#   tests/images/recovery-infiniti-OrangeFox.img  — used by 096 (--custom for real recovery graft)
+# Missing / [user-provides]:
+#   real post-install EFISP image (raw EFISP partition dump from a device) — none in-tree
+#   stock OEM vbmeta of recent infiniti shipping ROM — none in-tree (203/703/etc. dumps)

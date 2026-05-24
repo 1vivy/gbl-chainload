@@ -1,0 +1,54 @@
+# crates/mode2-profile-core/Cargo.toml — mode2_profile parse/derive/compile.
+#
+# Replaces:
+#   - GblChainloadPkg/Library/GblPayloadLib/Mode2Profile.c (firmware
+#     parser).
+#   - GblChainloadPkg/Library/GblPayloadLib/Internal/Mode2Profile.h.
+#
+# Wire constants for the 120-byte payload still live in
+# tools/shared/gbl_mode2_profile.h (the `struct gbl_mode2_profile`
+# definition is consumed by host C tools + the firmware until Task 8
+# collapses the host tools into the `gbl` multicall binary).
+#
+# Builds as both an rlib (for in-workspace Rust binaries) and a staticlib
+# (libmode2_profile_core.a). The firmware build links the
+# aarch64-unknown-none target's staticlib via DLINK2_FLAGS in
+# GblChainloadPkg.dsc. The host C tool (tools/mode2-profile) links the
+# host target's staticlib via tools/mode2-profile/Makefile.
+
+[package]
+name = "mode2-profile-core"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+
+[lib]
+crate-type = ["rlib", "staticlib"]
+
+[features]
+# Default: std-on, host-style. `derive` + `compile` need alloc; the
+# firmware build sets default-features = false (target_os = "uefi" or
+# bare-metal) and the derive/compile entry points are gated out, leaving
+# only `parse` exposed in the staticlib.
+#
+# The crate also provides its own no_std panic_handler when std is off.
+# In the firmware build both libgblp1.a and libmode2_profile_core.a get
+# linked into the same EDK2 image; rustc lowers each `#[panic_handler]`
+# to a strong `rust_begin_unwind` symbol, so the GblChainloadPkg.dsc
+# linker line passes `--allow-multiple-definition` to let both
+# definitions coexist (both are identical `loop {}` bodies, so the
+# linker's "first one wins" rule is safe).
+default = ["std"]
+std = ["alloc", "toml", "serde"]
+alloc = []
+
+[dependencies]
+# `toml` is std-only; gated behind the `std` feature so firmware
+# (no_std + no alloc) builds the staticlib without it.
+toml = { version = "0.8", optional = true, default-features = false, features = ["parse", "display"] }
+serde = { version = "1.0", optional = true, default-features = false, features = ["derive"] }
+# SHA-256 for `derive` — same dep as crates/gblp1, so cargo dedupes.
+sha2 = { version = "0.10", default-features = false }

@@ -5,22 +5,26 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
+# Reproducible gbl-pack output (see 060_pack_roundtrip.sh).
+: "${SOURCE_DATE_EPOCH:=0}"
+export SOURCE_DATE_EPOCH
+
 PE=tests/images/pe/infiniti-EU-16.0.5.703.efi
 [ -f "$PE" ] || { echo "SKIP: $PE missing"; exit 0; }
 
-make -s -C tools/abl-patcher
-make -s -C tools/gbl-pack
+cargo build --release --quiet -p gbl
+PATH="$PWD/target/release:$PATH"; export PATH
 make -s -C tests/host/helpers parser_harness
 
 OUT=tests/host/.last/067
 mkdir -p "$OUT"
 
-# 1. Pre-patch the PE so gbl-pack accepts it.
-tools/abl-patcher/abl-patcher --in "$PE" --out "$OUT/patched.efi" \
+# 1. Pre-patch the PE so gbl pack accepts it.
+gbl patch --in "$PE" --out "$OUT/patched.efi" \
   >"$OUT/patcher.log" 2>&1
 
 # 2. Pack a payload from the patched PE.
-tools/gbl-pack/gbl-pack --cached-abl "$OUT/patched.efi" --source "$PE" --extracted "$PE" \
+gbl pack --cached-abl "$OUT/patched.efi" --source "$PE" --extracted "$PE" \
   --out "$OUT/payload.bin" 2>"$OUT/pack.log"
 
 # 3. Concat: simulate the EFISP raw partition contents:
@@ -43,5 +47,11 @@ tests/host/helpers/parser_harness find-cached-abl "$OUT/payload-from-img.bin" \
   >"$OUT/parse.log"
 grep -q 'status=0' "$OUT/parse.log" \
   || { echo "FAIL: parse"; cat "$OUT/parse.log"; exit 1; }
+
+# Golden parity assertion (frozen C-tool output).
+cmp -s "$OUT/payload.bin" tests/host/goldens/067/payload.bin \
+  || { echo "FAIL 067 golden: payload.bin diverged from frozen C-tool output"; exit 1; }
+cmp -s "$OUT/efisp.img"   tests/host/goldens/067/efisp.img \
+  || { echo "FAIL 067 golden: efisp.img diverged from frozen C-tool output"; exit 1; }
 
 echo "PASS: 067 blockio reader smoke (synthetic raw EFISP)"

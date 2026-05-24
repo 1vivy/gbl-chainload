@@ -3,24 +3,13 @@
 #include <string.h>
 #include <assert.h>
 
-#define IN
-#define OUT
-#define OPTIONAL
-#define EFIAPI
-#define STATIC static
-#define CONST const
-typedef uint8_t  UINT8;
-typedef uint32_t UINT32;
-typedef uint64_t UINT64;
-typedef char     CHAR8;
-typedef int      EFI_STATUS;
-#define EFI_SUCCESS              0
-#define EFI_NOT_FOUND            14
-#define EFI_INVALID_PARAMETER    2
-#define EFI_END_OF_MEDIA         28
-#define EFI_ERROR(s)  ((s) != 0)
-
-#include "../../GblChainloadPkg/Include/Library/AvbParseLib.h"
+/* PR2 Task 7: AvbParseLib's host-build type shims (UINT8/UINT32/UINT64,
+ * IN/OUT/OPTIONAL, EFI_STATUS + EFI_* error codes, etc.) all live in
+ * avb_parse_ffi.h now — the previous in-test redefinitions are gone so
+ * we pick up the UEFI-compatible high-bit-set EFI_STATUS encoding the
+ * Rust shim returns. The `s == EFI_FOO` comparisons below resolve to
+ * the same EFI_STATUS values libavb_parse.a hands back. */
+#include "../../crates/avb-parse/include/avb_parse_ffi.h"
 
 static void make_footer (UINT8 *footer64, UINT64 orig_size, UINT64 vbm_off, UINT64 vbm_sz) {
   memset (footer64, 0, 64);

@@ -3,7 +3,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-make -s -C tools/gbl-commit
+cargo build --release --quiet -p gbl
+PATH="$PWD/target/release:$PATH"; export PATH
 
 OUT=tests/host/.last/066
 mkdir -p "$OUT"
@@ -13,7 +14,7 @@ dd if=/dev/urandom of="$OUT/dst.bin" bs=1024 count=512 2>/dev/null
 
 ORIG_DST_SHA=$(sha256sum "$OUT/dst.bin" | cut -d' ' -f1)
 
-tools/gbl-commit/gbl-commit \
+gbl commit \
   --src "$OUT/src.bin" \
   --dst "$OUT/dst.bin" \
   --backup "$OUT/dst.bak" \

@@ -3,30 +3,33 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
+# Reproducible gbl-pack output (see 060_pack_roundtrip.sh).
+: "${SOURCE_DATE_EPOCH:=0}"
+export SOURCE_DATE_EPOCH
+
 PE=tests/images/pe/infiniti-EU-16.0.5.703.efi
 [ -f "$PE" ] || { echo "SKIP: $PE missing" >&2; exit 0; }
 
-make -s -C tools/abl-patcher
-make -s -C tools/gbl-pack
-make -s -C tools/gblp1-inspect
+cargo build --release --quiet -p gbl
+PATH="$PWD/target/release:$PATH"; export PATH
 
 OUT=tests/host/.last/089
 rm -rf "$OUT"; mkdir -p "$OUT"
 
 # Build a valid payload.bin via the same path as 060.
-tools/abl-patcher/abl-patcher --in "$PE" --out "$OUT/patched.efi" >/dev/null
-tools/gbl-pack/gbl-pack --cached-abl "$OUT/patched.efi" --source "$PE" \
-                       --extracted "$PE" --out "$OUT/payload.bin"
+gbl patch --in "$PE" --out "$OUT/patched.efi" >/dev/null
+gbl pack --cached-abl "$OUT/patched.efi" --source "$PE" \
+         --extracted "$PE" --out "$OUT/payload.bin"
 
 # 1. Happy path on a bare payload.
-tools/gblp1-inspect/gblp1-inspect "$OUT/payload.bin" > "$OUT/ok.txt"
+gbl inspect "$OUT/payload.bin" > "$OUT/ok.txt"
 grep -q '^result: ok$' "$OUT/ok.txt" \
   || { echo "FAIL: clean payload did not produce result: ok"; cat "$OUT/ok.txt"; exit 1; }
 
 # 2. Happy path with arbitrary leading bytes (simulating EFISP = base EFI || GBLP1).
 head -c 65536 /dev/urandom > "$OUT/prefix.bin"
 cat "$OUT/prefix.bin" "$OUT/payload.bin" > "$OUT/efisp-like.img"
-tools/gblp1-inspect/gblp1-inspect "$OUT/efisp-like.img" > "$OUT/ok-prefixed.txt"
+gbl inspect "$OUT/efisp-like.img" > "$OUT/ok-prefixed.txt"
 grep -q '^result: ok$' "$OUT/ok-prefixed.txt" \
   || { echo "FAIL: prefixed payload did not produce result: ok"; cat "$OUT/ok-prefixed.txt"; exit 1; }
 
@@ -38,7 +41,7 @@ import sys
 p=open(sys.argv[1],"r+b"); p.seek(0x100); b=p.read(1); p.seek(0x100); p.write(bytes([b[0]^0xff])); p.close()
 ' "$OUT/corrupt.bin"
 set +e
-tools/gblp1-inspect/gblp1-inspect "$OUT/corrupt.bin" > "$OUT/corrupt.txt"
+gbl inspect "$OUT/corrupt.bin" > "$OUT/corrupt.txt"
 rc=$?
 set -e
 grep -q '^result: entry_sha_mismatch$' "$OUT/corrupt.txt" \
@@ -49,7 +52,7 @@ grep -q '^result: entry_sha_mismatch$' "$OUT/corrupt.txt" \
 # 4. Not-a-gblp1: feed pure random.
 head -c 4096 /dev/urandom > "$OUT/random.bin"
 set +e
-tools/gblp1-inspect/gblp1-inspect "$OUT/random.bin" > "$OUT/random.txt"
+gbl inspect "$OUT/random.bin" > "$OUT/random.txt"
 rc=$?
 set -e
 grep -q '^result: not_a_gblp1$' "$OUT/random.txt" \
@@ -68,10 +71,10 @@ b += bytes(96)
 assert len(b) == 120, len(b)
 open(sys.argv[1], "wb").write(b)
 PY
-tools/gbl-pack/gbl-pack --mode2-profile "$OUT/profile.bin" --manifest 0x01 \
+gbl pack --mode2-profile "$OUT/profile.bin" --manifest 0x01 \
                        --out "$OUT/manifest.bin" 2>"$OUT/manifest-pack.log" \
   || { echo "FAIL: gbl-pack --manifest 0x01 failed"; cat "$OUT/manifest-pack.log"; exit 1; }
-tools/gblp1-inspect/gblp1-inspect "$OUT/manifest.bin" > "$OUT/manifest.txt"
+gbl inspect "$OUT/manifest.bin" > "$OUT/manifest.txt"
 grep -q '^result: ok$' "$OUT/manifest.txt" \
   || { echo "FAIL: manifest container did not produce result: ok"; cat "$OUT/manifest.txt"; exit 1; }
 grep -q 'type=0x0020 (manifest)' "$OUT/manifest.txt" \
@@ -81,11 +84,26 @@ grep -q 'magic=GMAN schema=1 fakelock_hook=yes profile_spoof=no' \
   || { echo "FAIL: manifest detail line missing or wrong"; cat "$OUT/manifest.txt"; exit 1; }
 
 # 5b. --manifest 0x02 -> profile_spoof=yes fakelock_hook=no.
-tools/gbl-pack/gbl-pack --mode2-profile "$OUT/profile.bin" --manifest 0x02 \
+gbl pack --mode2-profile "$OUT/profile.bin" --manifest 0x02 \
                        --out "$OUT/manifest2.bin" 2>"$OUT/manifest2-pack.log" \
   || { echo "FAIL: gbl-pack --manifest 0x02 failed"; cat "$OUT/manifest2-pack.log"; exit 1; }
-tools/gblp1-inspect/gblp1-inspect "$OUT/manifest2.bin" > "$OUT/manifest2.txt"
+gbl inspect "$OUT/manifest2.bin" > "$OUT/manifest2.txt"
 grep -q 'fakelock_hook=no profile_spoof=yes' "$OUT/manifest2.txt" \
   || { echo "FAIL: manifest 0x02 capability bits wrong"; cat "$OUT/manifest2.txt"; exit 1; }
+
+# Golden parity assertion (frozen C-tool output).  prefix.bin / efisp-like.img
+# / corrupt.bin / random.bin all use /dev/urandom and are excluded.
+cmp -s "$OUT/payload.bin"   tests/host/goldens/089/payload.bin \
+  || { echo "FAIL 089 golden: payload.bin diverged from frozen C-tool output"; exit 1; }
+diff -u tests/host/goldens/089/ok.txt        "$OUT/ok.txt" \
+  || { echo "FAIL 089 golden: ok.txt diverged from frozen C-tool output"; exit 1; }
+cmp -s "$OUT/manifest.bin"  tests/host/goldens/089/manifest.bin \
+  || { echo "FAIL 089 golden: manifest.bin diverged from frozen C-tool output"; exit 1; }
+diff -u tests/host/goldens/089/manifest.txt  "$OUT/manifest.txt" \
+  || { echo "FAIL 089 golden: manifest.txt diverged from frozen C-tool output"; exit 1; }
+cmp -s "$OUT/manifest2.bin" tests/host/goldens/089/manifest2.bin \
+  || { echo "FAIL 089 golden: manifest2.bin diverged from frozen C-tool output"; exit 1; }
+diff -u tests/host/goldens/089/manifest2.txt "$OUT/manifest2.txt" \
+  || { echo "FAIL 089 golden: manifest2.txt diverged from frozen C-tool output"; exit 1; }
 
 echo "PASS: 089 gblp1-inspect"

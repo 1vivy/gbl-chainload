@@ -1,0 +1,23 @@
+# crates/pe-utils/Cargo.toml — PE sanity + UTF-16 "efisp" marker scan.
+#
+# Replaces GblChainloadPkg/Library/GblPayloadLib/PeSanity.c (host PE sanity
+# check, consumed by tools/gbl-pack at pack time — gBS->LoadImage is the
+# runtime authority for the EFI shim) and tools/shared/efisp_scan.h (the
+# 12-byte UTF-16LE "efisp\0" marker scan used by gbl-pack's warning).
+#
+# Builds as both an rlib (for the in-workspace Rust binaries) and a
+# staticlib (libpe_utils.a) consumed via extern "C" by the host C tools
+# and, on the aarch64-unknown-uefi target, by the EDK2 firmware build
+# pipeline.
+
+[package]
+name = "pe-utils"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+
+[lib]
+crate-type = ["rlib", "staticlib"]

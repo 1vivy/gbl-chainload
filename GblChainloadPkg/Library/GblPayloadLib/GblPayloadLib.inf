@@ -12,16 +12,33 @@
   LIBRARY_CLASS                  = GblPayloadLib
 
 [Sources]
-  PayloadParse.c
-  Mode2Profile.c
-  Crc32.c
-  Sha256.c
   LocateOverlay.c
   EfispBlockIo.c
   GblPayload.c
-  # PeSanity.c is intentionally not built into the EFI shim: gBS->LoadImage
-  # is the runtime authority for PE validity. PeSanity.c is a host pre-flight
-  # source consumed only by tools/gbl-pack.
+  # PR2 Task 3: The PE sanity check (formerly PeSanity.c) lives in the
+  # Rust workspace as `crates/pe-utils`. The crate has no firmware
+  # caller today — gBS->LoadImage is the runtime authority — so the
+  # staticlib (target/aarch64-unknown-uefi/release/libpe_utils.a) is
+  # built by cargo and stays unlinked from this .inf until a firmware
+  # call site lands (patcher loader-path gate, Task 4+, per the design
+  # doc). Host consumers (gbl-pack, fv-unwrap, test_pe_sanity) link the
+  # staticlib via their own Makefiles.
+  #
+  # PR2 Task 4: PayloadParse.c, Sha256.c, and Crc32.c moved into the
+  # `crates/gblp1` Rust crate. GblPayload.c still calls into them
+  # (gbl_payload_scan_cached_abl, gbl_payload_find_mode2_profile,
+  # gbl_payload_find_manifest) via the C ABI declared in
+  # crates/gblp1/include/gblp1_ffi.h. The aarch64-unknown-uefi
+  # libgblp1.a is built by cargo from scripts/build-inside-docker.sh
+  # and linked into the final EFI via the DLINK_FLAGS entry in
+  # GblChainloadPkg.dsc (`[BuildOptions.common]`).
+  #
+  # PR2 Task 5: Mode2Profile.c moved into the `crates/mode2-profile-core`
+  # Rust crate. GblPayload.c calls gbl_mode2_profile_parse() via the C
+  # ABI declared in crates/mode2-profile-core/include/mode2_profile_ffi.h;
+  # the aarch64-unknown-none libmode2_profile_core.a is built ahead of
+  # EDK2 by scripts/build-inside-docker.sh and linked via DLINK2_FLAGS in
+  # GblChainloadPkg.dsc.
 
 [Packages]
   MdePkg/MdePkg.dec

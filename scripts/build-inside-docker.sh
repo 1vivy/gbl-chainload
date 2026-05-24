@@ -69,6 +69,43 @@ set -u
 
 export GCC5_AARCH64_PREFIX=/usr/bin/aarch64-linux-gnu-
 
+# PR2 Task 4: GblPayloadLib's parser / SHA-256 / CRC-32 now live in the
+# crates/gblp1 Rust staticlib. EDK2's GCC link path (via aarch64-linux-
+# gnu-ld) wants ELF objects, so we target `aarch64-unknown-none`
+# (bare-metal ELF) — not `aarch64-unknown-uefi`, which emits COFF/PE
+# and fails with "file format not recognized" at link time. The crate
+# is fully no_std under target_os = "uefi" (which `unknown-none` is
+# not), so we also need the host-style cfg to NOT activate the panic
+# handler — but the panic handler is target_os = "uefi"-gated, which
+# is exactly what `unknown-none` is NOT, so the crate compiles
+# cleanly. The `--no-default-features` flag disables the
+# `alloc`-gated `pack()` function (firmware never packs).
+echo ">>> cargo build: crates/gblp1 (aarch64-unknown-none ELF staticlib)"
+cargo build --release --target aarch64-unknown-none -p gblp1 --no-default-features
+
+# PR2 Task 5: same pattern as crates/gblp1 — the firmware-side
+# mode2_profile parser (formerly Mode2Profile.c) lives in the Rust
+# `crates/mode2-profile-core` staticlib. `--no-default-features`
+# strips the host-only `compile` + `derive` paths (and their `toml` /
+# `serde` deps) so the firmware staticlib is the parser only.
+echo ">>> cargo build: crates/mode2-profile-core (aarch64-unknown-none ELF staticlib)"
+cargo build --release --target aarch64-unknown-none -p mode2-profile-core --no-default-features
+
+# PR2 Task 6: the dynamic patch engine moved into crates/patch-engine.
+# `--no-default-features` strips the host-only OEM + retired modules
+# from the firmware staticlib — only the abl_permissive group
+# (patch6 + patch10) ships on-device.
+echo ">>> cargo build: crates/patch-engine (aarch64-unknown-none ELF staticlib)"
+cargo build --release --target aarch64-unknown-none -p patch-engine --no-default-features
+
+# PR2 Task 7: AVB structure parsing moved into crates/avb-parse.
+# `--no-default-features` strips std + the host-only features so the
+# staticlib is pure no_std parser. Used by FastbootCmds.c (chain-verdict
+# probe, vbmeta lookup, hash descriptor walk) on the firmware side and
+# by vbmeta-graft / mode2-profile / tests/avb on the host side.
+echo ">>> cargo build: crates/avb-parse (aarch64-unknown-none ELF staticlib)"
+cargo build --release --target aarch64-unknown-none -p avb-parse --no-default-features
+
 echo ">>> build: $TOOLCHAIN_TAG / $ARCH / $BUILD_TARGET / name=$GBL_BUILD_NAME auto=$GBL_AUTO debug=$GBL_DEBUG verbose=$GBL_VERBOSE"
 build \
   -p GblChainloadPkg/GblChainloadPkg.dsc \

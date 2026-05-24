@@ -8,7 +8,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
-#include "../../../GblChainloadPkg/Library/GblPayloadLib/Internal/Crc32.h"
+/* PR2 Task 4: gbl_crc32 now ships in libgblp1.a (crates/gblp1). */
+#include "../../../crates/gblp1/include/gblp1_ffi.h"
 
 struct kat {
     const char *name;

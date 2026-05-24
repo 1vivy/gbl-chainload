@@ -9,7 +9,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "Internal/Mode2Profile.h"
+/* PR2 Task 5: gbl_mode2_profile_parse moved to crates/mode2-profile-core
+ * (Rust). The public C header replaces the deleted Internal/Mode2Profile.h. */
+#include "../../../crates/mode2-profile-core/include/mode2_profile_ffi.h"
 #include "ProfileRewrite.h"
 
 static unsigned char *slurp(const char *path, size_t *n) {

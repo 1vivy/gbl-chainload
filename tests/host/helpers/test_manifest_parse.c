@@ -5,10 +5,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
-#include "../../../GblChainloadPkg/Library/GblPayloadLib/Internal/PayloadParse.h"
-#include "../../../GblChainloadPkg/Library/GblPayloadLib/Internal/Crc32.h"
-#include "../../../GblChainloadPkg/Library/GblPayloadLib/Internal/Sha256.h"
-#include "../../../tools/shared/gblp1.h"
+/* PR2 Task 4: parser + sha256 + crc32 now ship in libgblp1.a
+ * (crates/gblp1). One header replaces the three deleted
+ * Internal/PayloadParse.h, Internal/Sha256.h, Internal/Crc32.h. */
+#include "../../../crates/gblp1/include/gblp1_ffi.h"
 
 static void wle16(uint8_t *p, uint16_t v) { p[0]=v; p[1]=v>>8; }
 static void wle32(uint8_t *p, uint32_t v) {

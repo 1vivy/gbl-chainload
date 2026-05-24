@@ -4,8 +4,12 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-make -s -C tools/abl-patcher
-make -s -C tools/gbl-pack
+# Reproducible gbl-pack output (see 060_pack_roundtrip.sh).
+: "${SOURCE_DATE_EPOCH:=0}"
+export SOURCE_DATE_EPOCH
+
+cargo build --release --quiet -p gbl
+PATH="$PWD/target/release:$PATH"; export PATH
 make -s -C tests/host/helpers parser_harness
 
 OUT=tests/host/.last/064
@@ -18,16 +22,21 @@ fixtures=(tests/images/pe/*.efi)
 for pe in "${fixtures[@]}"; do
   name=$(basename "$pe" .efi)
   patched="$OUT/$name.patched.efi"
-  tools/abl-patcher/abl-patcher --in "$pe" --out "$patched" \
+  gbl patch --in "$pe" --out "$patched" \
     >"$OUT/$name.patcher.log" 2>&1 \
-    || { echo "FAIL: $name abl-patcher"; cat "$OUT/$name.patcher.log"; exit 1; }
-  tools/gbl-pack/gbl-pack --cached-abl "$patched" --source "$pe" --extracted "$pe" \
+    || { echo "FAIL: $name gbl patch"; cat "$OUT/$name.patcher.log"; exit 1; }
+  gbl pack --cached-abl "$patched" --source "$pe" --extracted "$pe" \
     --out "$OUT/$name.bin" 2>"$OUT/$name.pack.log" \
     || { echo "FAIL: $name pack"; cat "$OUT/$name.pack.log"; exit 1; }
   tests/host/helpers/parser_harness find-cached-abl "$OUT/$name.bin" \
     >"$OUT/$name.parse.log" 2>&1
   grep -q 'status=0' "$OUT/$name.parse.log" \
     || { echo "FAIL: $name parse"; cat "$OUT/$name.parse.log"; exit 1; }
+  # Golden parity: per-fixture .bin + .patched.efi outputs are frozen.
+  for g in "$name.bin" "$name.patched.efi"; do
+    cmp -s "$OUT/$g" "tests/host/goldens/064/$g" \
+      || { echo "FAIL 064 golden: $g diverged from frozen C-tool output"; exit 1; }
+  done
   echo "  ok: $name"
 done
 

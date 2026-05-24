@@ -12,7 +12,10 @@ AVBTOOL="${AVBTOOL:-$HOME/avbtool.py}"
 OUT=tests/host/.last/079
 mkdir -p "$OUT"
 
-AVBTOOL="$AVBTOOL" python3 tools/mode2-profile/mode2-profile.py \
+# PR2 Task 8 moved mode2-profile.py from tools/mode2-profile/ into
+# scripts/ (the C tool dir got deleted with the rest of the host C
+# tools, but the Python reference stays as a parity anchor).
+AVBTOOL="$AVBTOOL" python3 scripts/mode2-profile.py \
   derive "$VBMETA" -o "$OUT/profile.toml" >"$OUT/derive.log" 2>&1 \
   || { echo "FAIL: derive failed"; cat "$OUT/derive.log"; exit 1; }
 

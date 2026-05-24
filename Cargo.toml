@@ -1,0 +1,27 @@
+# /Cargo.toml — Rust workspace for gbl-chainload tooling.
+[workspace]
+resolver = "2"
+members = [
+    "crates/avb-parse",
+    "crates/gblp1",
+    "crates/mode2-profile-core",
+    "crates/patch-engine",
+    "crates/pe-utils",
+    "tools/gbl",
+]
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+publish = false
+rust-version = "1.74"
+authors = ["vivy"]
+
+[profile.release]
+opt-level = "z"      # binary size for firmware staticlibs
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+

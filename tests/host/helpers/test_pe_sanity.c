@@ -1,7 +1,26 @@
-/* tests/host/helpers/test_pe_sanity.c */
+/* tests/host/helpers/test_pe_sanity.c
+ *
+ * PR2 Task 3: links the Rust pe-utils staticlib instead of the C
+ * PeSanity.c.  Status enum + extern decl are forward-declared here so
+ * the test binary stays standalone.
+ */
+#include <stdint.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <string.h>
-#include "../../../GblChainloadPkg/Library/GblPayloadLib/Internal/PeSanity.h"
+
+enum gbl_pe_status {
+    GBL_PE_OK = 0,
+    GBL_PE_TOO_SMALL,
+    GBL_PE_BAD_DOS,
+    GBL_PE_BAD_LFANEW,
+    GBL_PE_BAD_PE_MAGIC,
+    GBL_PE_BAD_MACHINE,
+    GBL_PE_BAD_OPT_MAGIC,
+    GBL_PE_BAD_SUBSYS,
+    GBL_PE_ENTRY_OUT_OF_BOUNDS
+};
+extern enum gbl_pe_status gbl_pe_sanity(const void *buf, size_t len);
 
 /* Minimal synthetic PE bytes for a sane AArch64 EFI_APPLICATION.
    Real PEs are larger; this exercises the header-parsing path only. */

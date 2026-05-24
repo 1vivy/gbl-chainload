@@ -1,1 +1,4 @@
 tests/images/grafted-recovery.img filter=lfs diff=lfs merge=lfs -text
+tests/images/recovery-infiniti-IN-16.0.7.201.img filter=lfs diff=lfs merge=lfs -text
+tests/images/recovery-infiniti-OrangeFox.img filter=lfs diff=lfs merge=lfs -text
+

@@ -1,12 +1,36 @@
 #!/usr/bin/env bash
-# scripts/build.sh — wrap docker EDK-II build for the single gbl-chainload EFI.
+# scripts/build.sh — orchestrate the full gbl-chainload build pipeline.
 #
-# Engine rework (Task 11): the per-mode compile flag is gone. Activation is
-# manifest-driven at runtime, so one EFI handles every install profile.
+# PR2 Task 9: this script is the single entry point covering the
+# four-phase build per docs rust-tooling spec §4:
 #
-# Usage: scripts/build.sh [--auto] [--debug] [--verbose]
+#   1. cargo build the firmware staticlibs (avb-parse, gblp1,
+#      mode2-profile-core, patch-engine, pe-utils) for
+#      aarch64-unknown-none.
+#   2. EDK2 build, which links the staticlibs into
+#      dist/gbl-chainload[-suffix].efi.
+#   3. cargo cross-build the `gbl` multicall for aarch64-linux-android
+#      (recovery), producing dist/recovery/gbl.
+#   4. cargo build the `gbl` multicall for the host (native), producing
+#      dist/host/gbl.
 #
-# Output: dist/gbl-chainload[-suffix].efi  (suffix from --auto/--debug/--verbose)
+# Phases 1–3 happen inside the gbl-chainload-build:latest docker image
+# (same image scripts/build-inside-docker.sh and scripts/build-recovery-
+# tools.sh use); phase 4 runs natively on the host. Cross-building for
+# Windows / macOS is handled separately by scripts/build-cross-tools.sh
+# (test 084) and intentionally not part of the default pipeline — it
+# requires non-trivial linker toolchains.
+#
+# Engine rework (Task 11): the per-mode compile flag is gone. Activation
+# is manifest-driven at runtime, so one EFI handles every install
+# profile.
+#
+# Usage: scripts/build.sh [--auto] [--debug] [--verbose] [--no-recovery] [--no-host]
+#
+# Outputs:
+#   dist/gbl-chainload[-suffix].efi   (firmware; suffix from --auto/--debug/--verbose)
+#   dist/recovery/gbl                  (aarch64-linux-android multicall)
+#   dist/host/gbl                      (native multicall; pass --no-host to skip)
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -15,21 +39,32 @@ cd "$REPO_ROOT"
 AUTO=0
 DEBUG=0
 VERBOSE=0
+DO_RECOVERY=1
+DO_HOST=1
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --auto)    AUTO=1;       shift   ;;
-    --debug)   DEBUG=1;      shift   ;;
-    --verbose) VERBOSE=1;    shift   ;;
+    --auto)         AUTO=1;          shift ;;
+    --debug)        DEBUG=1;         shift ;;
+    --verbose)      VERBOSE=1;       shift ;;
+    --no-recovery)  DO_RECOVERY=0;   shift ;;
+    --no-host)      DO_HOST=0;       shift ;;
     -h|--help)
       cat <<EOF
-Usage: $0 [--auto] [--debug] [--verbose]
+Usage: $0 [--auto] [--debug] [--verbose] [--no-recovery] [--no-host]
 
-Builds a single EFI at dist/gbl-chainload[-suffix].efi.
+Orchestrates the full four-phase gbl-chainload build:
+
+  1. firmware staticlibs (cargo aarch64-unknown-none, in docker)
+  2. EDK2 link              (in docker; emits dist/gbl-chainload[-suffix].efi)
+  3. recovery gbl multicall (cargo aarch64-linux-android, in docker;
+                             emits dist/recovery/gbl). Skip with --no-recovery.
+  4. host gbl multicall     (cargo host native; emits dist/host/gbl).
+                             Skip with --no-host.
 
 Activation of fakelock / profile-spoof behavior is driven by the runtime
 GBLP1 manifest baked into the EFISP overlay, not by compile flags. Build
-once; the same binary runs every install profile.
+once; the same firmware binary runs every install profile.
 EOF
       exit 0 ;;
     *) echo "unknown flag: $1" >&2; exit 2 ;;
@@ -76,14 +111,24 @@ if ! "$DOCKER" image inspect "$IMAGE_TAG" >/dev/null 2>&1; then
   "$DOCKER" build -t "$IMAGE_TAG" -f docker/Dockerfile .
 fi
 
-echo "==> Cleaning up previous build caches"
+echo "==> [1/4 + 2/4] Cleaning up previous EDK2 build caches"
 rm -rf Build/
 
 mkdir -p dist Build
 
-echo "==> Building $ARTIFACT (auto=$AUTO debug=$DEBUG verbose=$VERBOSE)"
+echo "==> [1/4 + 2/4] Building firmware staticlibs + $ARTIFACT (auto=$AUTO debug=$DEBUG verbose=$VERBOSE)"
 
-# Run the in-container build. Mount repo at /work.
+# Phases 1 + 2: run in-container. build-inside-docker.sh cargo-builds
+# every aarch64-unknown-none staticlib that the firmware actually links
+# (avb-parse, gblp1, mode2-profile-core, patch-engine) in workspace
+# order, and then invokes the EDK2 build, which DLINK_FLAGS's them
+# into the EFI.
+#
+# pe-utils has no firmware link consumer today (GblPayloadLib.inf
+# notes the staticlib stays unlinked until a firmware call site
+# lands), so it is NOT part of the docker firmware-staticlib build.
+# It is built transitively as an rlib by phase 4 (the host `gbl`
+# multicall, which links it via tools/gbl/Cargo.toml).
 "$DOCKER" run --rm \
   -v "$REPO_ROOT:/work" \
   -w /work \
@@ -110,4 +155,38 @@ if [[ -z "$EDK_OUT" || ! -f "$EDK_OUT" ]]; then
   fi
 fi
 cp "$EDK_OUT" "$ARTIFACT"
-echo "==> Built $ARTIFACT ($(stat -c%s "$ARTIFACT") bytes)"
+echo "==> [1/4 + 2/4] Built $ARTIFACT ($(stat -c%s "$ARTIFACT") bytes)"
+
+# Phase 3: cross-build the `gbl` multicall for aarch64-linux-android.
+# scripts/build-recovery-tools.sh wraps the same docker image and emits
+# dist/recovery/gbl + dist/recovery/SHA256SUMS. PR2 Task 8 already wired
+# it to the single multicall target.
+if [[ $DO_RECOVERY -eq 1 ]]; then
+  echo "==> [3/4] Cross-building recovery gbl multicall (aarch64-linux-android)"
+  bash scripts/build-recovery-tools.sh
+else
+  echo "==> [3/4] SKIP recovery cross-build (--no-recovery)"
+fi
+
+# Phase 4: native host build of the `gbl` multicall. We use the host
+# toolchain (not docker) so the resulting binary can run on the
+# developer's box for local testing without a docker round-trip.
+if [[ $DO_HOST -eq 1 ]]; then
+  echo "==> [4/4] Building host gbl multicall (native)"
+  if ! command -v cargo >/dev/null 2>&1; then
+    echo "ERROR: cargo not found on host PATH (host gbl build requires a working Rust toolchain)" >&2
+    echo "       Pass --no-host to skip phase 4, or install rustup." >&2
+    exit 1
+  fi
+  cargo build --release --locked -p gbl
+  mkdir -p dist/host
+  cp target/release/gbl dist/host/gbl
+  echo "==> [4/4] Built dist/host/gbl ($(stat -c%s dist/host/gbl) bytes)"
+else
+  echo "==> [4/4] SKIP host build (--no-host)"
+fi
+
+echo "==> done."
+echo "    firmware: $ARTIFACT"
+[[ $DO_RECOVERY -eq 1 ]] && echo "    recovery: dist/recovery/gbl"
+[[ $DO_HOST     -eq 1 ]] && echo "    host:     dist/host/gbl"

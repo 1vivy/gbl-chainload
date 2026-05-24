@@ -6,7 +6,7 @@ cd "$(dirname "$0")/../.."
 
 make -s -C tests/host/helpers mode2_harness
 H=tests/host/helpers/mode2_harness
-M2P=tools/mode2-profile/mode2-profile.py
+M2P=scripts/mode2-profile.py
 OUT=tests/host/.last/080
 mkdir -p "$OUT"
 

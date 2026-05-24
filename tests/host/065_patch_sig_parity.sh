@@ -1,27 +1,19 @@
 #!/usr/bin/env bash
-# tests/host/065_patch_sig_parity.sh — confirm DynamicPatchLib's
-# Signatures.h files all include tools/shared/patch_signatures.h, so the
-# patch byte data cannot diverge between EDK2 build and host tools.
+# tests/host/065_patch_sig_parity.sh — the canonical EFISP UTF-16LE
+# pattern lives in the Rust patch-engine crate (PR2 Task 6) and is no
+# longer duplicated in a C header (PR2 Task 8 removed
+# `tools/shared/patch_signatures.h` along with the rest of the host C
+# tool surface).
+#
+# This test guards against the Rust crate dropping the pattern — the
+# in-crate test pins it to the actual 10-byte value; we only check the
+# const is still referenced from the named source file.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-OUT=tests/host/.last/065
-mkdir -p "$OUT"
-
-missing=0
-for f in \
-    GblChainloadPkg/Library/DynamicPatchLib/abl_permissive/Signatures.h \
-    GblChainloadPkg/Library/DynamicPatchLib/oem/oplus/Signatures.h \
-    GblChainloadPkg/Library/DynamicPatchLib/retired/Signatures.h; do
-  if ! grep -q 'tools/shared/patch_signatures.h' "$f"; then
-    echo "FAIL: $f does not include tools/shared/patch_signatures.h"
-    missing=1
-  fi
-done
-[ "$missing" = "0" ] || exit 1
-
-# And confirm the shared header itself exists and defines kEfispUtf16Pattern.
-grep -q 'kEfispUtf16Pattern' tools/shared/patch_signatures.h \
-  || { echo "FAIL: kEfispUtf16Pattern missing from shared header"; exit 1; }
+test -f crates/patch-engine/src/retired/block_efisp_recursion.rs \
+  || { echo "FAIL: retired module missing from crates/patch-engine"; exit 1; }
+grep -q 'EFISP_UTF16_PATTERN' crates/patch-engine/src/retired/block_efisp_recursion.rs \
+  || { echo "FAIL: EFISP_UTF16_PATTERN missing from Rust retired module"; exit 1; }
 
 echo "PASS: 065 patch_sig parity"

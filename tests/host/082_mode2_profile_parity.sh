@@ -5,13 +5,15 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-PY=tools/mode2-profile/mode2-profile.py
-C_TOOL=tools/mode2-profile/mode2-profile
+cargo build --release --quiet -p gbl
+PATH="$PWD/target/release:$PATH"; export PATH
+
+# `gbl mode2 <sub>` replaces `tools/mode2-profile/mode2-profile <sub>`.
+# Use a bash array so `"${C_TOOL[@]}" compile <arg>` expands cleanly.
+PY=scripts/mode2-profile.py
+C_TOOL=(gbl mode2)
 OUT=tests/host/.last/082
 mkdir -p "$OUT"
-
-# Build the C tool.
-make -s -C tools/mode2-profile
 
 # ---- compile parity ----
 
@@ -30,7 +32,7 @@ TOML
 python3 "$PY" compile "$OUT/good.toml" -o "$OUT/py.bin" >"$OUT/py_compile.log" 2>&1 \
   || { echo "FAIL: Python compile failed"; cat "$OUT/py_compile.log"; exit 1; }
 
-"$C_TOOL" compile "$OUT/good.toml" -o "$OUT/c.bin" >"$OUT/c_compile.log" 2>&1 \
+"${C_TOOL[@]}" compile "$OUT/good.toml" -o "$OUT/c.bin" >"$OUT/c_compile.log" 2>&1 \
   || { echo "FAIL: C compile failed"; cat "$OUT/c_compile.log"; exit 1; }
 
 # Both must be exactly 120 bytes.
@@ -55,7 +57,7 @@ fi
   || { echo "FAIL: Python left output file after rejection (color=9)"; exit 1; }
 
 # C tool must reject.
-if "$C_TOOL" compile "$OUT/badcolor.toml" -o "$OUT/c_reject.bin" >/dev/null 2>&1; then
+if "${C_TOOL[@]}" compile "$OUT/badcolor.toml" -o "$OUT/c_reject.bin" >/dev/null 2>&1; then
   echo "FAIL: C tool accepted color=9"; exit 1
 fi
 [ ! -f "$OUT/c_reject.bin" ] \
@@ -71,7 +73,7 @@ if [ -f "$VBMETA" ] && [ -f "$AVBTOOL" ]; then
     >"$OUT/py_derive.log" 2>&1 \
     || { echo "FAIL: Python derive failed"; cat "$OUT/py_derive.log"; exit 1; }
 
-  "$C_TOOL" derive "$VBMETA" -o "$OUT/c_derive.toml" \
+  "${C_TOOL[@]}" derive "$VBMETA" -o "$OUT/c_derive.toml" \
     >"$OUT/c_derive.log" 2>&1 \
     || { echo "FAIL: C derive failed"; cat "$OUT/c_derive.log"; exit 1; }
 
@@ -85,7 +87,7 @@ if [ -f "$VBMETA" ] && [ -f "$AVBTOOL" ]; then
     || { echo "FAIL: Python compile of derived TOML failed"; \
          cat "$OUT/py_derive_compile.log"; exit 1; }
 
-  "$C_TOOL" compile "$OUT/c_derive.toml" -o "$OUT/c_derive.bin" \
+  "${C_TOOL[@]}" compile "$OUT/c_derive.toml" -o "$OUT/c_derive.bin" \
     >"$OUT/c_derive_compile.log" 2>&1 \
     || { echo "FAIL: C compile of derived TOML failed"; \
          cat "$OUT/c_derive_compile.log"; exit 1; }
@@ -97,5 +99,9 @@ if [ -f "$VBMETA" ] && [ -f "$AVBTOOL" ]; then
 else
   echo "  derive parity: SKIP (fixture or avbtool absent)"
 fi
+
+# Golden parity assertion: lock the compile output to the frozen byte string.
+cmp -s "$OUT/c.bin" tests/host/goldens/082/c.bin \
+  || { echo "FAIL 082 golden: c.bin diverged from frozen C-tool output"; exit 1; }
 
 echo "PASS: 082 mode2-profile parity"

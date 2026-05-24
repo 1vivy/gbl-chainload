@@ -1,415 +1,359 @@
-# gbl-chainload host-side tools
+# tools/
 
-Seven small C utilities (plus Python wrappers) for turning a dumped ABL
-partition image into a ready-to-stage EFISP payload, then optionally writing
-it to disk. Some workflows also consume additional inputs; for example, a
-stock `vbmeta.img` is only needed for mode 2. Most of the C tools build
-without extra library dependencies; `fv-unwrap` links `liblzma`.
-`mode2-profile` ships as both a C binary and a pure-Python script — they
-produce byte-identical output, so the C tool is the shippable build path and
-`mode2-profile.py` is the dev iteration path. The off-device chain is also
-wrapped by `scripts/efisp-package.py`, which calls these tools in order and
-produces a single `installed.efi`; `scripts/vbmeta-graft.py` wraps the graft
-tool for released host bundles.
+Host + recovery tooling for gbl-chainload. A single Rust multicall binary
+`gbl` replaces the seven legacy C tools (`gbl-commit`, `gbl-pack`,
+`gblp1-inspect`, `fv-unwrap`, `mode2-profile`, `vbmeta-graft`,
+`abl-patcher`). Each former tool maps 1:1 to a subcommand of `gbl`:
 
-## Host packaging workflow
+| Old binary       | New invocation                          |
+|------------------|-----------------------------------------|
+| `abl-patcher`    | `gbl patch`                             |
+| `gbl-commit`     | `gbl commit`                            |
+| `gbl-pack`       | `gbl pack`                              |
+| `gblp1-inspect`  | `gbl inspect`                           |
+| `fv-unwrap`      | `gbl unwrap`                            |
+| `mode2-profile`  | `gbl mode2 {derive,compile,build}`      |
+| `vbmeta-graft`   | `gbl avb {list,check,graft,list-hash}`  |
 
-Use `efisp-package.py` when you want to prepare an EFISP payload on a desktop
-host instead of inside the recovery ZIP. Pick the mode first, gather the
-required files for that mode, then run the package step and only use the
-RAM-only fastboot stage path for device testing.
-
-### Mode prep and required files
-
-All modes require:
-
-- a dumped stock ABL partition image (`--abl <abl.img>`), not just an already
-  extracted PE;
-- the matching base EFI (`--efi <mode-N.efi>`);
-- the released host-tool binaries next to `efisp-package.py` in `bin/`, or a
-  tool directory passed with `--bin-dir` / `--tools-dir`.
-
-Examples below use bare tool names for readability. In a release bundle, either
-run through `efisp-package.py`'s auto-discovery or prefix individual tools with
-`./bin/` unless you added them to `PATH`.
-
-Mode-specific inputs:
-
-| Mode | Base EFI | Required extra files | What gets packed |
-|---|---|---|---|
-| 0 | `mode-0.efi` | none | cached ABL patched with `--no-mode1` |
-| 1 | `mode-1.efi` | none | cached ABL with universal + `mode_1` patches |
-| 2 | `mode-2.efi` | stock main `vbmeta.img` and OEM id (`--stock-vbmeta`, `--oem`) | cached ABL patched with OEM group + a compiled mode-2 profile |
-
-For mode 2, `--stock-vbmeta` is the device's main vbmeta image used to derive
-the 120-byte mode-2 profile. It is separate from any partition image used with
-`vbmeta-graft`.
-
-### efisp-package.py
-
-Off-device chaining of `fv-unwrap → abl-patcher → gbl-pack` (plus
-`mode2-profile derive`+`compile` in mode 2), concatenated with a base
-`mode-N.efi` to produce a single ready-to-stage EFISP image. This is the
-host-side equivalent of the install ZIP's on-device `build_payload`. The
-script only *produces* the file — it does not write device storage.
-
-```
-efisp-package.py --abl <abl.img> --mode 0|1|2 --efi <mode-N.efi>
-                 [--stock-vbmeta <vbmeta.img>] [--oem <id>]
-                 [--bin-dir <dir>] [--out <path>]
-```
-
-Tool lookup order: `--bin-dir`/`--tools-dir` if given, then `bin/` adjacent to
-`efisp-package.py` (release bundle layout), then a platform `dist/<os>/`
-directory when running from a source checkout, then `PATH`.
-
-Mode 0 (no `mode_1` patches; minimal payload):
-
-```
-python3 efisp-package.py \
-  --abl  stock_abl.img \
-  --mode 0 \
-  --efi  mode-0.efi \
-  --out  installed-mode0.efi
-```
-
-Mode 1 (universal + `mode_1` patches; cached ABL in the overlay):
-
-```
-python3 efisp-package.py \
-  --abl  stock_abl.img \
-  --mode 1 \
-  --efi  mode-1.efi \
-  --out  installed-mode1.efi
-```
-
-Mode 2 (no `mode_1`; mode-2 profile + OEM patch group):
-
-```
-python3 efisp-package.py \
-  --abl          stock_abl.img \
-  --mode         2 \
-  --efi          mode-2.efi \
-  --stock-vbmeta stock_vbmeta.img \
-  --oem          oneplus \
-  --out          installed-mode2.efi
-```
-
-Default output, when omitted, is
-`dist/efisp-payload/<abl-basename>-mode<N>.efi` relative to the current working
-directory; pass `--out` when using the release bundle outside the repo.
-
-### Graft usage notes
-
-`vbmeta-graft` is for partition-level AVB cohabitation, not for building the
-EFISP overlay itself. Use it when a custom partition image needs its custom
-vbmeta placed before the stock OEM vbmeta footer so the existing chain
-descriptor can still validate the image.
-
-`--part-size` is the final target partition size: the size of the image you
-intend to write for that partition. The tool separately handles the
-custom image payload size: if `--custom` is already AVB-footered, it uses that
-footer's `OriginalImageSize`; otherwise it uses the custom file size.
-For a full, partition-sized custom image, `--part-size` is usually that custom
-image's file size. For a trimmed/bare payload, derive it from the real target
-partition or another known-good full partition image.
-
-The release bundle includes `vbmeta-graft.py`, a convenience wrapper that
-auto-discovers `bin/vbmeta-graft` and defaults `--part-size` to the custom
-image size:
-
-```
-python3 vbmeta-graft.py \
-  --stock  stock_partition.img \
-  --custom custom_partition.img \
-  --out    grafted_partition.img
-```
-
-Use `--part-size <bytes>` or `--size-from <image-or-device>` with the wrapper
-when the custom image is not the full destination-sized image.
-
-Recommended host flow:
-
-1. Inspect the stock partition or candidate image:
-
-   ```
-   vbmeta-graft list <stock-or-candidate-partition.img>
-   vbmeta-graft list-hash <stock-or-candidate-partition.img>
-   ```
-
-2. Graft the stock footer from the stock partition below the custom image.
-   `--part-size` must match the destination partition size; for a full custom
-   partition image, use that file's size:
-
-   ```
-   vbmeta-graft graft \
-     --stock     stock_partition.img \
-     --custom    custom_partition.img \
-     --part-size <target-partition-bytes> \
-     --out       grafted_partition.img
-   ```
-
-3. Optionally verify against the device's main vbmeta chain descriptor:
-
-   ```
-   vbmeta-graft check grafted_partition.img vbmeta.img <partition-name>
-   ```
-
-The `graft` step needs the stock partition image and the custom image. The
-optional `check` step additionally needs the device main `vbmeta.img` and the
-partition name from the chain descriptor.
-
-### Testing and device staging
-
-Verify the packaged payload before booting it:
-
-```
-gblp1-inspect installed-mode1.efi
-```
-
-Device testing must use the RAM-only staging path:
-
-```
-fastboot stage installed-mode1.efi
-fastboot oem boot-efi
-```
-
-Do not use host-tool docs as a license to flash firmware partitions. The safe
-iteration loop is `fastboot stage` followed by `fastboot oem boot-efi`; it is a
-one-shot boot path and survives a power cycle without persistent writes.
-
-### Advanced host-tool usage
-
-- Use `fv-unwrap` by itself to debug ABL/FV extraction failures before running
-  the full package script.
-- Use `abl-patcher --check-anchors-only --in <extracted.efi>` to validate patch
-  anchor coverage without producing a patched output.
-- Use `mode2-profile derive` to review the TOML profile derived from a stock
-  `vbmeta.img`; use `compile` to turn the reviewed TOML into the binary profile
-  consumed by `gbl-pack`.
-- Use `gbl-pack` directly when combining a cached ABL and mode-2 profile by
-  hand, or when constructing focused regression fixtures.
-- Use `gblp1-inspect <image>` on either a bare `payload.bin` or a full
-  base-EFI-plus-GBLP1 image to verify per-entry SHA-256 status.
-- Use `gbl-commit` only for file/block-device write workflows you intentionally
-  control; `efisp-package.py` itself does not call it and does not flash.
+Argv shape, exit codes, and byte-for-byte outputs are preserved against the
+captured C-tool golden outputs in `tests/host/goldens/` (see
+`docs/superpowers/pr-evidence/2026-05-23-rust-consolidation-parity.md` for
+the bit-level parity report). The Python parity tools
+(`scripts/mode2-profile.py`, `scripts/vbmeta-graft.py`) still exist as
+reference / convenience wrappers and now dispatch through `gbl <sub>`
+under the hood.
 
 ## Building
 
-All builds happen inside a single docker image. Build it once:
+All builds go through a single docker image:
 
 ```
 docker build -t gbl-chainload-build:latest -f docker/Dockerfile .
 ```
 
-- **Host (Linux dev binary):** `make -C tools/<tool>` → `tools/<tool>/<tool>`.
-  The default target builds a native binary suitable for local testing on
-  the Linux build host.
-- **Android (aarch64, for the recovery ZIP):**
-  `scripts/build-recovery-tools.sh` → `dist/recovery/<tool>` (statically
-  linked, runs in TWRP / recovery shells).
-- **Windows / macOS:** `scripts/build-cross-tools.sh windows|macos|all` →
-  `dist/windows/<tool>.exe` and `dist/macos/<tool>` (universal
-  `x86_64+arm64`). `SHA256SUMS` is emitted alongside the binaries.
+| Platform                    | Output                  | How                                                                            |
+|-----------------------------|-------------------------|--------------------------------------------------------------------------------|
+| Host (Linux dev binary)     | `target/release/gbl`    | `cargo build --release -p gbl`                                                 |
+| Static Linux musl release   | `dist/linux/gbl`        | `scripts/build-cross-tools.sh linux`                                           |
+| Android (aarch64, recovery) | `dist/recovery/gbl`     | `scripts/build-recovery-tools.sh`                                              |
+| Windows (x86_64 PE)         | `dist/windows/gbl.exe`  | `scripts/build-cross-tools.sh windows`                                         |
+| macOS (universal Mach-O)    | `dist/macos/gbl`        | `scripts/build-cross-tools.sh macos` (x86_64 + arm64 merged via `llvm-lipo`)   |
 
-## Tools
+`scripts/build.sh` orchestrates the full four-phase build (cargo workspace
++ EDK2 firmware + recovery cross-build + host build) and is what CI runs.
+`SHA256SUMS` is emitted alongside every `dist/<os>/gbl` artifact.
 
-### fv-unwrap
+`gbl --version` reports the Cargo package version. The compiled-in
+`packer_version` string embedded in `gbl pack` output picks up the in-tree
+`VERSION` file for release-branch stability; runs that need
+deterministic timestamps set `SOURCE_DATE_EPOCH` (the in-tree golden
+tests do exactly this — see `tests/host/060_pack_roundtrip.sh`).
 
-Extracts the EFI PE32+ payload out of a dumped Qualcomm-style ABL/XBL
+## Subcommands
+
+### `gbl unwrap`
+
+```
+gbl unwrap <INPUT> <OUTPUT>
+```
+
+Extracts the PE32+ payload out of a dumped Qualcomm-style ABL/XBL
 partition image. Walks the arm32-ELF wrapper, the EDK2 firmware volume,
 the LZMA-compressed `EFI_SECTION_GUID_DEFINED` section, and nested PE32
-sections; emits the inner PE.
+sections; emits the inner PE. LZMA decompression uses the pure-Rust
+`lzma-rs` crate — no `liblzma` link.
 
 ```
-fv-unwrap <partition.bin> <output.efi>
+gbl unwrap stock_abl.img extracted.efi
 ```
 
-```
-fv-unwrap stock_abl.img extracted.efi
-```
-
-### abl-patcher
-
-Drives the same `DynamicPatchLib` code that runs on-device, but against a
-PE on the host. Used to either dry-check anchor coverage on a candidate
-partition image, or to produce a pre-patched PE for the GBLP1 cache.
+### `gbl patch`
 
 ```
-abl-patcher --in <abl.bin> [--out <patched.bin>]
-abl-patcher --check-anchors-only --in <abl.bin>
-abl-patcher --oem <id> --in <abl.bin> [--out <patched.bin>]
+gbl patch --in <PE> [--out <OUT>] [--check-anchors-only] [--oem <id>]
 ```
+
+Drives the same `DynamicPatchLib` Rust code that runs on-device, but
+against a PE on the host. Used to either dry-check anchor coverage on a
+candidate partition image (`--check-anchors-only`) or produce a
+pre-patched PE for the GBLP1 cache.
 
 Flags:
 
-- `--oem <id>` — OEM patch group. `<id>` is one of `{ oplus, none }`. Default
-  `none` (no OEM group). `oneplus` is accepted as a deprecation alias for
-  `oplus` (still maps to `GBL_OEM_OPLUS`; will be removed in a future release).
-  `abl_permissive` patches are always applied at host packing time — the
+- `--oem <id>` — OEM patch group. Canonical: `oplus`, `none`. Default
+  `none` (no OEM-scoped patches). `oneplus` is accepted as a deprecation
+  alias for `oplus` (still maps to `Oem::Oplus`; prints a one-time
+  warning; will be removed in a future release).
+- `abl_permissive` patches are always applied at host packing time — the
   on-device manifest decides at runtime whether they take effect.
 
+Note (post-PR1): `gbl patch` has NO `--no-mode1` flag. Engine-rework
+PR1 collapsed the mode-1 patch group into the always-on `abl_permissive`
+set; the on-device manifest gates execution.
+
 ```
-abl-patcher --check-anchors-only --in extracted.efi
+gbl patch --check-anchors-only --in extracted.efi
+gbl patch --oem oplus --in extracted.efi --out patched.efi
 ```
 
-### gbl-pack
+### `gbl pack`
 
-Builds the GBLP1 overlay binary that the on-device `GblPayloadLib` consumes.
-Two non-overlapping payload kinds:
+```
+gbl pack --out OUT
+         [--cached-abl PE --source RAW --extracted PE]
+         [--mode2-profile BIN]
+         [--manifest BITS]
+```
 
-- `--cached-abl PE --source RAW --extracted PE` — cache a pre-patched ABL
-  PE (`gbl_cached_abl` record), so the on-device patch step can be skipped.
+Builds the GBLP1 overlay binary that the on-device `GblPayloadLib`
+consumes. Three non-overlapping entry kinds, any of which can be
+combined into a single overlay:
+
+- `--cached-abl PE --source RAW --extracted PE` — cache a pre-patched
+  ABL PE (`gbl_cached_abl` record), so the on-device patch step can be
+  skipped. `--source` and `--extracted` provide the source-meta SHA
+  trail.
 - `--mode2-profile BIN` — embed the 120-byte `gbl_mode2_profile` struct
-  (mode-2 overlay).
+  (mode-2 overlay; emitted by `gbl mode2 compile`).
+- `--manifest BITS` — capability-bits manifest entry (PR1 Task 3 wire
+  format; type `0x0020`). `BITS` accepts hex (`0x01`) or decimal (`2`).
 
-Both can be combined in a single overlay.
+`SOURCE_DATE_EPOCH` is honored for the embedded ISO timestamp; the
+golden tests pin it to `0` for byte-stable output.
 
 ```
-gbl-pack --out OUT [--cached-abl PE --source RAW --extracted PE] [--mode2-profile BIN]
-```
-
-```
-gbl-pack \
+gbl pack \
   --cached-abl patched.efi \
   --source     stock_abl.img \
   --extracted  extracted.efi \
-  --out        payload.bin
+  --mode2-profile profile.bin \
+  --manifest      0x01 \
+  --out           payload.bin
 ```
 
-### gbl-commit
+### `gbl inspect`
+
+```
+gbl inspect <IMAGE>
+```
+
+GBLP1 container inspector — parses + verifies a GBLP1 container and
+reports per-entry SHA-256 status. Used by the diag mode and host-side
+regression suite. Scans for the GBLP1 header inside an arbitrary image
+(so it works on a bare `payload.bin` or a full EFISP = base EFI ||
+GBLP1), validates the header and every entry digest, and prints a
+`result:` verdict (`ok`, `entry_sha_mismatch`, `not_a_gblp1`), exiting
+non-zero on any failure.
+
+Pretty-prints the PR1 manifest entry's capability bits when present.
+
+```
+gbl inspect payload.bin
+```
+
+### `gbl mode2`
+
+Mode-2 profile tooling. Three subcommands:
+
+```
+gbl mode2 derive  <VBMETA>  -o <OUT.TOML>     # vbmeta → human-readable TOML
+gbl mode2 compile <IN.TOML> -o <OUT.BIN>      # TOML → 120-byte binary struct
+gbl mode2 build   <VBMETA>  -o <OUT.BIN>      # composite: derive + compile
+```
+
+The 120-byte `gbl_mode2_profile` binary (`OUT.BIN`) is what
+`gbl pack --mode2-profile` consumes. The intermediate TOML is for
+human review and diff against operator-curated baselines.
+
+The standalone `scripts/mode2-profile.py` (pure-Python equivalent of the
+old C `mode2-profile`) still exists for dev iteration and now dispatches
+through `gbl mode2` for the produced binary. Use `gbl mode2` directly
+for shippable builds — no Python runtime requirement.
+
+```
+gbl mode2 derive  stock_vbmeta.img -o profile.toml
+gbl mode2 compile profile.toml     -o profile.bin
+# or composite:
+gbl mode2 build   stock_vbmeta.img -o profile.bin
+```
+
+### `gbl avb`
+
+AVB vbmeta tooling for partition-level cohabitation (the on-device
+mode-2 pattern, done off-device). Four subcommands:
+
+```
+gbl avb list      <IMAGE>                                  # walk descriptors
+gbl avb check     <CANDIDATE> <MAIN_VBMETA> <PART>         # chain-validate candidate
+gbl avb graft     --stock <S> --custom <C> --part-size <N> --out <O>
+gbl avb list-hash <ACTIVE_VBMETA> <BYNAME_DIR>             # walk hash + chain over byname
+```
+
+`graft` is the easy host path: needs only the stock partition image
+(stock vbmeta footer is read from it directly), the custom partition
+image, the target partition size, and an output path. If the custom
+image is AVB-footered, the tool uses its `OriginalImageSize`;
+otherwise it treats the whole custom file as the payload. For a full
+partition-sized custom image, `--part-size` is usually the custom file
+size.
+
+`check` is the optional safety verification — walks the *device's*
+main `vbmeta.img`, finds the chain descriptor for `<part>`, and confirms
+the candidate partition image's vbmeta key matches that descriptor's
+public key.
+
+`list-hash` walks both hash and chain descriptors over an on-device-style
+`by-name/` directory, producing the structured forensic report used by
+diag mode and the host parity tests (`tests/host/090`).
+
+```
+gbl avb list <stock-or-candidate-partition.img>
+gbl avb graft \
+    --stock     stock_partition.img \
+    --custom    custom_partition.img \
+    --part-size <target-partition-bytes> \
+    --out       grafted_partition.img
+gbl avb check grafted_partition.img vbmeta.img <partition-name>
+```
+
+### `gbl commit`
+
+```
+gbl commit --src FILE --dst PATH [--backup PATH] [--verify]
+```
 
 POSIX raw write of `--src` to `--dst`. Same code on host (writes regular
-files; used by tests) and Android (writes `/dev/block/by-name/efisp` from
-inside the recovery ZIP). `--backup` first reads the destination and saves
-a restore copy; `--verify` reads the destination back and SHA-256-checks it
-against the source, restoring from backup on mismatch.
+files; used by tests) and Android (writes `/dev/block/by-name/efisp`
+from inside the recovery ZIP). `--backup` first reads the destination
+and saves a restore copy; `--verify` reads the destination back through
+an **uncached** path (`posix_fadvise(POSIX_FADV_DONTNEED)` on the dst
+fd before re-read) and SHA-256-checks it against the source, restoring
+from backup on mismatch.
+
+The uncached read-back catches non-persisting writes — see issue #43 /
+main commit 6d3adc6 for the bug it shipped to address.
 
 ```
-gbl-commit --src FILE --dst PATH [--backup BACKUP_PATH] [--verify]
-```
-
-```
-gbl-commit \
+gbl commit \
   --src installed.efi \
   --dst /tmp/efisp.out \
   --backup /tmp/efisp.bak \
   --verify
 ```
 
-### vbmeta-graft
+## Engine-rework deltas (PR1 contract)
 
-vbmeta-aware "stretch a custom image to partition size and graft the
-stock OEM vbmeta below it" — the on-device mode-2 cohabit pattern, but
-done off-device. Three subcommands.
+- `gbl patch` has no `--no-mode1` flag (PR1 Task 12 dropped the mode-1
+  patch group as a separate gate; `abl_permissive` is always applied;
+  the on-device manifest decides at runtime).
+- `gbl pack --manifest <bits>` emits a PR1 Task 3 capability-bits
+  manifest entry (type `0x0020`); `BITS` accepts hex or decimal.
+- `gbl inspect` pretty-prints the manifest entry's bit fields (PR1
+  Task 4).
+- `gbl patch --oem oplus` is canonical; `--oem oneplus` is a deprecation
+  alias.
 
-`list` dumps the descriptors of any vbmeta-bearing image (debug aid):
+## Host packaging workflow
 
-```
-vbmeta-graft list <vbmeta-or-partition-img>
-```
-
-`graft` is the easy host path. Needs **only** the stock partition image
-(stock vbmeta footer is read from it directly), the custom partition image,
-the target partition size, and an output path. Does **not** need the device's
-main `vbmeta.img`. If the custom image is AVB-footered, the tool uses its
-`OriginalImageSize`; otherwise it treats the whole custom file as the payload:
-for a full custom partition image, `--part-size` is usually the custom file
-size.
-
-```
-vbmeta-graft graft --stock <stock-part> --custom <custom-part> --part-size <target-partition-bytes> --out <out>
-```
+Use `scripts/efisp-package.py` when you want to prepare an EFISP payload
+on a desktop host instead of inside the recovery ZIP. The script chains
+`gbl unwrap → gbl patch → gbl pack` (plus `gbl mode2 derive` + `compile`
+for mode 2) and concatenates the result with a base `mode-N.efi` to
+produce a single ready-to-stage EFISP image. It produces a file — it
+does not write device storage.
 
 ```
-vbmeta-graft graft \
-  --stock     stock_partition.img \
-  --custom    custom_partition.img \
-  --part-size <target-partition-bytes> \
-  --out       grafted_partition.img
+python3 scripts/efisp-package.py \
+  --abl  stock_abl.img \
+  --mode 0|1|2 \
+  --efi  mode-N.efi \
+  [--stock-vbmeta stock_vbmeta.img] \
+  [--oem oplus] \
+  [--out installed.efi]
 ```
 
-`check` is the optional safety verification. It walks the *device's* main
-`vbmeta.img`, finds the chain descriptor for `<part>`, and confirms the
-candidate partition image's vbmeta key matches that descriptor's public
-key — i.e. the device will still authenticate this candidate at boot.
-Needs the device main `vbmeta.img`:
+Mode-specific inputs:
+
+| Mode | Base EFI     | Required extra files                                                    | What gets packed                                          |
+|------|--------------|-------------------------------------------------------------------------|-----------------------------------------------------------|
+| 0    | `mode-0.efi` | none                                                                    | cached ABL with `abl_permissive` only                     |
+| 1    | `mode-1.efi` | none                                                                    | cached ABL with `abl_permissive` + manifest mode-1 bit    |
+| 2    | `mode-2.efi` | stock main `vbmeta.img` (`--stock-vbmeta`) and OEM id (`--oem`)         | cached ABL with OEM group + compiled mode-2 profile       |
+
+For mode 2, `--stock-vbmeta` is the device's main vbmeta image used to
+derive the 120-byte mode-2 profile. It is separate from any partition
+image used with `gbl avb graft`.
+
+### Testing and device staging
+
+Verify the packaged payload before booting it:
 
 ```
-vbmeta-graft check <candidate-part-img> <main-vbmeta-img> <part>
+gbl inspect installed.efi
 ```
 
-```
-vbmeta-graft check grafted_partition.img vbmeta.img <partition-name>
-```
-
-### mode2-profile
-
-Reads a stock `vbmeta.img` and emits the 120-byte `gbl_mode2_profile`
-struct (`tools/shared/gbl_mode2_profile.h`) that `gbl-pack --mode2-profile`
-embeds into a GBLP1 `0x0010` overlay. Two stages: `derive` extracts the
-relevant fields into a human-readable TOML; `compile` reads that TOML and
-writes the packed binary.
+Device testing must use the RAM-only staging path:
 
 ```
-mode2-profile derive  <vbmeta.img> -o <out.toml>
-mode2-profile compile <in.toml>    -o <out.bin>
+fastboot stage installed.efi
+fastboot oem boot-efi
 ```
 
-```
-mode2-profile derive  stock_vbmeta.img -o profile.toml
-mode2-profile compile profile.toml     -o profile.bin
-```
+`fastboot stage` + `fastboot oem boot-efi` is a one-shot RAM load that
+survives a power cycle without persistent writes. Never flash an EFI
+overlay to a non-HLOS partition without operator-in-the-loop
+verification — the `.claude/hooks/block-non-hlos-flash.py` PreToolUse
+hook will block such commands inside an agent session.
 
-A pure-Python equivalent ships alongside, `tools/mode2-profile/mode2-profile.py`,
-with the same two subcommands and byte-identical output. Use the C tool for
-the shippable build (cross-compiles to Windows/macOS/Android with no Python
-runtime requirement); use the `.py` for dev iteration on the host:
+## Advanced usage
 
-```
-python3 mode2-profile.py derive  stock_vbmeta.img -o profile.toml
-python3 mode2-profile.py compile profile.toml     -o profile.bin
-```
-
-**`mode2-profile.py derive` requires `avbtool.py`.** It is resolved in order:
-`$AVBTOOL`, `~/avbtool.py`, `/usr/bin/avbtool`, `/usr/local/bin/avbtool`.
-The C `mode2-profile derive` does not need `avbtool.py` (it has its own AVB parser).
-
-The `mode2-profile/vendor/tomlc99/` directory contains
-[tomlc99](https://github.com/cktan/tomlc99) by CK Tan (MIT) — a single-file
-C99 TOML parser used by `compile`.
-
-### gblp1-inspect
-
-GBLP1 container inspector — parses + verifies a GBLP1 container and reports
-per-entry SHA-256 status. Used by the diag mode. Scans for the GBLP1 header
-inside an arbitrary image (so it works on a bare `payload.bin` or a full
-EFISP = base EFI || GBLP1), validates the header and every entry digest, and
-prints a `result:` verdict (`ok`, `entry_sha_mismatch`, `not_a_gblp1`),
-exiting non-zero on any failure.
-
-```
-gblp1-inspect <image>
-```
-
-```
-gblp1-inspect payload.bin
-```
+- `gbl unwrap` by itself to debug ABL/FV extraction failures before
+  running the full package script.
+- `gbl patch --check-anchors-only --in <extracted.efi>` to validate
+  patch anchor coverage without producing a patched output. Useful
+  when surveying a fresh OTA ABL for engine compatibility.
+- `gbl mode2 derive` to review the TOML profile derived from a stock
+  `vbmeta.img`; `gbl mode2 compile` to turn the reviewed TOML into the
+  binary profile consumed by `gbl pack`.
+- `gbl pack` directly when combining a cached ABL and mode-2 profile by
+  hand, or when constructing focused regression fixtures.
+- `gbl inspect <image>` on either a bare `payload.bin` or a full
+  base-EFI-plus-GBLP1 image to verify per-entry SHA-256 status.
+- `gbl commit` only for file/block-device write workflows you
+  intentionally control; `efisp-package.py` itself does not call it
+  and does not flash.
 
 ## Platform matrix
 
-| Tool             | Linux | Android | Windows | macOS |
-|------------------|-------|---------|---------|-------|
-| fv-unwrap        | ✓     | ✓       | ✓       | ✓     |
-| abl-patcher      | ✓     | ✓       | ✓       | ✓     |
-| gbl-pack         | ✓     | ✓       | ✓       | ✓     |
-| gbl-commit       | ✓     | ✓       | ✓       | ✓     |
-| vbmeta-graft     | ✓     | ✓       | ✓       | ✓     |
-| vbmeta-graft.py  | ✓     | —       | ✓       | ✓     |
-| mode2-profile    | ✓     | ✓       | ✓       | ✓     |
-| gblp1-inspect    | ✓     | ✓       | ✓       | ✓     |
-| mode2-profile.py | ✓     | —       | ✓       | ✓     |
+| Tool       | Linux (host) | Linux (musl) | Android | Windows | macOS |
+|------------|--------------|--------------|---------|---------|-------|
+| `gbl`      | ✓            | ✓            | ✓       | ✓ *     | ✓     |
 
-`mode2-profile.py` runs on any host with Python 3.11+; `derive` additionally
-needs `avbtool.py` reachable via `$AVBTOOL`, `~/avbtool.py`, `/usr/bin/avbtool`,
-or `/usr/local/bin/avbtool`.
+\* Windows build requires `x86_64-w64-mingw32-dlltool` in the docker
+image (mingw-w64 binutils). Currently missing from `docker/Dockerfile`;
+test 084 SKIPs cleanly until added. See
+`docs/superpowers/pr-evidence/2026-05-23-rust-consolidation-parity.md`
+for the follow-up note.
+
+The host (native) build uses the system Rust toolchain. All cross
+targets use the docker build image's pinned Rust (currently 1.85) +
+zig for the Windows/macOS targets and the Android NDK for the recovery
+target.
+
+## Crate map
+
+The `gbl` multicall is a thin clap front-end over five in-workspace
+crates that hold the actual logic. The same crates are linked into the
+EDK2 firmware build as `aarch64-unknown-none` staticlibs via FFI shims:
+
+| Crate                              | Role                                            |
+|------------------------------------|-------------------------------------------------|
+| `crates/pe-utils`                  | PE32+ sanity + UTF-16 efisp marker scan         |
+| `crates/gblp1`                     | GBLP1 v1 parse + pack + streaming SHA + CRC     |
+| `crates/mode2-profile-core`        | Mode-2 derive (vbmeta) + compile/parse (TOML)   |
+| `crates/patch-engine`              | DynamicPatchLib host inversion                  |
+| `crates/avb-parse`                 | AvbParseLib inversion (descriptor walk + chain) |
+
+See each crate's `lib.rs` doc block for the API surface; the
+`tests/parity.rs` file under each crate locks behavior against the
+captured pre-Rust C-tool goldens.

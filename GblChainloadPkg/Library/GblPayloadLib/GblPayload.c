@@ -8,9 +8,8 @@
 #include <Library/DebugLib.h>
 #include <Library/GblLog.h>
 #include <Library/GblPayloadLib.h>
-#include "Internal/PayloadParse.h"
-#include "Internal/Mode2Profile.h"
-#include "../../../tools/shared/gblp1.h"
+#include "../../../crates/gblp1/include/gblp1_ffi.h"
+#include "../../../crates/mode2-profile-core/include/mode2_profile_ffi.h"
 
 EFI_STATUS LocateOverlayBytes(OUT VOID **Bytes, OUT UINTN *Size);
 

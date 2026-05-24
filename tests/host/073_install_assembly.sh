@@ -15,17 +15,19 @@ for n in 0 1 2; do
   [ -f "$ZIP" ] || { echo "FAIL: $ZIP not produced"; exit 1; }
   unzip -l "$ZIP" > "$OUT/$MODE.list"
 
+  # PR2 Task 9: the 7 per-tool C binaries collapsed into bin/gbl
+  # (single Rust multicall). MODE_TOOLS in each .conf is "gbl"; the
+  # zip carries one binary plus bin/busybox-arm64.
   common_expected=(META-INF/com/google/android/update-binary \
            META-INF/com/google/android/updater-script \
            core/ui.sh core/env.sh core/ota.sh core/busybox.sh \
            core/partition.sh core/safety.sh core/install_abl.sh \
            modes/SELECTED modes/install-common.sh \
            "modes/$MODE.conf" "modes/$MODE.sh" \
-           bin/fv-unwrap bin/abl-patcher bin/gbl-pack bin/gbl-commit \
-           bin/busybox-arm64 \
+           bin/gbl bin/busybox-arm64 \
             "base/gbl-chainload.efi" SHA256SUMS)
   if [ "$n" = 1 ]; then
-    common_expected+=(modes/graft-common.sh bin/vbmeta-graft)
+    common_expected+=(modes/graft-common.sh)
   fi
   for e in "${common_expected[@]}"; do
     grep -q "[ /]$e\$" "$OUT/$MODE.list" \

@@ -16,8 +16,9 @@ are the curated test pool.)
 
 Extracted PEs (post-unwrap) sit alongside as
 `<phone>-<codename>-<build-tail>-LinuxLoader.efi` (`.efi` extension), produced
-by the FV→PE extractor (`scripts/extract-pe-from-fv.sh` / `tools/fv-unwrap`,
-WIP).
+by the FV→PE extractor (`scripts/extract-pe-from-fv.sh` / `gbl unwrap`, the
+`gbl` multicall subcommand that replaced the standalone `fv-unwrap` C tool
+in PR2 Task 8).
 
 ## Which test consumes what
 

@@ -3,21 +3,25 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
+# Reproducible gbl-pack output (see 060_pack_roundtrip.sh).
+: "${SOURCE_DATE_EPOCH:=0}"
+export SOURCE_DATE_EPOCH
+
 PE=tests/images/pe/infiniti-EU-16.0.5.703.efi
 [ -f "$PE" ] || { echo "SKIP: $PE missing"; exit 0; }
 
-make -s -C tools/abl-patcher
-make -s -C tools/gbl-pack
+cargo build --release --quiet -p gbl
+PATH="$PWD/target/release:$PATH"; export PATH
 make -s -C tests/host/helpers parser_harness poison_byte
 
 OUT=tests/host/.last/061
 mkdir -p "$OUT"
 
-# Pre-patch the fixture so gbl-pack accepts it.
-tools/abl-patcher/abl-patcher --in "$PE" --out "$OUT/patched.efi" 2>"$OUT/patcher.log"
+# Pre-patch the fixture so gbl pack accepts it.
+gbl patch --in "$PE" --out "$OUT/patched.efi" 2>"$OUT/patcher.log"
 
 # Pack a clean container.
-tools/gbl-pack/gbl-pack --cached-abl "$OUT/patched.efi" --source "$PE" --extracted "$PE" \
+gbl pack --cached-abl "$OUT/patched.efi" --source "$PE" --extracted "$PE" \
   --out "$OUT/clean.bin" 2>/dev/null
 
 # Each (offset, xor, expected_status_label) — values must match
@@ -45,5 +49,10 @@ fuzz 24 0xFF 8 "header_crc32"
 # Footer at total_size-8 (read total from header bytes [16..20))
 TOTAL=$(od -An -tu4 -N4 -j16 "$OUT/clean.bin" | tr -d ' ')
 fuzz $((TOTAL - 8)) 0xFF 9 "footer"
+
+# Golden parity assertion: the unpoisoned packed container is the C tool's
+# canonical output; the Rust port must produce the same bytes.
+cmp -s "$OUT/clean.bin" tests/host/goldens/061/clean.bin \
+  || { echo "FAIL 061 golden: clean.bin diverged from frozen C-tool output"; exit 1; }
 
 echo "PASS: 061 parser fuzz"

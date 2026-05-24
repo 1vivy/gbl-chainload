@@ -4,6 +4,10 @@ dist/
 *.o
 *.obj
 *.efi.unsigned
+
+# Rust workspace build outputs (Cargo.lock is tracked at repo root)
+/target/
+
 tools/abl-patcher/abl-patcher
 tools/abl-patcher/abl-patcher-android
 tools/fv-unwrap/fv-unwrap

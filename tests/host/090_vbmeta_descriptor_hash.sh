@@ -3,14 +3,15 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-make -s -C tools/vbmeta-graft
+cargo build --release --quiet -p gbl
+PATH="$PWD/target/release:$PATH"; export PATH
 
 FX=tests/images/grafted-recovery.img
 [ -f "$FX" ] || { echo "SKIP: $FX absent"; exit 0; }
 
 OUT=tests/host/.last/090
 rm -rf "$OUT"; mkdir -p "$OUT/byname"
-VG=tools/vbmeta-graft/vbmeta-graft
+VG=(gbl avb)
 
 # Build a synthetic by-name dir: copy the fixture into byname/recovery_a.
 # The fixture's embedded vbmeta is what list-hash will both parse and (for
@@ -21,7 +22,7 @@ cp "$FX" "$OUT/byname/recovery_a"
 # main vbmeta target. list-hash walks its descriptors against the byname
 # dir. The exact descriptor set depends on the fixture; the test asserts
 # only on stable shape, not specific partitions.
-GBL_VBMETA_SLOT=a "$VG" list-hash "$FX" "$OUT/byname" > "$OUT/lh.txt" 2>&1 \
+GBL_VBMETA_SLOT=a "${VG[@]}" list-hash "$FX" "$OUT/byname" > "$OUT/lh.txt" 2>&1 \
   || { echo "FAIL: list-hash exited nonzero"; cat "$OUT/lh.txt"; exit 1; }
 
 # Every emitted partition line must carry digest=, graft=, verdict= fields.
@@ -43,13 +44,21 @@ import sys
 p=open(sys.argv[1],"r+b"); p.seek(0); p.write(b"\x00\x00\x00\x00"); p.close()
 ' "$OUT/byname/recovery_a"
 
-GBL_VBMETA_SLOT=a "$VG" list-hash "$FX" "$OUT/byname" > "$OUT/lh-corrupt.txt" 2>&1 \
+GBL_VBMETA_SLOT=a "${VG[@]}" list-hash "$FX" "$OUT/byname" > "$OUT/lh-corrupt.txt" 2>&1 \
   || true
 grep -q 'verdict=mismatch' "$OUT/lh-corrupt.txt" \
   || { echo "FAIL: perturbed byname did not produce verdict=mismatch"; cat "$OUT/lh-corrupt.txt"; exit 1; }
 
 # Restore.
 mv "$OUT/byname/recovery_a.bak" "$OUT/byname/recovery_a"
+
+# Golden parity assertion (frozen C-tool output). The "corrupt" run zeroes
+# the body before list-hash, but the descriptor walk is deterministic given
+# the same byname dir contents, so we lock that too.
+diff -u tests/host/goldens/090/lh.txt         "$OUT/lh.txt" \
+  || { echo "FAIL 090 golden: lh.txt diverged from frozen C-tool output"; exit 1; }
+diff -u tests/host/goldens/090/lh-corrupt.txt "$OUT/lh-corrupt.txt" \
+  || { echo "FAIL 090 golden: lh-corrupt.txt diverged from frozen C-tool output"; exit 1; }
 
 # Regression: existing list / check / graft must still work — run 074.
 bash tests/host/074_vbmeta_graft.sh > "$OUT/074.log" 2>&1 \

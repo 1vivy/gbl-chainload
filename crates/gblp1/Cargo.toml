@@ -1,0 +1,41 @@
+# crates/gblp1/Cargo.toml — GBLP1 v1 container parser + packer.
+#
+# Replaces:
+#   - GblChainloadPkg/Library/GblPayloadLib/PayloadParse.c (firmware
+#     parser; the only firmware caller of gbl_sha256 + gbl_crc32).
+#   - GblChainloadPkg/Library/GblPayloadLib/Sha256.c + Crc32.c (vendored
+#     SHA-256 + CRC-32 — now sourced from the sha2 + crc32fast crates).
+#   - The matching Internal/*.h headers (PayloadParse.h, Sha256.h, Crc32.h).
+#
+# Wire constants stay in tools/shared/gblp1.h; that header is consumed by
+# host C tools that PR2 Task 8 collapses into the `gbl` multicall binary.
+#
+# Builds as both an rlib (for in-workspace Rust binaries) and a staticlib
+# (libgblp1.a). Consumed via extern "C" by the firmware (aarch64-unknown-uefi)
+# and by every host C tool that previously linked Sha256.c / Crc32.c /
+# PayloadParse.c — see crates/gblp1/include/gblp1_ffi.h for the C header
+# those callers now include.
+
+[package]
+name = "gblp1"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+
+[lib]
+crate-type = ["rlib", "staticlib"]
+
+[features]
+# Default: std-on, host-style. `pack()` requires alloc. UEFI firmware
+# build sets default-features = false (and the crate gates itself on
+# target_os = "uefi" without alloc, so pack() is excluded).
+default = ["std"]
+std = ["alloc"]
+alloc = []
+
+[dependencies]
+sha2 = { version = "0.10", default-features = false }
+crc32fast = { version = "1.4", default-features = false }

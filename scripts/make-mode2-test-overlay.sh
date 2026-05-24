@@ -17,7 +17,7 @@ cd "$(dirname "$0")/.."
 VBMETA="${1:-images/vbmeta-infiniti-IN-16.0.7.201.img}"
 AVBTOOL="${AVBTOOL:-$HOME/avbtool.py}"
 OUT=dist/mode-2-test-build
-M2P=tools/mode2-profile/mode2-profile.py
+M2P=scripts/mode2-profile.py
 BUILT_EFI=dist/mode-2-debug.efi
 
 [ -f "$VBMETA" ]  || { echo "error: vbmeta not found: $VBMETA" >&2; exit 1; }
@@ -25,8 +25,9 @@ BUILT_EFI=dist/mode-2-debug.efi
 
 mkdir -p "$OUT" dist
 
-echo "==> Compiling gbl-pack (fail-fast before slow Docker build)"
-make -s -C tools/gbl-pack
+echo "==> Compiling gbl multicall (fail-fast before slow Docker build)"
+cargo build --release --quiet -p gbl
+PATH="$PWD/target/release:$PATH"; export PATH
 
 echo "==> Building mode-2 EFI"
 ./scripts/build.sh --mode 2 --debug
@@ -39,7 +40,7 @@ echo "==> Compiling profile"
 python3 "$M2P" compile "$OUT/profile.xml" -o "$OUT/profile.bin"
 
 echo "==> Packing GBLP1 0x0010 overlay"
-tools/gbl-pack/gbl-pack --mode2-profile "$OUT/profile.bin" --out "$OUT/overlay.bin"
+gbl pack --mode2-profile "$OUT/profile.bin" --out "$OUT/overlay.bin"
 
 echo "==> Concatenating overlay onto $BUILT_EFI"
 cat "$BUILT_EFI" "$OUT/overlay.bin" > dist/mode-2-test.efi
