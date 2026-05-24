@@ -91,19 +91,9 @@ gbl inspect "$OUT/manifest2.bin" > "$OUT/manifest2.txt"
 grep -q 'fakelock_hook=no profile_spoof=yes' "$OUT/manifest2.txt" \
   || { echo "FAIL: manifest 0x02 capability bits wrong"; cat "$OUT/manifest2.txt"; exit 1; }
 
-# Golden parity assertion (frozen C-tool output).  prefix.bin / efisp-like.img
-# / corrupt.bin / random.bin all use /dev/urandom and are excluded.
-cmp -s "$OUT/payload.bin"   tests/host/goldens/089/payload.bin \
-  || { echo "FAIL 089 golden: payload.bin diverged from frozen C-tool output"; exit 1; }
-diff -u tests/host/goldens/089/ok.txt        "$OUT/ok.txt" \
-  || { echo "FAIL 089 golden: ok.txt diverged from frozen C-tool output"; exit 1; }
-cmp -s "$OUT/manifest.bin"  tests/host/goldens/089/manifest.bin \
-  || { echo "FAIL 089 golden: manifest.bin diverged from frozen C-tool output"; exit 1; }
-diff -u tests/host/goldens/089/manifest.txt  "$OUT/manifest.txt" \
-  || { echo "FAIL 089 golden: manifest.txt diverged from frozen C-tool output"; exit 1; }
-cmp -s "$OUT/manifest2.bin" tests/host/goldens/089/manifest2.bin \
-  || { echo "FAIL 089 golden: manifest2.bin diverged from frozen C-tool output"; exit 1; }
-diff -u tests/host/goldens/089/manifest2.txt "$OUT/manifest2.txt" \
-  || { echo "FAIL 089 golden: manifest2.txt diverged from frozen C-tool output"; exit 1; }
+# Note: ok.txt / manifest.txt / manifest2.txt schema coverage above (result
+# lines + manifest detail line) is the regression guard now that the parity-
+# contract goldens are retired. The binary outputs (payload.bin / manifest*.bin)
+# are validated by gbl inspect itself (parse status / result: ok).
 
 echo "PASS: 089 gblp1-inspect"

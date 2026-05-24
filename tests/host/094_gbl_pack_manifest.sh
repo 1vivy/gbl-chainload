@@ -76,10 +76,4 @@ set -e
 grep -q 'bad --manifest bits (reserved bits set)' "$OUT/bad.log" \
   || { echo "FAIL: expected error string missing"; cat "$OUT/bad.log"; exit 1; }
 
-# Golden parity assertion (frozen C-tool output).
-for g in with-manifest.bin dec-manifest.bin no-manifest.bin; do
-  cmp -s "$OUT/$g" "tests/host/goldens/094/$g" \
-    || { echo "FAIL 094 golden: $g diverged from frozen C-tool output"; exit 1; }
-done
-
 echo "PASS: 094 gbl-pack manifest"

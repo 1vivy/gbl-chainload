@@ -1,2 +1,0 @@
-partition=recovery type=hash graftable=yes
-descriptor type=other

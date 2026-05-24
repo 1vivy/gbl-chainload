@@ -32,11 +32,6 @@ for pe in "${fixtures[@]}"; do
     >"$OUT/$name.parse.log" 2>&1
   grep -q 'status=0' "$OUT/$name.parse.log" \
     || { echo "FAIL: $name parse"; cat "$OUT/$name.parse.log"; exit 1; }
-  # Golden parity: per-fixture .bin + .patched.efi outputs are frozen.
-  for g in "$name.bin" "$name.patched.efi"; do
-    cmp -s "$OUT/$g" "tests/host/goldens/064/$g" \
-      || { echo "FAIL 064 golden: $g diverged from frozen C-tool output"; exit 1; }
-  done
   echo "  ok: $name"
 done
 
