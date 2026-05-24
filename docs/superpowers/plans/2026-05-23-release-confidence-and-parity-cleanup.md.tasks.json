@@ -16,23 +16,23 @@
     },
     {
       "id": "35",
-      "subject": "Task 2: build-efi job — EFI parity check vs zip submodule",
+      "subject": "Task 2: build-efi job — EFI + recovery-gbl parity checks vs zip",
       "status": "pending",
       "blockedBy": ["33"],
-      "description": "**Goal:** Add a release.yml step in `build-efi` that asserts `sha256(dist/gbl-chainload.efi) == sha256(zip/base/gbl-chainload.efi)`. Fail loudly with recovery hint.\n\nSee plan doc Task 2 for YAML.\n\n```json:metadata\n{\"files\":[\".github/workflows/release.yml\"],\"verifyCommand\":\"python3 -c 'import yaml; w=yaml.safe_load(open(\\\".github/workflows/release.yml\\\")); assert any(\\\"EFI parity\\\" in s.get(\\\"name\\\",\\\"\\\") for s in w[\\\"jobs\\\"][\\\"build-efi\\\"][\\\"steps\\\"])'\",\"acceptanceCriteria\":[\"build-efi has EFI parity step\",\"fails with recovery hint\",\"artifact upload intact\",\"release job folds EFI into SHA256SUMS\"]}\n```"
+      "description": "**Goal:** Extend build-efi to build both vendored artifacts (firmware EFI + recovery gbl multicall) and assert each is byte-identical to its zip counterpart. Replaces the squash-merge-fragile parent-commit SHA check.\n\nSee plan doc Task 2 for full YAML.\n\n```json:metadata\n{\"files\":[\".github/workflows/release.yml\"],\"verifyCommand\":\"python3 -c 'import yaml; j=yaml.safe_load(open(\\\".github/workflows/release.yml\\\"))[\\\"jobs\\\"]; names=[s.get(\\\"name\\\",\\\"\\\") for s in j[\\\"build-efi\\\"][\\\"steps\\\"]]; assert any(\\\"EFI parity\\\" in n for n in names); assert any(\\\"Build recovery gbl\\\" in n for n in names); assert any(\\\"Recovery gbl parity\\\" in n for n in names)'\",\"acceptanceCriteria\":[\"EFI parity step present\",\"Build recovery gbl step present\",\"Recovery gbl parity step present\",\"Both parity steps fail with recovery hint\",\"artifact + release-job wiring intact\"]}\n```"
     },
     {
       "id": "36",
-      "subject": "Task 3: verify-job — submodule provenance + reachability",
+      "subject": "Task 3: verify-job — submodule pointer reachability",
       "status": "pending",
       "blockedBy": ["33"],
-      "description": "**Goal:** Extend the `verify` job with (a) zip MANIFEST `# parent-commit:` matches tag SHA, (b) all submodule pointers reachable from their `origin/main`.\n\nSee plan doc Task 3 for YAML.\n\n```json:metadata\n{\"files\":[\".github/workflows/release.yml\"],\"verifyCommand\":\"python3 -c 'import yaml; v=yaml.safe_load(open(\\\".github/workflows/release.yml\\\"))[\\\"jobs\\\"][\\\"verify\\\"]; names=[s.get(\\\"name\\\",\\\"\\\") for s in v[\\\"steps\\\"]]; assert any(\\\"provenance\\\" in n.lower() for n in names); assert any(\\\"reachability\\\" in n.lower() for n in names)'\",\"acceptanceCriteria\":[\"provenance step present\",\"reachability step present\",\"both fail with recovery hints\",\"verify outputs unchanged\"]}\n```"
+      "description": "**Goal:** Extend the verify job with submodule pointer reachability check. Parent-commit-matches-tag-SHA check dropped (squash-merge incompatible); Task 2's parity checks now catch the staleness failure mode.\n\nSee plan doc Task 3 for YAML.\n\n```json:metadata\n{\"files\":[\".github/workflows/release.yml\"],\"verifyCommand\":\"python3 -c 'import yaml; v=yaml.safe_load(open(\\\".github/workflows/release.yml\\\"))[\\\"jobs\\\"][\\\"verify\\\"]; names=[s.get(\\\"name\\\",\\\"\\\") for s in v[\\\"steps\\\"]]; assert any(\\\"reachability\\\" in n.lower() for n in names)'\",\"acceptanceCriteria\":[\"reachability step present\",\"fails with recovery hint\",\"verify outputs unchanged\"]}\n```"
     },
     {
       "id": "37",
       "subject": "Task 4: scripts/release.sh — one-command release prep",
       "status": "pending",
-      "description": "**Goal:** Create `scripts/release.sh X.Y.Z` that scaffolds the release branch + commits + PR.\n\nSee plan doc Task 4 for full script body.\n\n```json:metadata\n{\"files\":[\"scripts/release.sh\"],\"verifyCommand\":\"bash scripts/release.sh --help && bash scripts/release.sh --dry-run 2.3.99 && [ -z \\\"$(git status --porcelain)\\\" ] && [ -x scripts/release.sh ] && echo OK\",\"acceptanceCriteria\":[\"--help exits 0\",\"--dry-run no state change\",\"executable\",\"EXIT trap rollback\",\"validates semver/clean/tag\"]}\n```"
+      "description": "**Goal:** Create scripts/release.sh X.Y.Z that scaffolds the release branch + commits + PR. Script must checkout zip's main + ff-merge BEFORE running update-tools.sh, and push zip's main AFTER committing so the parent's bumped pointer is reachable.\n\nSee plan doc Task 4 for full script body.\n\n```json:metadata\n{\"files\":[\"scripts/release.sh\"],\"verifyCommand\":\"bash scripts/release.sh --help && bash scripts/release.sh --dry-run 2.3.99 && [ -z \\\"$(git status --porcelain)\\\" ] && [ -x scripts/release.sh ] && echo OK\",\"acceptanceCriteria\":[\"--help exits 0\",\"--dry-run no state change\",\"executable\",\"EXIT trap rollback\",\"validates semver/clean/tag\",\"zip main checked out + pushed\"]}\n```"
     },
     {
       "id": "38",
@@ -59,7 +59,7 @@
       "subject": "Task 8: Finalize PR #46 — retitle, rebody, force-push",
       "status": "pending",
       "blockedBy": ["33", "34", "35", "36", "37", "38", "39", "40"],
-      "description": "**Goal:** Force-push consolidated branch; `gh pr edit 46` with new title + body; watch CI to CLEAN.\n\nSee plan doc Task 8 for title + body.\n\n```json:metadata\n{\"files\":[],\"verifyCommand\":\"gh pr view 46 --json title,mergeable,mergeStateStatus\",\"acceptanceCriteria\":[\"new title set\",\"all task commits on origin\",\"mergeStateStatus = CLEAN\",\"host-tools + CI workflows green\"]}\n```"
+      "description": "**Goal:** Force-push consolidated branch; gh pr edit 46 with new title + body; watch CI to CLEAN. PR #46 merges via **merge commit, not squash** (per brainstorm follow-up — preserves spec/plan commit history on main for traceability).\n\nSee plan doc Task 8 for title + body.\n\n```json:metadata\n{\"files\":[],\"verifyCommand\":\"gh pr view 46 --json title,mergeable,mergeStateStatus\",\"acceptanceCriteria\":[\"new title set\",\"spec+plan+8 task commits on origin\",\"mergeStateStatus = CLEAN\",\"PR body notes 'merge commit, not squash'\",\"host-tools + CI workflows green\"]}\n```"
     }
   ]
 }

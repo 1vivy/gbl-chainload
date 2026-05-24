@@ -295,21 +295,36 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 
 ---
 
-### Task 2: build-efi job — fresh build + parity check vs zip submodule
+### Task 2: build-efi job — fresh build + parity checks vs zip submodule
 
-**Goal:** Add a release.yml job that builds the firmware payload in CI, asserts its sha256 matches the zip submodule's vendored copy, and uploads the EFI as a release asset. Catches "developer forgot to run `zip/update-tools.sh` after changing firmware source".
+**Goal:** Add a release.yml job that builds **both** vendored artifacts in CI — the firmware EFI and the recovery `gbl` multicall — and asserts both byte-match the zip submodule's vendored copies. Uploads the EFI as a release asset. Catches "developer forgot to run `zip/update-tools.sh` after changing firmware or tooling source".
+
+The two parity checks replace the squash-merge-fragile "MANIFEST parent-commit == tag SHA" invariant that Task 3 originally tried to enforce. They catch the same failure mode (vendored artifacts stale vs source at tag time) without depending on SHA equality through squash merges.
 
 **Files:**
-- Modify: `.github/workflows/release.yml` (the `build-efi` job is already in the file from Task 0; Task 2 adds the parity-check step + tightens the artifact path).
+- Modify: `.github/workflows/release.yml` (the `build-efi` job is already in the file from Task 0; Task 2 adds two parity-check steps + the recovery-gbl build step).
 
 **Acceptance Criteria:**
-- [ ] `build-efi` job has a step named "EFI parity: built == vendored in zip" that compares sha256s
-- [ ] The step fails loudly if drift is detected, with a recovery hint pointing to `zip/update-tools.sh`
+- [ ] `build-efi` job has a step named "EFI parity — built == vendored in zip" comparing sha256s of `dist/gbl-chainload.efi` and `zip/base/gbl-chainload.efi`
+- [ ] `build-efi` job has a step named "Build recovery gbl multicall" that runs `bash scripts/build-recovery-tools.sh` (this populates `dist/recovery/gbl`)
+- [ ] `build-efi` job has a step named "Recovery gbl parity — built == vendored in zip" comparing sha256s of `dist/recovery/gbl` and `zip/bin/gbl`
+- [ ] Both parity steps fail loudly with a recovery hint pointing to `zip/update-tools.sh`
 - [ ] The job still uploads `release-stage/gbl-chainload-v${ver}.efi` as the `efi-payload` artifact
 - [ ] The `release` job's "Compute top-level SHA256SUMS" step folds in the EFI
 - [ ] `release create` includes the EFI in its asset list
 
-**Verify:** `python3 -c 'import yaml; w=yaml.safe_load(open(".github/workflows/release.yml")); assert "build-efi" in w["jobs"]; assert any("EFI parity" in s.get("name","") for s in w["jobs"]["build-efi"]["steps"])'` exits 0.
+**Verify:**
+
+```bash
+python3 -c 'import yaml; j=yaml.safe_load(open(".github/workflows/release.yml"))["jobs"]; \
+  assert "build-efi" in j; \
+  names=[s.get("name","") for s in j["build-efi"]["steps"]]; \
+  assert any("EFI parity" in n for n in names), "EFI parity step missing"; \
+  assert any("Build recovery gbl" in n for n in names), "recovery gbl build missing"; \
+  assert any("Recovery gbl parity" in n for n in names), "recovery gbl parity missing"; \
+  assert "build-efi" in j["release"]["needs"], "release job not waiting on build-efi"; \
+  assert "efi-payload" in str(j["build-efi"]["steps"]), "artifact name missing"'
+```
 
 **Steps:**
 
@@ -321,7 +336,7 @@ grep -n "build-efi:" .github/workflows/release.yml
 # load image, build.sh, rename+checksum, upload-artifact steps.
 ```
 
-- [ ] **Step 2: Insert the parity-check step between "Build EFI payload" and "Rename + checksum"**
+- [ ] **Step 2: Insert the EFI parity step between "Build EFI payload" and "Rename + checksum"**
 
 Edit `release.yml`:
 
@@ -349,50 +364,78 @@ Edit `release.yml`:
             exit 1
           fi
           echo "EFI parity ok ($fresh)"
+```
+
+- [ ] **Step 3: Insert the recovery-gbl build + parity step after the EFI parity step**
+
+```yaml
+      - name: Build recovery gbl multicall (aarch64-linux-android)
+        # Builds dist/recovery/gbl — the aarch64-linux-android multicall
+        # that ships inside zip/bin/gbl. Required for the parity check below.
+        run: bash scripts/build-recovery-tools.sh
+      - name: Recovery gbl parity — built == vendored in zip
+        # Same shape as the EFI parity check, for the recovery gbl multicall.
+        # zip/bin/gbl is the aarch64-linux-android binary that runs inside
+        # OrangeFox / TWRP. update-tools.sh rebuilds it from parent source;
+        # if a developer changed crates/tools/gbl source but didn't refresh
+        # the zip, the installer ZIPs would ship a stale recovery binary.
+        run: |
+          set -euo pipefail
+          fresh=$(sha256sum dist/recovery/gbl | awk '{print $1}')
+          vendored=$(sha256sum zip/bin/gbl | awk '{print $1}')
+          if [ "$fresh" != "$vendored" ]; then
+            echo "::error::Recovery gbl drift detected"
+            echo "  built (dist/recovery/gbl): $fresh"
+            echo "  vendored (zip/bin/gbl):    $vendored"
+            echo "  Run zip/update-tools.sh from a clean parent checkout to"
+            echo "  refresh the vendored artifacts, commit in the zip submodule,"
+            echo "  bump the parent's zip pointer, and re-tag."
+            exit 1
+          fi
+          echo "Recovery gbl parity ok ($fresh)"
       - name: Rename + checksum
         run: |
           ...
 ```
 
-- [ ] **Step 3: Validate the YAML and confirm Task 0's release-asset wiring is intact**
+- [ ] **Step 4: Validate the YAML and confirm Task 0's release-asset wiring is intact**
 
-```bash
-python3 -c 'import yaml; w=yaml.safe_load(open(".github/workflows/release.yml")); j=w["jobs"]; \
-  assert "build-efi" in j; \
-  assert any("EFI parity" in s.get("name","") for s in j["build-efi"]["steps"]), "parity step missing"; \
-  assert "build-efi" in j["release"]["needs"], "release job not waiting on build-efi"; \
-  assert "efi-payload" in str(j["build-efi"]["steps"]), "artifact name missing"'
-```
+Run the Verify command from above; it asserts all three new steps are present plus the artifact wiring.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add .github/workflows/release.yml
-git commit -m "release.yml: EFI parity check in build-efi job
+git commit -m "release.yml: EFI + recovery-gbl parity checks in build-efi
 
-build-efi now sha256-compares its fresh dist/gbl-chainload.efi against
-zip/base/gbl-chainload.efi before uploading. If they differ, fail with
-a recovery hint pointing at zip/update-tools.sh. Catches the failure
-mode where a developer changes firmware source but forgets to refresh
-the zip submodule's vendored EFI — without this, the release would
-ship two different EFIs (the asset and the one inside installer ZIPs).
+build-efi now sha256-compares both of zip's vendored artifacts against
+fresh builds before publishing:
+
+  · dist/gbl-chainload.efi      vs zip/base/gbl-chainload.efi
+  · dist/recovery/gbl           vs zip/bin/gbl
+
+Both fail with a recovery hint pointing at zip/update-tools.sh.
+Catches the failure mode where a developer changes firmware or
+tooling source but forgets to refresh the zip submodule — without
+this, the release ships artifacts that disagree with the source tree
+at tag time. Replaces the squash-merge-fragile parent-commit SHA
+check the design originally considered.
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 ```
 
 ---
 
-### Task 3: verify-job — submodule provenance + reachability checks
+### Task 3: verify-job — submodule pointer reachability
 
-**Goal:** The `verify` job now also asserts that (a) `zip/bin/MANIFEST`'s `# parent-commit:` matches the tag SHA being released, and (b) every submodule pointer in the parent's tag commit is reachable from that submodule's `origin/main`.
+**Goal:** The `verify` job asserts every submodule pointer in the parent's tag commit is reachable from that submodule's `origin/main`. The parent-commit-matches-tag-SHA check originally drafted here is dropped — squash-merging release PRs creates new SHAs on main that can't match what `update-tools.sh` recorded on the release branch. Task 2's two parity checks (EFI + recovery-gbl built fresh vs vendored) catch the same staleness failure mode without depending on SHA equality.
 
 **Files:**
 - Modify: `.github/workflows/release.yml` — extend the `verify` job
 
 **Acceptance Criteria:**
-- [ ] verify job has a step named "Submodule provenance — zip MANIFEST parent-commit"
 - [ ] verify job has a step named "Submodule pointer reachability"
-- [ ] Both fail loudly with explicit recovery hints on mismatch
+- [ ] Step fails loudly with explicit recovery hints on mismatch
 - [ ] verify job still produces the `version` + `sha` outputs (existing contract intact)
 
 **Verify:**
@@ -400,7 +443,6 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 ```bash
 python3 -c 'import yaml; v=yaml.safe_load(open(".github/workflows/release.yml"))["jobs"]["verify"]; \
   names=[s.get("name","") for s in v["steps"]]; \
-  assert any("provenance" in n.lower() for n in names), "provenance step missing"; \
   assert any("reachability" in n.lower() for n in names), "reachability step missing"'
 ```
 
@@ -408,35 +450,15 @@ python3 -c 'import yaml; v=yaml.safe_load(open(".github/workflows/release.yml"))
 
 - [ ] **Step 1: Locate the verify job's last step**
 
-The current `verify` job ends with `MANIFEST drift check`. The new steps go after it.
+The current `verify` job ends with `MANIFEST drift check`. The new step goes after it.
 
-- [ ] **Step 2: Add provenance + reachability steps**
+- [ ] **Step 2: Add reachability step**
 
 ```yaml
       - name: MANIFEST drift check
         run: |
           set -euo pipefail
           cd zip && grep -E '^[0-9a-f]{64}  ' bin/MANIFEST | sha256sum -c --status
-
-      - name: Submodule provenance — zip MANIFEST parent-commit
-        # zip/bin/MANIFEST encodes the parent-commit SHA that produced the
-        # vendored artifacts. At release time this MUST match the tag SHA;
-        # otherwise the vendored binaries are from a different parent
-        # checkout and the zip is shipping artifacts that don't match the
-        # tag's source tree.
-        run: |
-          set -euo pipefail
-          parent=$(awk '/^# parent-commit:/ {print $3; exit}' zip/bin/MANIFEST)
-          tag_sha="${{ steps.resolve.outputs.sha }}"
-          if [ "$parent" != "$tag_sha" ]; then
-            echo "::error::zip/bin/MANIFEST parent-commit '$parent' != tag SHA '$tag_sha'"
-            echo "  The zip submodule's vendored artifacts were built from a"
-            echo "  different parent commit than the one being tagged."
-            echo "  Run zip/update-tools.sh against this parent checkout to"
-            echo "  rebuild + commit, then bump the parent's zip pointer."
-            exit 1
-          fi
-          echo "zip provenance ok (parent-commit=$parent == tag=$tag_sha)"
 
       - name: Submodule pointer reachability
         # Each submodule pinned by the parent's tag commit MUST be reachable
@@ -468,18 +490,20 @@ python3 -c 'import yaml; yaml.safe_load(open(".github/workflows/release.yml"))'
 
 ```bash
 git add .github/workflows/release.yml
-git commit -m "release.yml: verify-job submodule provenance + reachability checks
+git commit -m "release.yml: verify-job submodule pointer reachability
 
-The verify job now asserts two parent↔submodule sync invariants:
+Each submodule pinned in the parent's tag commit must be reachable
+from that submodule's origin/main; otherwise downstream
+\`git submodule update\` fails for anyone cloning the tag. Catches
+the drift mode we hit this session: edk2/main not yet ff'd to
+engine-rework's tip even though the parent's pointer expected it.
 
-  · zip/bin/MANIFEST's '# parent-commit:' SHA matches the tag SHA, so
-    the vendored binaries are built from the exact parent being shipped.
-  · every submodule pin is reachable from that submodule's origin/main,
-    so \`git submodule update\` works for anyone cloning the tag.
-
-Both fail with explicit recovery hints. Catches the drift modes we
-hit in this session: stale zip MANIFEST after a force-rebase, and
-edk2/main not yet ff'd to engine-rework's tip.
+The parent-commit-matches-tag-SHA invariant the design originally
+considered is dropped — squash-merging release PRs creates new SHAs
+on main that can't match what update-tools.sh recorded on the
+release branch. Task 2's two parity checks (EFI + recovery-gbl built
+fresh vs vendored) catch the same staleness failure mode without
+depending on SHA equality through squash.
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 ```
@@ -629,10 +653,22 @@ else
 fi
 
 # --- zip refresh ---
+# Submodule is typically in detached HEAD after a fresh clone / submodule
+# update. We need the commit to land on zip's main and reach origin/main
+# so the parent's bumped pointer is reachable (verify-job reachability
+# check enforces this at release time).
+echo "==> preparing zip submodule (checkout main, fast-forward from origin)"
+run "( cd zip && git fetch --quiet origin main )"
+run "( cd zip && git checkout main )"
+run "( cd zip && git merge --ff-only origin/main )"
+
 echo "==> refreshing zip submodule artifacts (rebuilds EFI + bin/gbl)"
 run "( cd zip && bash update-tools.sh )"
 run "git -C zip add -A"
 run "git -C zip commit -m 'release: $VER — refresh vendored artifacts'"
+
+echo "==> pushing zip's main so the new commit is reachable"
+run "git -C zip push origin main"
 
 # --- parent zip pointer ---
 echo "==> bumping parent's zip pointer"
@@ -1090,6 +1126,8 @@ If any check is `FAILURE`, fetch the failed log via `gh run view <run_id> --log-
 - [ ] **Step 4: Hand control back to the human (you / coordinator)**
 
 PR #46 is ready for human review + merge. No automated merge — explicit on main per CLAUDE.md.
+
+**Merge style:** Per the brainstorm follow-up, PR #46 merges via **merge commit (not squash)**. Future release PRs (created by `scripts/release.sh`) can squash-merge — they're 2-3 file changes and `verify`'s reachability check is the only invariant that cares about SHA continuity, and it operates on the submodule pointers (which the squash preserves).
 
 ---
 
