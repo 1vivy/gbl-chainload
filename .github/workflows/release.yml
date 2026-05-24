@@ -190,84 +190,36 @@ jobs:
           path: release-stage/*.zip
           retention-days: 1
 
-  build-efi:
-    # Build the firmware payload (dist/gbl-chainload.efi) inside the same
-    # build image, so users can stage + boot-efi without a local toolchain.
-    needs: [verify, prep-image]
+  stage-efi:
+    # Stage the firmware EFI from the zip submodule as a release asset.
+    # The vendored zip/base/gbl-chainload.efi is the trust anchor — it's
+    # what installer ZIPs ship, what on-device validation was run against,
+    # and what verify-job's MANIFEST drift check already authenticated.
+    # We do NOT rebuild the EFI in CI: GenFw embeds a PE-header timestamp
+    # and clang embeds host paths in debug info, so a fresh CI build will
+    # never byte-match a developer-machine build. Releasing the vendored
+    # binary directly is the consistent model (same as zip/bin/gbl).
+    needs: verify
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - uses: actions/download-artifact@v4
-        with:
-          name: build-image
-          path: /tmp
-      - name: Load docker image
-        run: docker load -i /tmp/image.tar
-      - name: Build EFI payload (firmware staticlibs + EDK2 link)
-        run: bash scripts/build.sh --no-recovery --no-host
-      - name: EFI parity — built == vendored in zip
-        # Asserts the freshly built dist/gbl-chainload.efi is byte-identical
-        # to zip/base/gbl-chainload.efi. A mismatch means the zip submodule's
-        # vendored EFI is stale: the developer changed firmware source but
-        # did not run zip/update-tools.sh to refresh the vendored artifacts.
-        # Without this, the release ships two different EFIs (the asset and
-        # the one inside installer ZIPs).
-        run: |
-          set -euo pipefail
-          fresh=$(sha256sum dist/gbl-chainload.efi | awk '{print $1}')
-          vendored=$(sha256sum zip/base/gbl-chainload.efi | awk '{print $1}')
-          if [ "$fresh" != "$vendored" ]; then
-            echo "::error::EFI drift detected"
-            echo "  built (dist/gbl-chainload.efi):       $fresh"
-            echo "  vendored (zip/base/gbl-chainload.efi): $vendored"
-            echo "  Run zip/update-tools.sh from a clean parent checkout to"
-            echo "  refresh the vendored artifacts, commit in the zip submodule,"
-            echo "  bump the parent's zip pointer, and re-tag."
-            exit 1
-          fi
-          echo "EFI parity ok ($fresh)"
-      - name: Build recovery gbl multicall (aarch64-linux-android)
-        # Builds dist/recovery/gbl — the aarch64-linux-android multicall
-        # that ships inside zip/bin/gbl. Required for the parity check below.
-        run: bash scripts/build-recovery-tools.sh
-      - name: Recovery gbl parity — built == vendored in zip
-        # Same shape as the EFI parity check, for the recovery gbl multicall.
-        # zip/bin/gbl is the aarch64-linux-android binary that runs inside
-        # OrangeFox / TWRP. update-tools.sh rebuilds it from parent source;
-        # if a developer changed crates/tools/gbl source but didn't refresh
-        # the zip, the installer ZIPs would ship a stale recovery binary.
-        run: |
-          set -euo pipefail
-          fresh=$(sha256sum dist/recovery/gbl | awk '{print $1}')
-          vendored=$(sha256sum zip/bin/gbl | awk '{print $1}')
-          if [ "$fresh" != "$vendored" ]; then
-            echo "::error::Recovery gbl drift detected"
-            echo "  built (dist/recovery/gbl): $fresh"
-            echo "  vendored (zip/bin/gbl):    $vendored"
-            echo "  Run zip/update-tools.sh from a clean parent checkout to"
-            echo "  refresh the vendored artifacts, commit in the zip submodule,"
-            echo "  bump the parent's zip pointer, and re-tag."
-            exit 1
-          fi
-          echo "Recovery gbl parity ok ($fresh)"
-      - name: Rename + checksum
+      - name: Stage EFI from zip submodule
         run: |
           set -euo pipefail
           ver="${{ needs.verify.outputs.version }}"
           mkdir -p release-stage
-          cp dist/gbl-chainload.efi "release-stage/gbl-chainload-v${ver}.efi"
-          (cd release-stage && sha256sum "gbl-chainload-v${ver}.efi" > "gbl-chainload-v${ver}.efi.sha256")
+          cp zip/base/gbl-chainload.efi "release-stage/gbl-chainload-v${ver}.efi"
           ls -la release-stage/
       - uses: actions/upload-artifact@v4
         with:
           name: efi-payload
-          path: release-stage/gbl-chainload-v*.efi*
+          path: release-stage/gbl-chainload-v*.efi
           retention-days: 1
 
   release:
-    needs: [verify, build-host-tools, build-zips, build-efi]
+    needs: [verify, build-host-tools, build-zips, stage-efi]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
