@@ -40,10 +40,13 @@ around it.
 Work happens on feature branches; landing on `main` is via PR.
 
 - Never commit to or push `main` directly.
-- Feature branches are otherwise unrestricted: commit early, commit often,
-  iterate freely. The PR grows new commits as feedback comes in.
-- Hot-fix-style "tiny" / "obvious" changes are not an exception to the
-  branch-and-PR rule.
+- Branch+PR applies to all changes, but the ceremony scales with the
+  change. Single-commit PRs are fine for small fixes; multi-commit
+  feature branches are fine for larger work — iterate freely on the
+  branch, the PR grows new commits as feedback comes in.
+- **Version bumps (`VERSION` + `CHANGELOG.md`) land as their own focused
+  PR — explicit on main, no bundling with feature work.** Use
+  `scripts/release.sh X.Y.Z` to scaffold the branch + PR.
 
 This applies regardless of mode. Auto mode does not opt out.
 
