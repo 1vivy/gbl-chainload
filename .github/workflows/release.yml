@@ -65,6 +65,24 @@ jobs:
         run: |
           set -euo pipefail
           cd zip && grep -E '^[0-9a-f]{64}  ' bin/MANIFEST | sha256sum -c --status
+      - name: Submodule pointer reachability
+        # Each submodule pinned by the parent's tag commit MUST be reachable
+        # from that submodule's origin/main. Catches the failure mode where
+        # a submodule has the commit only on a feature branch and main hasn't
+        # been ff'd yet — downstream clones would fail `git submodule update`.
+        run: |
+          set -euo pipefail
+          for sub in zip edk2; do
+            pin=$(git ls-tree HEAD "$sub" | awk '{print $3}')
+            (cd "$sub" && git fetch --quiet origin main)
+            if ! git -C "$sub" merge-base --is-ancestor "$pin" origin/main 2>/dev/null; then
+              echo "::error::$sub submodule pinned to $pin which is NOT reachable from $sub/origin/main"
+              echo "  Push the commit (or its branch's tip) to that submodule's main,"
+              echo "  then re-tag the parent."
+              exit 1
+            fi
+            echo "$sub reachability ok (pin=$pin)"
+          done
 
   prep-image:
     needs: verify
