@@ -182,6 +182,51 @@ jobs:
         run: docker load -i /tmp/image.tar
       - name: Build EFI payload (firmware staticlibs + EDK2 link)
         run: bash scripts/build.sh --no-recovery --no-host
+      - name: EFI parity — built == vendored in zip
+        # Asserts the freshly built dist/gbl-chainload.efi is byte-identical
+        # to zip/base/gbl-chainload.efi. A mismatch means the zip submodule's
+        # vendored EFI is stale: the developer changed firmware source but
+        # did not run zip/update-tools.sh to refresh the vendored artifacts.
+        # Without this, the release ships two different EFIs (the asset and
+        # the one inside installer ZIPs).
+        run: |
+          set -euo pipefail
+          fresh=$(sha256sum dist/gbl-chainload.efi | awk '{print $1}')
+          vendored=$(sha256sum zip/base/gbl-chainload.efi | awk '{print $1}')
+          if [ "$fresh" != "$vendored" ]; then
+            echo "::error::EFI drift detected"
+            echo "  built (dist/gbl-chainload.efi):       $fresh"
+            echo "  vendored (zip/base/gbl-chainload.efi): $vendored"
+            echo "  Run zip/update-tools.sh from a clean parent checkout to"
+            echo "  refresh the vendored artifacts, commit in the zip submodule,"
+            echo "  bump the parent's zip pointer, and re-tag."
+            exit 1
+          fi
+          echo "EFI parity ok ($fresh)"
+      - name: Build recovery gbl multicall (aarch64-linux-android)
+        # Builds dist/recovery/gbl — the aarch64-linux-android multicall
+        # that ships inside zip/bin/gbl. Required for the parity check below.
+        run: bash scripts/build-recovery-tools.sh
+      - name: Recovery gbl parity — built == vendored in zip
+        # Same shape as the EFI parity check, for the recovery gbl multicall.
+        # zip/bin/gbl is the aarch64-linux-android binary that runs inside
+        # OrangeFox / TWRP. update-tools.sh rebuilds it from parent source;
+        # if a developer changed crates/tools/gbl source but didn't refresh
+        # the zip, the installer ZIPs would ship a stale recovery binary.
+        run: |
+          set -euo pipefail
+          fresh=$(sha256sum dist/recovery/gbl | awk '{print $1}')
+          vendored=$(sha256sum zip/bin/gbl | awk '{print $1}')
+          if [ "$fresh" != "$vendored" ]; then
+            echo "::error::Recovery gbl drift detected"
+            echo "  built (dist/recovery/gbl): $fresh"
+            echo "  vendored (zip/bin/gbl):    $vendored"
+            echo "  Run zip/update-tools.sh from a clean parent checkout to"
+            echo "  refresh the vendored artifacts, commit in the zip submodule,"
+            echo "  bump the parent's zip pointer, and re-tag."
+            exit 1
+          fi
+          echo "Recovery gbl parity ok ($fresh)"
       - name: Rename + checksum
         run: |
           set -euo pipefail
