@@ -1,9 +1,13 @@
-/* tools/gbl-pack/pack.c — pure-logic GBLP1 packer. */
+/* tools/gbl-pack/pack.c — pure-logic GBLP1 packer.
+
+   Task 10 retired the efisp UTF-16 rejection path here: the BlockIoHook
+   EFISP gate is the operational guarantee, so the packer is now permissive
+   about cached_abl content.  The CLI layer (gbl-pack.c) emits a warning
+   when it sees the pattern, but does not fail. */
 #include <stdlib.h>
 #include <string.h>
 #include "pack.h"
 #include "../shared/gblp1.h"
-#include "../shared/efisp_scan.h"
 #include "../shared/gbl_mode2_profile.h"
 #include "../../GblChainloadPkg/Library/GblPayloadLib/Internal/Sha256.h"
 #include "../../GblChainloadPkg/Library/GblPayloadLib/Internal/Crc32.h"
@@ -25,14 +29,17 @@ gbl_pack_build(const struct gbl_pack_inputs *in,
 {
     if (!in)
         return GBL_PACK_ERR_BAD_INPUT;
-    int have_cached  = (in->cached_abl && in->cached_abl_size > 0);
-    int have_profile = (in->mode2_profile && in->mode2_profile_size > 0);
-    if (!have_cached && !have_profile)
+    int have_cached   = (in->cached_abl && in->cached_abl_size > 0);
+    int have_profile  = (in->mode2_profile && in->mode2_profile_size > 0);
+    int have_manifest = in->have_manifest ? 1 : 0;
+    if (!have_cached && !have_profile && !have_manifest)
         return GBL_PACK_ERR_BAD_INPUT;
 
     if (have_cached) {
-        if (gbl_contains_utf16_efisp(in->cached_abl, in->cached_abl_size))
-            return GBL_PACK_ERR_EFISP_PRESENT;
+        /* Task 10: efisp UTF-16 rejection retired — BlockIoHook gate is the
+           operational guarantee; the CLI front-end warns when it sees the
+           pattern.  Keep PE sanity as a hard reject (it catches genuinely
+           malformed inputs that would never boot). */
         if (gbl_pe_sanity(in->cached_abl, in->cached_abl_size) != GBL_PE_OK)
             return GBL_PACK_ERR_PE_INSANE;
     }
@@ -42,14 +49,21 @@ gbl_pack_build(const struct gbl_pack_inputs *in,
         if (memcmp(in->mode2_profile, GBL_M2P_MAGIC, 4) != 0)
             return GBL_PACK_ERR_PROFILE_BAD;
     }
+    if (have_manifest) {
+        /* Defense in depth: reject reserved bits before constructing the
+           container, so the on-device parser never sees a malformed entry. */
+        if (in->manifest_cap_bits & GBLP1_MANIFEST_BITS_RESERVED_MASK)
+            return GBL_PACK_ERR_MANIFEST_BAD;
+    }
 
     /* source_meta payload (only emitted alongside cached_abl). */
     size_t pv_len = in->packer_version ? strlen(in->packer_version) : 0;
     size_t ts_len = in->timestamp_iso8601 ? strlen(in->timestamp_iso8601) : 0;
     size_t meta_size = 3 * (4 + 32) + 4 + pv_len + 4 + ts_len;
 
-    /* Entry descriptors, in emission order. */
-    struct { uint16_t type; const uint8_t *data; size_t size; } ents[3];
+    /* Entry descriptors, in emission order. Max 4: cached_abl, source_meta,
+       mode2_profile, manifest. */
+    struct { uint16_t type; const uint8_t *data; size_t size; } ents[4];
     uint32_t ec = 0;
     if (have_cached) {
         ents[ec].type = GBLP1_TYPE_CACHED_ABL;
@@ -61,10 +75,14 @@ gbl_pack_build(const struct gbl_pack_inputs *in,
         ents[ec].type = GBLP1_TYPE_MODE2_PROFILE;
         ents[ec].data = in->mode2_profile; ents[ec].size = in->mode2_profile_size; ec++;
     }
+    if (have_manifest) {
+        ents[ec].type = GBLP1_TYPE_MANIFEST;
+        ents[ec].data = NULL;              ents[ec].size = GBLP1_MANIFEST_SIZE; ec++;
+    }
 
     uint32_t entries_end = GBLP1_HEADER_SIZE + ec * GBLP1_ENTRY_SIZE;
     uint32_t off = align_up(entries_end, GBLP1_PAYLOAD_ALIGN);
-    uint32_t payload_off[3];
+    uint32_t payload_off[4];
     for (uint32_t i = 0; i < ec; i++) {
         payload_off[i] = off;
         off = align_up(off + (uint32_t)ents[i].size, GBLP1_PAYLOAD_ALIGN);
@@ -106,6 +124,13 @@ gbl_pack_build(const struct gbl_pack_inputs *in,
             m += pv_len;
             wle32(m, (uint32_t)ts_len);             m += 4;
             if (ts_len) memcpy(m, in->timestamp_iso8601, ts_len);
+        } else if (ents[i].type == GBLP1_TYPE_MANIFEST) {
+            /* 16-byte manifest: magic[4] | schema u16 | bits u16 | pad[8].
+               calloc already zeroed the 8-byte reserved pad. */
+            uint8_t *m = buf + payload_off[i];
+            memcpy(m, GBLP1_MANIFEST_MAGIC, GBLP1_MANIFEST_MAGIC_SIZE);
+            wle16(m + 4, GBLP1_MANIFEST_SCHEMA_VERSION);
+            wle16(m + 6, in->manifest_cap_bits);
         } else {
             memcpy(buf + payload_off[i], ents[i].data, ents[i].size);
         }

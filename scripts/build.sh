@@ -1,52 +1,50 @@
 #!/usr/bin/env bash
-# scripts/build.sh — wrap docker EDK-II build with mode/flag selection.
+# scripts/build.sh — wrap docker EDK-II build for the single gbl-chainload EFI.
 #
-# Usage: scripts/build.sh --mode {0|1|2} [--auto] [--debug] [--verbose]
+# Engine rework (Task 11): the per-mode compile flag is gone. Activation is
+# manifest-driven at runtime, so one EFI handles every install profile.
 #
-# Output: dist/mode-<N>[flags].efi
+# Usage: scripts/build.sh [--auto] [--debug] [--verbose]
+#
+# Output: dist/gbl-chainload[-suffix].efi  (suffix from --auto/--debug/--verbose)
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
-MODE=1
 AUTO=0
 DEBUG=0
 VERBOSE=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --mode)    MODE="$2";    shift 2 ;;
     --auto)    AUTO=1;       shift   ;;
     --debug)   DEBUG=1;      shift   ;;
     --verbose) VERBOSE=1;    shift   ;;
     -h|--help)
       cat <<EOF
-Usage: $0 --mode {0|1|2} [--auto] [--debug] [--verbose]
+Usage: $0 [--auto] [--debug] [--verbose]
 
-Mode 0: honest unlocked observation + universal preservation baseline; no fakelock overlay.
-Mode 1: fakelocked chainload (default).
-Mode 2: TA-payload spoof at QSEE/SPSS boundaries (custom-ROM mode); ABL stays honest.
+Builds a single EFI at dist/gbl-chainload[-suffix].efi.
+
+Activation of fakelock / profile-spoof behavior is driven by the runtime
+GBLP1 manifest baked into the EFISP overlay, not by compile flags. Build
+once; the same binary runs every install profile.
 EOF
       exit 0 ;;
     *) echo "unknown flag: $1" >&2; exit 2 ;;
   esac
 done
 
-case "$MODE" in
-  0|1|2) ;;
-  *) echo "--mode $MODE not yet supported (valid: 0, 1, 2)" >&2; exit 2 ;;
-esac
-
-# Artifact name reflects active flags. This same string is also passed to the
-# in-container build as GBL_BUILD_NAME so the EFI publishes it via getvar
-# build-name — scripts can identify what's running on device without parsing
-# the binary or filename.
+# Artifact name reflects active build flags. This same string is also passed
+# to the in-container build as GBL_BUILD_NAME so the EFI publishes it via
+# getvar gbl-chainload_build — scripts can identify what's running on device
+# without parsing the binary or filename.
 SUFFIX=""
 [[ $AUTO    -eq 1 ]] && SUFFIX+="-auto"
 [[ $DEBUG   -eq 1 ]] && SUFFIX+="-debug"
 [[ $VERBOSE -eq 1 ]] && SUFFIX+="-verbose"
-BUILD_NAME="mode-${MODE}${SUFFIX}"
+BUILD_NAME="gbl-chainload${SUFFIX}"
 ARTIFACT="dist/${BUILD_NAME}.efi"
 
 # Read version from top-level VERSION file (single source of truth).
@@ -83,14 +81,13 @@ rm -rf Build/
 
 mkdir -p dist Build
 
-echo "==> Building $ARTIFACT (mode=$MODE auto=$AUTO debug=$DEBUG verbose=$VERBOSE)"
+echo "==> Building $ARTIFACT (auto=$AUTO debug=$DEBUG verbose=$VERBOSE)"
 
 # Run the in-container build. Mount repo at /work.
 "$DOCKER" run --rm \
   -v "$REPO_ROOT:/work" \
   -w /work \
   --user "$(id -u):$(id -g)" \
-  -e GBL_MODE="$MODE" \
   -e GBL_AUTO="$AUTO" \
   -e GBL_DEBUG="$DEBUG" \
   -e GBL_VERBOSE="$VERBOSE" \

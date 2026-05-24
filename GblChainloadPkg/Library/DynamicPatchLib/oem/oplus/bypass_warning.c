@@ -1,4 +1,4 @@
-/** @file oneplus_canoe.c — OnePlus/Oppo/Realme (oplus / canoe) family OEM patches.
+/** @file oem/oplus/bypass_warning.c — OnePlus/Oppo/Realme (oplus / canoe) family OEM patches.
 
   ## Patch 7 — orange-state-screen + unlock-warning + 5-second boot-delay gate
 
@@ -26,17 +26,17 @@
   Non-mandatory — cosmetic only; PATCH_MISS on non-matching ABLs is a clean
   no-op.
 
-  Scope: SCOPE_OEM_ONEPLUS.  Selected at host build time by
+  Scope: SCOPE_OEM_OPLUS.  Selected at host build time by
   `abl-patcher --oem oneplus`, and aggregated automatically by the EFI
   runtime patch table (mode-1 fakelocks the orange-state code path so the
   rewrite is dead code there; mode-2 keeps ABL honest and needs the rewrite
   to silence the warning).
 **/
 
-#include "../../../Include/Library/PatchDesc.h"
-#include "../Internal/ScanLib.h"
-#include "../Internal/Encode.h"
-#include "../Internal/Arm64Decode.h"
+#include "../../../../Include/Library/PatchDesc.h"
+#include "../../Internal/ScanLib.h"
+#include "../../Internal/Encode.h"
+#include "../../Internal/Arm64Decode.h"
 #include "Signatures.h"
 
 PATCH_OUTCOME
@@ -84,14 +84,14 @@ ApplyOrangeScreen (
   return PATCH_MISS;
 }
 
-CONST PATCH_DESC kOemOneplusPatches[] = {
+CONST PATCH_DESC kOemOplusPatches[] = {
   {
     .Name      = "patch7-orange-screen",
-    .Scope     = SCOPE_OEM_ONEPLUS,
+    .Scope     = SCOPE_OEM_OPLUS,
     .Mandatory = FALSE,
     .Apply     = ApplyOrangeScreen,
   },
 };
 
-CONST UINTN kOemOneplusPatchesCount =
-  sizeof (kOemOneplusPatches) / sizeof (kOemOneplusPatches[0]);
+CONST UINTN kOemOplusPatchesCount =
+  sizeof (kOemOplusPatches) / sizeof (kOemOplusPatches[0]);

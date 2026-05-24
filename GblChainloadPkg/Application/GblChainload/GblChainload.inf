@@ -1,7 +1,7 @@
 ## @file
 #  GblChainload application — single-mode dispatcher.
-#  GBL_MODE (0/1 today; mode 2 planned), GBL_AUTO, GBL_DEBUG, GBL_VERBOSE are set via BuildOptions
-#  in the DSC; one binary per mode is produced.
+#  AUTO, DEBUG, VERBOSE are set via BuildOptions in the DSC. Hook activation
+#  is driven by the runtime GBLP1 manifest, not by compile flags.
 #
 #  [Packages] / [LibraryClasses] / [Protocols] / [Guids] / [FixedPcd] carried
 #  from the dirty-repo GblChainload.inf (which mirrored LinuxLoader.inf) with
@@ -119,7 +119,7 @@
   gQcomTokenSpaceGuid.EnableMdtpSupport
 
 [BuildOptions]
-  *_*_AARCH64_CC_FLAGS = -DGBL_MODE=$(GBL_MODE) -DGBL_AUTO=$(GBL_AUTO) -DGBL_DEBUG=$(GBL_DEBUG) -DGBL_VERBOSE=$(GBL_VERBOSE)
+  *_*_AARCH64_CC_FLAGS = -DGBL_AUTO=$(GBL_AUTO) -DGBL_DEBUG=$(GBL_DEBUG) -DGBL_VERBOSE=$(GBL_VERBOSE)
 
 [Depex]
   TRUE

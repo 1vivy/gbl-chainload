@@ -1,5 +1,6 @@
-/** @file UniversalBaseline.h — universal-mode hook policy declarations.
-    These run on every GBL_MODE; the per-mode overlay layers on top.
+/** @file UniversalBaseline.h — universal hook policy declarations.
+    These always run regardless of manifest caps; per-cap overlays
+    (FakelockOverlay, ProfileOverlay) layer on top under runtime gates.
 **/
 #ifndef UNIVERSAL_BASELINE_H_
 #define UNIVERSAL_BASELINE_H_

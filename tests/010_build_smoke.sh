@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
-# 010_build_smoke.sh — verify scripts/build.sh produces the expected artifacts.
+# 010_build_smoke.sh — verify scripts/build.sh produces the expected artifact.
+#
+# Engine rework (Task 11): build.sh produces a single dist/gbl-chainload.efi
+# (and dist/gbl-chainload-<suffix>.efi when --auto/--debug/--verbose). The
+# per-mode loop is gone — activation lives in the runtime GBLP1 manifest.
 #
 # Requires docker (scripts/build.sh runs EDK-II inside a container). If docker
 # is unavailable on the runner, skip cleanly — host-side lint/scan/patch tests
@@ -15,18 +19,18 @@ if ! command -v docker >/dev/null 2>&1; then
   exit 0
 fi
 
-echo "== building dist/mode-0.efi =="
-./scripts/build.sh --mode 0
-test -f dist/mode-0.efi || { echo "FAIL: dist/mode-0.efi missing"; exit 1; }
+# Build verbose first, then non-verbose last. build-inside-docker.sh always
+# copies its output to dist/gbl-chainload.efi as well as the suffixed name,
+# so we order the runs so the verbose build does not clobber the non-verbose
+# artifact that the VERBOSE-strip lint below reads.
+echo "== building dist/gbl-chainload-auto-debug-verbose.efi =="
+./scripts/build.sh --auto --debug --verbose
+test -f dist/gbl-chainload-auto-debug-verbose.efi \
+  || { echo "FAIL: dist/gbl-chainload-auto-debug-verbose.efi missing"; exit 1; }
 
-echo "== building dist/mode-1.efi =="
-./scripts/build.sh --mode 1
-test -f dist/mode-1.efi || { echo "FAIL: dist/mode-1.efi missing"; exit 1; }
-
-echo "== building dist/mode-1-auto-debug-verbose.efi =="
-./scripts/build.sh --mode 1 --auto --debug --verbose
-test -f dist/mode-1-auto-debug-verbose.efi \
-  || { echo "FAIL: dist/mode-1-auto-debug-verbose.efi missing"; exit 1; }
+echo "== building dist/gbl-chainload.efi =="
+./scripts/build.sh
+test -f dist/gbl-chainload.efi || { echo "FAIL: dist/gbl-chainload.efi missing"; exit 1; }
 
 
 # ── VERBOSE compile-strip verification ────────────────────────────────────
@@ -42,11 +46,9 @@ PROBES=(
   'first16='          # VerifiedBootHook payload hex
 )
 
-# Non-verbose artifacts produced by this script: mode-0.efi and mode-1.efi.
-# Both are GBL_VERBOSE=0 builds, so VERBOSE() format-string fragments must
-# be absent from .rodata. (mode-0 has fewer hook call sites but still
-# includes AblUnwrap; mode-1 has all of them.)
-for v in dist/mode-0.efi dist/mode-1.efi; do
+# Non-verbose artifact is dist/gbl-chainload.efi (no --verbose flag passed).
+# VERBOSE() format-string fragments must be absent from its .rodata.
+for v in dist/gbl-chainload.efi; do
   [ -f "$v" ] || continue
   for p in "${PROBES[@]}"; do
     n=$(strings "$v" 2>/dev/null | grep -c "$p" || true)
@@ -57,14 +59,14 @@ for v in dist/mode-0.efi dist/mode-1.efi; do
   done
 done
 
-if [ -f dist/mode-1-auto-debug-verbose.efi ]; then
+if [ -f dist/gbl-chainload-auto-debug-verbose.efi ]; then
   total=0
   for p in "${PROBES[@]}"; do
-    n=$(strings dist/mode-1-auto-debug-verbose.efi 2>/dev/null | grep -c "$p" || true)
+    n=$(strings dist/gbl-chainload-auto-debug-verbose.efi 2>/dev/null | grep -c "$p" || true)
     total=$((total + n))
   done
   if [ "$total" -eq 0 ]; then
-    echo "WARN: no VERBOSE probe markers found in mode-1-auto-debug-verbose.efi —"  >&2
+    echo "WARN: no VERBOSE probe markers found in gbl-chainload-auto-debug-verbose.efi —"  >&2
     echo "      compiler may have stripped string literals; manual nm/objdump needed" >&2
   else
     echo "OK: $total VERBOSE probe marker(s) present in verbose build"

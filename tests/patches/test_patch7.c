@@ -2,7 +2,7 @@
    Verifies the string-anchored locate-and-rewrite (warning-string uniqueness,
    ADRP resolution, CBZ→B rewrite, target preservation, idempotency, and a
    clean MISS when the warning string is absent) AND patch7's registration in
-   the active OEM aggregator table `kOemOneplusPatches[]`.  The membership
+   the active OEM aggregator table `kOemOplusPatches[]`.  The membership
    check runs first so it executes even when the infiniti fixture is
    absent (SKIP path).  */
 #include <stdio.h>
@@ -13,11 +13,11 @@
 #include "../../GblChainloadPkg/Include/Library/PatchDesc.h"
 #include "../../GblChainloadPkg/Include/Library/ScanLib.h"
 #include "../../GblChainloadPkg/Library/DynamicPatchLib/Internal/Arm64Decode.h"
-#include "../../GblChainloadPkg/Library/DynamicPatchLib/oem/Signatures.h"
+#include "../../GblChainloadPkg/Library/DynamicPatchLib/oem/oplus/Signatures.h"
 
 extern PATCH_OUTCOME ApplyOrangeScreen (UINT8 *Buf, UINT32 Size);
-extern CONST PATCH_DESC  kOemOneplusPatches[];
-extern CONST UINTN       kOemOneplusPatchesCount;
+extern CONST PATCH_DESC  kOemOplusPatches[];
+extern CONST UINTN       kOemOplusPatchesCount;
 
 #ifndef TEST_FIXTURES_DIR
 #error "TEST_FIXTURES_DIR must be -D'd at compile time (set by Makefile)"
@@ -65,18 +65,18 @@ int
 main (void)
 {
   /* --- 0. Table membership (runs regardless of fixture presence) ---------- */
-  assert (kOemOneplusPatchesCount >= 1 && "kOemOneplusPatches must contain patch7");
+  assert (kOemOplusPatchesCount >= 1 && "kOemOplusPatches must contain patch7");
   int found_patch7 = 0;
-  for (UINTN k = 0; k < kOemOneplusPatchesCount; ++k) {
-    if (kOemOneplusPatches[k].Name != NULL
-        && kOemOneplusPatches[k].Apply != NULL
-        && 0 == strcmp ((const char *)kOemOneplusPatches[k].Name,
+  for (UINTN k = 0; k < kOemOplusPatchesCount; ++k) {
+    if (kOemOplusPatches[k].Name != NULL
+        && kOemOplusPatches[k].Apply != NULL
+        && 0 == strcmp ((const char *)kOemOplusPatches[k].Name,
                         "patch7-orange-screen")) {
       found_patch7 = 1;
       break;
     }
   }
-  assert (found_patch7 && "patch7-orange-screen not found in kOemOneplusPatches[]");
+  assert (found_patch7 && "patch7-orange-screen not found in kOemOplusPatches[]");
   printf ("ok patch7 table membership\n");
 
   UINT32 size = 0;

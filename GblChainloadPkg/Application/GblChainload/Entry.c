@@ -1,6 +1,8 @@
 /** @file Entry.c — gbl-chainload entry point.
-    Single dispatcher: GBL_MODE selects the mode (0 or 1); AUTO/DEBUG/VERBOSE
-    are orthogonal flags. **/
+    Single dispatcher; hook behavior is driven by the GBLP1 manifest loaded
+    by BootFlow at chain-load time, not by compile-time flags. AUTO / DEBUG /
+    VERBOSE remain orthogonal build flags affecting only host-interaction
+    surface and screen-print verbosity. **/
 
 #include <Uefi.h>
 #include <Library/UefiLib.h>
@@ -23,9 +25,6 @@
 EFI_STATUS FastbootInitialize (VOID);
 EFI_STATUS EFIAPI BootFlowChainLoad (VOID);
 
-#ifndef GBL_MODE
-# error "GBL_MODE (0 or 1) must be defined at build time"
-#endif
 #ifndef GBL_AUTO
 # define GBL_AUTO 0
 #endif
@@ -119,9 +118,10 @@ CommonEarlyInit (
 {
   EFI_STATUS Status;
 
-  GBL_INFO ("gbl-chainload %a mode=%d auto=%d debug=%d verbose=%d (%a %a)\n",
+  GBL_INFO ("gbl-chainload %a build=%a auto=%d debug=%d verbose=%d (%a %a)\n",
             GBL_CHAINLOAD_VERSION,
-            (int)GBL_MODE, (int)GBL_AUTO, (int)GBL_DEBUG, (int)GBL_VERBOSE,
+            GBL_BUILD_NAME,
+            (int)GBL_AUTO, (int)GBL_DEBUG, (int)GBL_VERBOSE,
             __DATE__, __TIME__);
 
   DeviceInfoInit ();

@@ -1,7 +1,8 @@
 ## @file ProtocolHookLib.inf
-#  Universal + per-mode protocol hook dispatcher for GBL chainload.
-#  Installs slot wrappers for VerifiedBoot, SCM, Qseecom, and SPSS
-#  protocols and applies baseline + mode-specific policies.
+#  Capability-gated protocol hook dispatcher for GBL chainload.
+#  Installs slot wrappers for VerifiedBoot, SCM, Qseecom, SPSS, and
+#  BlockIo protocols and applies the universal baseline plus
+#  manifest-gated overlay policies (FakelockOverlay, ProfileOverlay).
 ##
 
 [Defines]
@@ -15,11 +16,12 @@
 [Sources]
   InstallAll.c
   UniversalBaseline.c
-  Mode1Overlay.c
-  # Mode2Rewrite.c has no GBL_MODE guard; it compiles in all modes but is
-  # unreferenced (and dead-stripped) unless GBL_MODE == 2.
-  Mode2Overlay.c
-  Mode2Rewrite.c
+  # All overlay/rewrite TUs compile in every build; activation is runtime-
+  # gated on gManifest at the hook call sites, and unreferenced symbols
+  # are dead-stripped when the manifest does not enable the relevant cap.
+  FakelockOverlay.c
+  ProfileOverlay.c
+  ProfileRewrite.c
   VerifiedBootHook.c
   QseecomHook.c
   ScmHook.c
@@ -38,6 +40,5 @@
   PrintLib
   UefiBootServicesTableLib
   UefiLib
+  GblPayloadLib
 
-[BuildOptions]
-  *_*_AARCH64_CC_FLAGS = -DGBL_MODE=$(GBL_MODE)

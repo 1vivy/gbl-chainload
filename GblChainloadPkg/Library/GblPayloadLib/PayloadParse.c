@@ -153,3 +153,28 @@ gbl_payload_scan_cached_abl(const uint8_t *bytes, size_t size,
     (void)found_any;
     return last;
 }
+
+enum gbl_payload_status
+gbl_payload_find_manifest(const uint8_t *b, size_t n,
+                          struct gbl_manifest *out, int *out_present) {
+    const uint8_t *p = NULL; size_t sz = 0;
+    enum gbl_payload_status s =
+        gbl_payload_find_entry(b, n, GBLP1_TYPE_MANIFEST, &p, &sz);
+    if (s != GBL_PAYLOAD_OK) return s;
+    if (p == NULL) { *out_present = 0; return GBL_PAYLOAD_OK; }
+    if (sz != GBLP1_MANIFEST_SIZE) return GBL_PAYLOAD_BAD_MANIFEST_SIZE;
+    if (memcmp(p, GBLP1_MANIFEST_MAGIC, GBLP1_MANIFEST_MAGIC_SIZE) != 0)
+        return GBL_PAYLOAD_BAD_MANIFEST_MAGIC;
+    uint16_t schema = le16(p + 4);
+    if (schema != GBLP1_MANIFEST_SCHEMA_VERSION)
+        return GBL_PAYLOAD_BAD_MANIFEST_SCHEMA;
+    uint16_t bits = le16(p + 6);
+    if (bits & GBLP1_MANIFEST_BITS_RESERVED_MASK)
+        return GBL_PAYLOAD_BAD_MANIFEST_RESERVED;
+    /* Reserved pad: bytes 8..15 must all be zero. */
+    for (int i = 8; i < 16; ++i)
+        if (p[i] != 0) return GBL_PAYLOAD_BAD_MANIFEST_RESERVED;
+    out->cap_bits = bits;
+    *out_present = 1;
+    return GBL_PAYLOAD_OK;
+}

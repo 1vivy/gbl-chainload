@@ -4,7 +4,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <errno.h>
 #include "pack.h"
+#include "../shared/gblp1.h"
+#include "../shared/efisp_scan.h"
 
 static int slurp(const char *path, uint8_t **out, size_t *out_size)
 {
@@ -32,21 +35,23 @@ int main(int argc, char **argv)
         return 0;
     }
     const char *cached = NULL, *source = NULL, *extracted = NULL,
-               *out = NULL, *profile = NULL;
+               *out = NULL, *profile = NULL, *manifest_arg = NULL;
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--cached-abl") && i + 1 < argc)  cached    = argv[++i];
         else if (!strcmp(argv[i], "--source")    && i + 1 < argc)  source    = argv[++i];
         else if (!strcmp(argv[i], "--extracted") && i + 1 < argc)  extracted = argv[++i];
         else if (!strcmp(argv[i], "--mode2-profile") && i + 1 < argc) profile = argv[++i];
+        else if (!strcmp(argv[i], "--manifest")  && i + 1 < argc)  manifest_arg = argv[++i];
         else if (!strcmp(argv[i], "--out")       && i + 1 < argc)  out       = argv[++i];
         else { fprintf(stderr, "unknown arg: %s\n", argv[i]); return 2; }
     }
-    if (!out || (!cached && !profile)) {
+    if (!out || (!cached && !profile && !manifest_arg)) {
         fprintf(stderr,
             "gbl-pack %s\n"
             "usage: gbl-pack --out OUT "
             "[--cached-abl PE --source RAW --extracted PE] "
-            "[--mode2-profile BIN]\n", GBL_TOOL_VERSION);
+            "[--mode2-profile BIN] "
+            "[--manifest BITS]\n", GBL_TOOL_VERSION);
         return 2;
     }
     if (cached && (!source || !extracted)) {
@@ -55,16 +60,53 @@ int main(int argc, char **argv)
         return 2;
     }
 
+    int have_manifest = 0;
+    uint16_t manifest_cap_bits = 0;
+    if (manifest_arg) {
+        errno = 0;
+        char *end = NULL;
+        unsigned long v = strtoul(manifest_arg, &end, 0);  /* auto 0x/0/decimal */
+        if (errno != 0 || !end || *end != '\0' || end == manifest_arg) {
+            fprintf(stderr, "gbl-pack: bad --manifest bits (not a number)\n");
+            return 2;
+        }
+        if (v > 0xFFFFu) {
+            fprintf(stderr,
+                "gbl-pack: bad --manifest bits (must fit in 16 bits)\n");
+            return 2;
+        }
+        if ((uint16_t)v & GBLP1_MANIFEST_BITS_RESERVED_MASK) {
+            fprintf(stderr,
+                "gbl-pack: bad --manifest bits (reserved bits set)\n");
+            return 2;
+        }
+        manifest_cap_bits = (uint16_t)v;
+        have_manifest = 1;
+    }
+
     struct gbl_pack_inputs in = {0};
     if (cached) {
         if (slurp(cached,    (uint8_t **)&in.cached_abl, &in.cached_abl_size)) return 1;
         if (slurp(source,    (uint8_t **)&in.source,      &in.source_size))     return 1;
         if (slurp(extracted, (uint8_t **)&in.extracted,   &in.extracted_size))  return 1;
+        /* Task 10: efisp UTF-16 rejection retired from the packer; warn only.
+           The BlockIoHook EFISP gate is the runtime guarantee, so the packer
+           accepts cached_abl containing the literal pattern.  Still useful
+           as a signal that patch10/patch6 may have missed. */
+        if (gbl_contains_utf16_efisp(in.cached_abl, in.cached_abl_size)) {
+            fprintf(stderr,
+                "gbl-pack: warning: cached_abl still contains UTF-16 \"efisp\" "
+                "— BlockIoHook gate will handle this, but check that "
+                "patch10/patch6 applied as expected\n");
+        }
     }
     if (profile) {
         if (slurp(profile, (uint8_t **)&in.mode2_profile, &in.mode2_profile_size))
             return 1;
     }
+
+    in.have_manifest     = have_manifest;
+    in.manifest_cap_bits = manifest_cap_bits;
 
     in.packer_version = "gbl-pack " GBL_TOOL_VERSION;
     char ts[32];

@@ -48,8 +48,34 @@ static const char *type_name(uint16_t t) {
         case GBLP1_TYPE_CACHED_ABL:    return "CACHED_ABL";
         case GBLP1_TYPE_SOURCE_META:   return "SOURCE_META";
         case GBLP1_TYPE_MODE2_PROFILE: return "MODE2_PROFILE";
+        case GBLP1_TYPE_MANIFEST:      return "manifest";
         default:                       return "UNKNOWN";
     }
+}
+
+/* Pretty-print the GBLP1_TYPE_MANIFEST (0x0020) payload, which holds the
+   engine capability bits. Called after the sha256 line so the manifest
+   detail appears as a child of the entry line. Layout (LE):
+     magic[4] | schema_version u16 | cap_bits u16 | reserved_pad[8] */
+static void print_manifest_payload(const uint8_t *p, uint32_t size) {
+    if (size != GBLP1_MANIFEST_SIZE) {
+        printf("  manifest: bad size=%u (expected %u)\n",
+               size, GBLP1_MANIFEST_SIZE);
+        return;
+    }
+    char magic[GBLP1_MANIFEST_MAGIC_SIZE + 1];
+    memcpy(magic, p, GBLP1_MANIFEST_MAGIC_SIZE);
+    magic[GBLP1_MANIFEST_MAGIC_SIZE] = '\0';
+    int magic_ok = memcmp(p, GBLP1_MANIFEST_MAGIC,
+                          GBLP1_MANIFEST_MAGIC_SIZE) == 0;
+    uint16_t schema = rle16(p + 4);
+    uint16_t bits   = rle16(p + 6);
+    const char *fakelock = (bits & GBLP1_MANIFEST_BIT_FAKELOCK_HOOK)
+                            ? "yes" : "no";
+    const char *spoof    = (bits & GBLP1_MANIFEST_BIT_PROFILE_SPOOF)
+                            ? "yes" : "no";
+    printf("  magic=%s schema=%u fakelock_hook=%s profile_spoof=%s\n",
+           magic_ok ? magic : "BAD", schema, fakelock, spoof);
 }
 
 /* find_container — locate the best GBLP1 candidate in buf[0..len).
@@ -179,6 +205,8 @@ int main(int argc, char **argv) {
         printf("entry: type=0x%04x (%s) offset=0x%x size=%u sha256=%s\n",
                type, type_name(type), poff, psize, ok ? "ok" : "MISMATCH");
         if (!ok) sha_fail = 1;
+        if (type == GBLP1_TYPE_MANIFEST)
+            print_manifest_payload(h + poff, psize);
     }
 
     const uint8_t *foot = h + total_size - GBLP1_FOOTER_SIZE;

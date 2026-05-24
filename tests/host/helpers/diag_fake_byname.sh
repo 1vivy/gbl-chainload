@@ -15,12 +15,13 @@ rm -rf "$OUT"
 mkdir -p "$OUT/byname" "$OUT/work" "$OUT/sdcard" "$OUT/zip"
 
 ZIP_ROOT="$REPO/zip"
-# Use zip/base/mode-1.efi as the base-EFI prefix for EFISP.  With Fix A in
-# gblp1-inspect (magic+CRC validated together), the embedded GBLP1 string
-# inside mode-1.efi is skipped and only the appended real GBLP1 container is
-# selected.  Using the real base EFI also lets collect_efisp fingerprint it
-# against MANIFEST and populate BASE_EFI_MODE=mode-1, satisfying §4.1 HIGH.
-BASE_EFI="$REPO/zip/base/mode-1.efi"
+# Use zip/base/gbl-chainload.efi as the base-EFI prefix for EFISP. With Fix A
+# in gblp1-inspect (magic+CRC validated together), any embedded GBLP1 string
+# inside the base EFI is skipped and only the appended real GBLP1 container
+# is selected. Using the real base EFI also lets collect_efisp fingerprint it
+# against MANIFEST. The engine rework collapsed the three per-mode EFIs into
+# this single base; mode is recovered from the overlay manifest, not the EFI.
+BASE_EFI="$REPO/zip/base/gbl-chainload.efi"
 [ -f "$BASE_EFI" ] || { echo "ERROR: $BASE_EFI not found" >&2; exit 1; }
 
 # Canonical payload: prefer 060 output, fall back to 084 output.

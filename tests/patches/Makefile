@@ -17,10 +17,10 @@ TESTS := test_patch1 test_patch7 test_patch10 test_patch6
 all: $(TESTS)
 	@for t in $(TESTS); do echo "== $$t =="; ./$$t || exit 1; done
 
-test_patch1: test_patch1.c \
-             $(DPL)/Internal/ScanLib.c \
-             $(DPL)/Internal/PeSections.c \
-             $(DPL)/universal/universal.c
+# test_patch1 is a SKIP placeholder post engine-rework Task 10 (patch1 retired);
+# kept so the run-all wiring still has a binary to invoke. Self-contained: no
+# DPL sources needed.
+test_patch1: test_patch1.c
 	$(CC) $(CFLAGS) $(INCLUDES) $^ -o $@
 
 test_patch7: test_patch7.c \
@@ -28,7 +28,7 @@ test_patch7: test_patch7.c \
              $(DPL)/Internal/PeSections.c \
              $(DPL)/Internal/Encode.c \
              $(DPL)/Internal/Arm64Decode.c \
-             $(DPL)/oem/oneplus_canoe.c
+             $(DPL)/oem/oplus/bypass_warning.c
 	$(CC) $(CFLAGS) $(INCLUDES) $^ -o $@
 
 test_patch10: test_patch10.c \
@@ -36,7 +36,7 @@ test_patch10: test_patch10.c \
               $(DPL)/Internal/PeSections.c \
               $(DPL)/Internal/Encode.c \
               $(DPL)/Internal/Arm64Decode.c \
-              $(DPL)/mode_1/mode_1.c
+              $(DPL)/abl_permissive/libavb_force_success.c
 	$(CC) $(CFLAGS) $(INCLUDES) $^ -o $@
 
 test_patch6: test_patch6.c \
@@ -44,7 +44,7 @@ test_patch6: test_patch6.c \
              $(DPL)/Internal/PeSections.c \
              $(DPL)/Internal/Encode.c \
              $(DPL)/Internal/Arm64Decode.c \
-             $(DPL)/mode_1/mode_1.c
+             $(DPL)/abl_permissive/fastboot_lock_gates.c
 	$(CC) $(CFLAGS) $(INCLUDES) $^ -o $@
 
 clean:

@@ -3,7 +3,7 @@ CFLAGS  ?= -O1 -g -Wall -Wextra -Wno-unused-parameter -std=c11
 PROJ    := $(realpath ../..)
 DPL     := $(PROJ)/GblChainloadPkg/Library/DynamicPatchLib
 
-CFLAGS += -D__HOST_BUILD__ -DGBL_MODE=1 \
+CFLAGS += -D__HOST_BUILD__ \
           -I$(PROJ)/GblChainloadPkg/Include/Library \
           -I$(DPL)/Internal
 
@@ -14,9 +14,10 @@ SRCS := abl-patcher.c \
         $(DPL)/Internal/Arm64Decode.c \
         $(DPL)/Internal/PatchEngine.c \
         $(DPL)/PatchTable.c \
-        $(DPL)/universal/universal.c \
-        $(DPL)/oem/oneplus_canoe.c \
-        $(DPL)/mode_1/mode_1.c
+        $(DPL)/retired/block_efisp_recursion.c \
+        $(DPL)/oem/oplus/bypass_warning.c \
+        $(DPL)/abl_permissive/libavb_force_success.c \
+        $(DPL)/abl_permissive/fastboot_lock_gates.c
 
 abl-patcher: $(SRCS)
 	$(CC) $(CFLAGS) $^ -o $@
@@ -27,7 +28,7 @@ clean:
 
 # --- Windows / macOS cross-compile (zig cc) ---
 XCFLAGS = -O2 -Wall -Wextra -Wno-unused-parameter -std=c11 \
-          -D__HOST_BUILD__ -DGBL_MODE=1 \
+          -D__HOST_BUILD__ \
           -I$(PROJ)/GblChainloadPkg/Include/Library -I$(DPL)/Internal
 
 windows:     abl-patcher.exe
@@ -57,7 +58,7 @@ test: abl-patcher
 NDK     ?= $(ANDROID_NDK)
 NDK_CC   = $(NDK)/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android31-clang
 NDK_CFLAGS = -static -O2 -Wall -Wextra -Wno-unused-parameter -std=c11 \
-             -D__HOST_BUILD__ -DGBL_MODE=1 \
+             -D__HOST_BUILD__ \
              -I$(PROJ)/GblChainloadPkg/Include/Library \
              -I$(DPL)/Internal
 

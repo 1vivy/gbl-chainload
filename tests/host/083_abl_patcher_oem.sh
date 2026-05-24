@@ -1,15 +1,17 @@
 #!/usr/bin/env bash
-# tests/host/083_abl_patcher_oem.sh — abl-patcher --oem runtime scope selection.
+# tests/host/083_abl_patcher_oem.sh — abl-patcher --oem behaviour.
 #
-# Checks:
-#   1. --oem oneplus --no-mode1  applies universal + oneplus; mode_1 patches absent.
-#   2. plain invocation          applies mode_1 patches (present in stderr).
-#   3. --oem bad                 exits non-zero with "error: unknown --oem".
-# SKIP-guarded if the PE fixture is absent (same fixture as 060).
+# Engine-rework spec (Task 12): abl_permissive is ALWAYS applied at host
+# packing time; --no-mode1 / --no-libavb-bypass are gone.  --oem oplus is
+# canonical, --oem oneplus is a deprecation alias that still maps to
+# GBL_OEM_OPLUS for one release.
 #
-# Coverage note: this test verifies both --oem *routing* (the scope-selection
-# path through EnsureInitScoped) and OEM-patch *application* (patch7-orange-
-# screen, the sole OEM patch as of 2026-05-20).
+# Cases:
+#   1. --oem oplus      canonical OEM scope; patch7 applies.
+#   2. --oem oneplus    deprecation-message alias for oplus; patch7 applies.
+#   3. plain            abl_permissive always on; patch10 + patch6 apply.
+#   4. --oem bad        exits non-zero with "unknown --oem '<value>'".
+# SKIP-guarded if the PE fixture is absent.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
@@ -22,71 +24,88 @@ PATCHER=tools/abl-patcher/abl-patcher
 OUT=tests/host/.last/083
 mkdir -p "$OUT"
 
-# ---- Test 1: --oem oneplus --no-mode1 ----------------------------------------
-# mode_1 patches (patch10, patch6) must NOT appear in the per-patch log lines.
-"$PATCHER" --in "$PE" --oem oneplus --no-mode1 \
-    --out "$OUT/m2_patched.efi" >"$OUT/m2.log" 2>&1 \
-    || { echo "FAIL: abl-patcher --oem oneplus --no-mode1 returned non-zero"; cat "$OUT/m2.log"; exit 1; }
+# ---- Case 1: --oem oplus (canonical) -----------------------------------------
+"$PATCHER" --in "$PE" --oem oplus --out "$OUT/oplus.efi" >"$OUT/oplus.log" 2>&1 \
+    || { echo "FAIL: abl-patcher --oem oplus returned non-zero"; cat "$OUT/oplus.log"; exit 1; }
+if ! grep -qE 'patch7-orange-screen .* -> OK' "$OUT/oplus.log"; then
+    echo "FAIL: oem patch7 not applied (-> OK) under --oem oplus"
+    cat "$OUT/oplus.log"
+    exit 1
+fi
+if ! grep -qE 'patch10-libavb-force-avb-success .* -> OK' "$OUT/oplus.log"; then
+    echo "FAIL: abl_permissive patch10 not applied under --oem oplus"
+    cat "$OUT/oplus.log"
+    exit 1
+fi
+if ! grep -qE 'patch6-lock-state-fastboot-gate .* -> OK' "$OUT/oplus.log"; then
+    echo "FAIL: abl_permissive patch6 not applied under --oem oplus"
+    cat "$OUT/oplus.log"
+    exit 1
+fi
+echo "  ok: --oem oplus applies patch7 + abl_permissive patches"
 
-if grep -qF 'patch10-libavb-force-avb-success' "$OUT/m2.log"; then
-    echo "FAIL: mode_1 patch10 present in --no-mode1 run"
-    cat "$OUT/m2.log"
+# ---- Case 2: --oem oneplus (deprecation alias) -------------------------------
+"$PATCHER" --in "$PE" --oem oneplus --out "$OUT/oneplus.efi" >"$OUT/oneplus.log" 2>&1 \
+    || { echo "FAIL: abl-patcher --oem oneplus returned non-zero"; cat "$OUT/oneplus.log"; exit 1; }
+if ! grep -qF 'abl-patcher: --oem oneplus is deprecated; use --oem oplus' "$OUT/oneplus.log"; then
+    echo "FAIL: deprecation message missing under --oem oneplus"
+    cat "$OUT/oneplus.log"
     exit 1
 fi
-if grep -qF 'patch6-lock-state-fastboot-gate' "$OUT/m2.log"; then
-    echo "FAIL: mode_1 patch6 present in --no-mode1 run"
-    cat "$OUT/m2.log"
+if ! grep -qE 'patch7-orange-screen .* -> OK' "$OUT/oneplus.log"; then
+    echo "FAIL: oem patch7 not applied (-> OK) under --oem oneplus alias"
+    cat "$OUT/oneplus.log"
     exit 1
 fi
-# DynamicPatch logs every patch as "DynamicPatch: <name> [<scope>, <opt>] -> <outcome>"
-# regardless of OK/MISS/AMBIGUOUS, so grep the OK outcome on the same line to
-# verify patch7 actually APPLIED (not merely that it was attempted).
-if ! grep -qE 'patch7-orange-screen .* -> OK' "$OUT/m2.log"; then
-    echo "FAIL: oem patch7 not applied (-> OK) in --oem oneplus run"
-    cat "$OUT/m2.log"
-    exit 1
-fi
-echo "  ok: --oem oneplus --no-mode1 excludes mode_1 patches, applies oem patch7"
+echo "  ok: --oem oneplus prints deprecation msg, still maps to oplus"
 
-# ---- Test 2: default (mode-1) invocation -------------------------------------
-# mode_1 patches MUST appear.
-"$PATCHER" --in "$PE" --out "$OUT/m1_patched.efi" >"$OUT/m1.log" 2>&1 \
-    || { echo "FAIL: plain abl-patcher returned non-zero"; cat "$OUT/m1.log"; exit 1; }
+# ---- Case 3: plain invocation always applies abl_permissive ------------------
+"$PATCHER" --in "$PE" --out "$OUT/plain.efi" >"$OUT/plain.log" 2>&1 \
+    || { echo "FAIL: plain abl-patcher returned non-zero"; cat "$OUT/plain.log"; exit 1; }
+if ! grep -qE 'patch10-libavb-force-avb-success .* -> OK' "$OUT/plain.log"; then
+    echo "FAIL: abl_permissive patch10 absent from plain run"
+    cat "$OUT/plain.log"
+    exit 1
+fi
+if ! grep -qE 'patch6-lock-state-fastboot-gate .* -> OK' "$OUT/plain.log"; then
+    echo "FAIL: abl_permissive patch6 absent from plain run"
+    cat "$OUT/plain.log"
+    exit 1
+fi
+# Plain invocation must NOT pull in the OEM scope.
+if grep -qF 'patch7-orange-screen' "$OUT/plain.log"; then
+    echo "FAIL: oem patch7 present in plain (no --oem) run"
+    cat "$OUT/plain.log"
+    exit 1
+fi
+echo "  ok: plain invocation always applies abl_permissive (no OEM scope)"
 
-if ! grep -qF 'patch10-libavb-force-avb-success' "$OUT/m1.log"; then
-    echo "FAIL: mode_1 patch10 absent from default (mode-1) run"
-    cat "$OUT/m1.log"
+# ---- Case 4: --oem bad rejected with exit code 2 -----------------------------
+set +e
+"$PATCHER" --in "$PE" --oem bad_oem_name --out "$OUT/bad.efi" >"$OUT/bad.log" 2>&1
+rc=$?
+set -e
+if [ "$rc" -eq 0 ]; then
+    echo "FAIL: --oem bad_oem_name was accepted (exit 0)"
+    cat "$OUT/bad.log"
     exit 1
 fi
-if ! grep -qF 'patch6-lock-state-fastboot-gate' "$OUT/m1.log"; then
-    echo "FAIL: mode_1 patch6 absent from default (mode-1) run"
-    cat "$OUT/m1.log"
+if [ "$rc" -ne 2 ]; then
+    echo "FAIL: --oem bad_oem_name expected exit 2, got $rc"
+    cat "$OUT/bad.log"
     exit 1
 fi
-if grep -qF 'patch7-orange-screen' "$OUT/m1.log"; then
-    echo "FAIL: oem patch7 present in default (mode-1) run"
-    cat "$OUT/m1.log"
+if ! grep -qF "abl-patcher: unknown --oem 'bad_oem_name'" "$OUT/bad.log"; then
+    echo "FAIL: expected \"abl-patcher: unknown --oem 'bad_oem_name'\" message, got:"
+    cat "$OUT/bad.log"
     exit 1
 fi
-echo "  ok: plain invocation includes mode_1 patches, excludes oem patch7"
+echo "  ok: --oem bad_oem_name rejected with exit 2 + clear message"
 
-# ---- Test 3: unknown --oem must exit non-zero --------------------------------
-if "$PATCHER" --in "$PE" --oem bad_oem_name 2>"$OUT/bad_oem.log"; then
-    echo "FAIL: --oem bad_oem_name should have exited non-zero"
-    exit 1
-fi
-if ! grep -qF "error: unknown --oem 'bad_oem_name'" "$OUT/bad_oem.log"; then
-    echo "FAIL: expected 'error: unknown --oem' message, got:"
-    cat "$OUT/bad_oem.log"
-    exit 1
-fi
-echo "  ok: unknown --oem exits non-zero with clear message"
-
-# ---- Regression gate --------------------------------------------------------
-# Run sibling tests so a breakage in roundtrip / efisp-scan / mode taxonomy
-# surfaces here too.  Each test exits 0 on SKIP (missing fixture) already.
+# ---- Regression gate ---------------------------------------------------------
+# Run sibling tests so a breakage in roundtrip / mode taxonomy surfaces here
+# too.  Each test exits 0 on SKIP (missing fixture) already.
 bash tests/host/060_pack_roundtrip.sh
-bash tests/host/062_efisp_scan_gate.sh
 bash tests/045_mode_taxonomy_lint.sh
 
-echo "PASS: 083 abl-patcher oem"
+echo "PASS: 083 abl-patcher --oem behavior"

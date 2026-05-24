@@ -14,12 +14,12 @@ static int Usage (CONST char *argv0) {
     "%s %s\n"
     "Usage: %s --in <abl.bin> [--out <patched.bin>]\n"
     "       %s --check-anchors-only --in <abl.bin>\n"
-    "       %s --oem <id> [--no-mode1] --in <abl.bin> [--out <patched.bin>]\n"
+    "       %s --oem <id> --in <abl.bin> [--out <patched.bin>]\n"
     "\n"
-    "  --oem <id>         OEM patch group to apply (e.g. oneplus).\n"
-    "                     Default: GBL_OEM_NONE (no OEM group; universal + mode_1).\n"
-    "  --no-mode1         Exclude mode_1 patches (use for mode-2 profile ZIP).\n"
-    "                     Default: mode_1 patches included.\n",
+    "  --oem <id>         OEM patch group to apply.  <id> in { oplus, none }.\n"
+    "                     Default: none (no OEM group).  abl_permissive patches\n"
+    "                     are always applied.  oneplus is accepted as a\n"
+    "                     deprecation alias for oplus.\n",
     argv0, GBL_TOOL_VERSION, argv0, argv0, argv0);
   return 2;
 }
@@ -33,7 +33,6 @@ int main (int argc, char **argv) {
   CONST char *Out        = NULL;
   CONST char *OemStr     = NULL;
   int         CheckOnly  = 0;
-  int         NoMode1    = 0;
   int         opt;
 
   static struct option longopts[] = {
@@ -41,17 +40,15 @@ int main (int argc, char **argv) {
     {"out",                 required_argument, 0, 'o'},
     {"check-anchors-only",  no_argument,       0, 'c'},
     {"oem",                 required_argument, 0, 'e'},
-    {"no-mode1",            no_argument,       0, 'n'},
     {"help",                no_argument,       0, 'h'},
     {0, 0, 0, 0},
   };
-  while ((opt = getopt_long (argc, argv, "i:o:ce:nh", longopts, NULL)) != -1) {
+  while ((opt = getopt_long (argc, argv, "i:o:ce:h", longopts, NULL)) != -1) {
     switch (opt) {
       case 'i': In       = optarg; break;
       case 'o': Out      = optarg; break;
       case 'c': CheckOnly = 1;    break;
       case 'e': OemStr   = optarg; break;
-      case 'n': NoMode1  = 1;     break;
       case 'h': default: return Usage (argv[0]);
     }
   }
@@ -60,24 +57,30 @@ int main (int argc, char **argv) {
 
   /* Resolve OEM id and call the appropriate init path.
      Default is GBL_OEM_NONE — EnsureInitScoped skips all OEM-group patches.
-     Previously plain invocation implicitly aggregated the OnePlus OEM patches;
-     that is no longer the case.  Callers needing OEM patches (e.g. the install
-     ZIP, if it wants OEM patches applied) must pass --oem <id> explicitly. */
+     --oem oplus is canonical; --oem oneplus is accepted as a deprecation
+     alias for one release (still maps to GBL_OEM_OPLUS, prints a warning). */
   GBL_OEM Oem = GBL_OEM_NONE;
   if (OemStr != NULL) {
-    if (strcmp (OemStr, "oneplus") == 0) {
-      Oem = GBL_OEM_ONEPLUS;
+    if (strcmp (OemStr, "oplus") == 0) {
+      Oem = GBL_OEM_OPLUS;
+    } else if (strcmp (OemStr, "oneplus") == 0) {
+      fprintf (stderr,
+        "abl-patcher: --oem oneplus is deprecated; use --oem oplus "
+        "(accepted for compatibility, will be removed in a future release)\n");
+      Oem = GBL_OEM_OPLUS;
+    } else if (strcmp (OemStr, "none") == 0) {
+      Oem = GBL_OEM_NONE;
     } else {
-      fprintf (stderr, "error: unknown --oem '%s'\n", OemStr);
+      fprintf (stderr, "abl-patcher: unknown --oem '%s'\n", OemStr);
       return 2;
     }
   }
 
-  /* include_mode1: on by default; --no-mode1 disables it.
-     Plain invocation (no --oem, no --no-mode1) preserves the old behaviour:
-     universal + oneplus(skip) + mode_1. */
-  int IncludeMode1 = !NoMode1;
-  DynamicPatchLib_EnsureInitScoped (Oem, IncludeMode1);
+  /* abl_permissive is always applied at host packing time (engine rework
+     spec).  --no-mode1 / --no-libavb-bypass are removed.  The on-device
+     manifest decides at runtime whether to actually act on the patched
+     ABL — the host always installs the bytes. */
+  DynamicPatchLib_EnsureInitScoped (Oem, /*include_abl_permissive=*/1);
 
   /* Load file. */
   FILE *f = fopen (In, "rb");

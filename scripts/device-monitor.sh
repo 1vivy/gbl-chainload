@@ -204,20 +204,20 @@ device_monitor_dropped_to_stock () {
 
 # Is the current fastboot device our gbl-chainload FastbootLib?
 #
-# Signature: our FastbootLib publishes `build-name` as a getvar — values look
-# like `mode-1-auto-debug-verbose`. Stock fastboot returns FAILED/unknown for
-# unknown vars.
+# Signature: our FastbootLib publishes `gbl-chainload_build` as a getvar —
+# values look like `gbl-chainload[-auto][-debug][-verbose]`. Stock fastboot
+# returns FAILED/unknown for unknown vars.
 device_monitor_is_our_fastbootlib () {
   local out
-  out="$(timeout 3 fastboot getvar build-name 2>&1 || true)"
-  echo "$out" | grep -qi "^build-name: mode-" && return 0
+  out="$(timeout 3 fastboot getvar gbl-chainload_build 2>&1 || true)"
+  echo "$out" | grep -qi "^gbl-chainload_build: gbl-chainload" && return 0
   return 1
 }
 
-# Print the build-name string (e.g. "mode-1-auto-debug-verbose") if the device
-# is in our FastbootLib, empty string otherwise.
+# Print the build-name string (e.g. "gbl-chainload-auto-debug-verbose") if
+# the device is in our FastbootLib, empty string otherwise.
 device_monitor_build_name () {
   local out
-  out="$(timeout 3 fastboot getvar build-name 2>&1 || true)"
-  echo "$out" | grep -oE 'mode-[a-z0-9-]+' | head -1
+  out="$(timeout 3 fastboot getvar gbl-chainload_build 2>&1 || true)"
+  echo "$out" | grep -oE 'gbl-chainload[a-z0-9-]*' | head -1
 }

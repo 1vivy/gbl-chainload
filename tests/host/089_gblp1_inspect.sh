@@ -57,4 +57,35 @@ grep -q '^result: not_a_gblp1$' "$OUT/random.txt" \
 [ "$rc" != 0 ] \
   || { echo "FAIL: not_a_gblp1 returned exit 0"; exit 1; }
 
+# 5. Manifest entry pretty-print: pack with --manifest 0x01 (fakelock_hook
+#    only, profile_spoof off) and confirm gblp1-inspect renders the
+#    capability bits.  Mirrors 094's fixture so a single mode2_profile is
+#    enough to anchor the container.
+python3 - "$OUT/profile.bin" <<'PY'
+import struct, sys
+b  = b"GM2P" + struct.pack("<HHIIII", 1, 0, 0, 0, 0x40000, 0x9A4)
+b += bytes(96)
+assert len(b) == 120, len(b)
+open(sys.argv[1], "wb").write(b)
+PY
+tools/gbl-pack/gbl-pack --mode2-profile "$OUT/profile.bin" --manifest 0x01 \
+                       --out "$OUT/manifest.bin" 2>"$OUT/manifest-pack.log" \
+  || { echo "FAIL: gbl-pack --manifest 0x01 failed"; cat "$OUT/manifest-pack.log"; exit 1; }
+tools/gblp1-inspect/gblp1-inspect "$OUT/manifest.bin" > "$OUT/manifest.txt"
+grep -q '^result: ok$' "$OUT/manifest.txt" \
+  || { echo "FAIL: manifest container did not produce result: ok"; cat "$OUT/manifest.txt"; exit 1; }
+grep -q 'type=0x0020 (manifest)' "$OUT/manifest.txt" \
+  || { echo "FAIL: manifest entry-line missing or wrong type"; cat "$OUT/manifest.txt"; exit 1; }
+grep -q 'magic=GMAN schema=1 fakelock_hook=yes profile_spoof=no' \
+        "$OUT/manifest.txt" \
+  || { echo "FAIL: manifest detail line missing or wrong"; cat "$OUT/manifest.txt"; exit 1; }
+
+# 5b. --manifest 0x02 -> profile_spoof=yes fakelock_hook=no.
+tools/gbl-pack/gbl-pack --mode2-profile "$OUT/profile.bin" --manifest 0x02 \
+                       --out "$OUT/manifest2.bin" 2>"$OUT/manifest2-pack.log" \
+  || { echo "FAIL: gbl-pack --manifest 0x02 failed"; cat "$OUT/manifest2-pack.log"; exit 1; }
+tools/gblp1-inspect/gblp1-inspect "$OUT/manifest2.bin" > "$OUT/manifest2.txt"
+grep -q 'fakelock_hook=no profile_spoof=yes' "$OUT/manifest2.txt" \
+  || { echo "FAIL: manifest 0x02 capability bits wrong"; cat "$OUT/manifest2.txt"; exit 1; }
+
 echo "PASS: 089 gblp1-inspect"

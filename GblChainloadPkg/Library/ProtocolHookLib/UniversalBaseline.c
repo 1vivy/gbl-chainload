@@ -16,9 +16,9 @@
     KM 0x207 SET_VERSION is intentionally NOT dropped here — that travels
     over QSEECOM (not SCM SIP) and is handled by mode-specific overlays.
 
-    Mode-specific overlays (Mode1Overlay.c, etc.) layer on top; they are
-    called from slot wrappers before or after these universal checks as
-    appropriate.
+    Mode-specific overlays (FakelockOverlay.c, ProfileOverlay.c, etc.)
+    layer on top; they are called from slot wrappers before or after
+    these universal checks as appropriate.
 **/
 
 #include "UniversalBaseline.h"

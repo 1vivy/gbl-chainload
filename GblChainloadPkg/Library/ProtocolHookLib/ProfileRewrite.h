@@ -1,7 +1,7 @@
-/* GblChainloadPkg/Library/ProtocolHookLib/Mode2Rewrite.h — pure-logic
+/* GblChainloadPkg/Library/ProtocolHookLib/ProfileRewrite.h — pure-logic
    KM/SPSS buffer rewrite. No EDK2 dependency; host-testable. */
-#ifndef GBL_MODE2_REWRITE_H_
-#define GBL_MODE2_REWRITE_H_
+#ifndef GBL_PROFILE_REWRITE_H_
+#define GBL_PROFILE_REWRITE_H_
 
 #ifdef GBL_HOST_BUILD
 # include <stdint.h>
@@ -37,15 +37,15 @@
    u32 of the buffer; `buf`/`len` the send buffer. Rewrites only the
    four spoof-target cmd-ids and only when `len` matches the wire size.
    Returns 1 if a rewrite happened, 0 otherwise. Safe on NULL/short buf. */
-int gbl_m2_rewrite_km(uint32_t cmd_id, uint8_t *buf, uint32_t len,
-                      const struct gbl_mode2_profile *p);
+int gbl_profile_rewrite_km(uint32_t cmd_id, uint8_t *buf, uint32_t len,
+                           const struct gbl_mode2_profile *p);
 
 /* SPSS ShareKeyMintInfo carries a packed
    { KmSetRotReqWire(44), KmSetBootStateReqWire(64), KmSetVbhReqWire(36) }.
    Rewrite all three sub-structs in place. `info`/`info_len` is the whole
    packed struct (>= 144 bytes). Returns 1 if rewritten, 0 otherwise. */
 #define GBL_SPSS_INFO_LEN  144u
-int gbl_m2_rewrite_spss(uint8_t *info, uint32_t info_len,
-                        const struct gbl_mode2_profile *p);
+int gbl_profile_rewrite_spss(uint8_t *info, uint32_t info_len,
+                             const struct gbl_mode2_profile *p);
 
 #endif

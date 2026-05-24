@@ -1,157 +1,22 @@
-/* Host test for patch1 (efisp recursion) against discovered fixtures.
-
-   Discovers ABL fixtures in TEST_FIXTURES_DIR (compile-time macro, default
-   <repo>/tests/images, set by tests/patches/Makefile). Globs *.efi, *.bin,
-   *.img and runs patch1 against each. The patch is a UTF-16 byte-scan
-   ("efisp" -> "nulls"), so it works generically against either raw FV
-   wrappers or extracted PEs.
-
-   CI behaviour: zero fixtures present is acceptable — emit a SKIP line
-   and exit 0. Fixture blobs are gitignored (device firmware), so CI
-   normally runs with zero coverage; locally the user drops images into
-   tests/images/ to exercise the patch logic.
-*/
+/* Host test for patch1 (efisp recursion) — RETIRED.
+ *
+ * patch1 was retired from the active patch table in Task 10 (engine-rework).
+ * The BlockIoHook EFISP gate is the operational replacement and is exercised
+ * by its own hook-level tests.  This file is kept as a placeholder so the
+ * test_patch1 binary still exists for run-all wiring, but it does nothing
+ * except emit a SKIP line.
+ *
+ * The retired implementation lives at
+ *   GblChainloadPkg/Library/DynamicPatchLib/retired/block_efisp_recursion.c
+ * and can be re-imported with a real test driver if patch1 is ever revived.
+ */
 
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <assert.h>
-#include <glob.h>
-
-#include "../../GblChainloadPkg/Include/Library/PatchDesc.h"
-
-#ifndef TEST_FIXTURES_DIR
-#error "TEST_FIXTURES_DIR must be -D'd at compile time (set by Makefile)"
-#endif
-
-extern CONST PATCH_DESC kUniversalPatches[];
-extern CONST UINTN      kUniversalPatchesCount;
-
-static UINT8 *
-load_file (const char *path, UINT32 *size_out)
-{
-  FILE *f = fopen (path, "rb");
-  if (!f) {
-    perror (path);
-    return NULL;
-  }
-  fseek (f, 0, SEEK_END);
-  long sz = ftell (f);
-  fseek (f, 0, SEEK_SET);
-  UINT8 *buf = (UINT8 *)malloc ((size_t)sz);
-  if (!buf || (long)fread (buf, 1, (size_t)sz, f) != sz) {
-    fclose (f);
-    free (buf);
-    return NULL;
-  }
-  fclose (f);
-  *size_out = (UINT32)sz;
-  return buf;
-}
-
-static const char *
-outcome_name (PATCH_OUTCOME o)
-{
-  return (o == PATCH_OK)        ? "PATCH_OK"
-       : (o == PATCH_MISS)      ? "PATCH_MISS"
-       : (o == PATCH_AMBIGUOUS) ? "PATCH_AMBIGUOUS"
-                                : "?";
-}
-
-/* Counts (out-parameters): both must be supplied.
-   *ran_out   — increments on any fixture that was loaded.
-   *ok_out    — increments only on PATCH_OK.
-   Asserts on logic errors (unexpected outcome, broken idempotency, etc.). */
-static void
-test_patch1_against (PATCH_APPLY apply, const char *path,
-                     int *ran_out, int *ok_out)
-{
-  UINT32 size = 0;
-  UINT8 *buf  = load_file (path, &size);
-  if (!buf) {
-    return;
-  }
-  ++*ran_out;
-
-  PATCH_OUTCOME o = apply (buf, size);
-  printf ("patch1 vs %s -> %s\n", path, outcome_name (o));
-  assert ((o == PATCH_OK || o == PATCH_MISS) && "unexpected outcome");
-  if (o == PATCH_OK) ++*ok_out;
-
-  if (o == PATCH_OK) {
-    UINT8 nulls_pat[] = { 'n', 0, 'u', 0, 'l', 0, 'l', 0, 's', 0 };
-    int found_nulls = 0;
-    for (UINT32 i = 0; i + 10 <= size; ++i) {
-      if (memcmp (buf + i, nulls_pat, 10) == 0) { found_nulls = 1; break; }
-    }
-    assert (found_nulls && "rewrite did not produce UTF-16LE 'nulls'");
-
-    UINT8 efisp_pat[] = { 'e', 0, 'f', 0, 'i', 0, 's', 0, 'p', 0 };
-    int still_present = 0;
-    for (UINT32 i = 0; i + 10 <= size; ++i) {
-      if (memcmp (buf + i, efisp_pat, 10) == 0) { still_present = 1; break; }
-    }
-    assert (!still_present && "efisp still present after patch");
-
-    PATCH_OUTCOME o2 = apply (buf, size);
-    assert (o2 == PATCH_MISS && "second application should miss");
-    printf ("ok patch1 idempotency vs %s\n", path);
-  }
-
-  free (buf);
-}
-
-static void
-glob_extension (PATCH_APPLY apply, const char *dir, const char *ext,
-                int *ran_out, int *ok_out)
-{
-  char pat[1024];
-  snprintf (pat, sizeof (pat), "%s/*%s", dir, ext);
-  glob_t g;
-  if (glob (pat, 0, NULL, &g) == 0) {
-    for (size_t i = 0; i < g.gl_pathc; ++i) {
-      test_patch1_against (apply, g.gl_pathv[i], ran_out, ok_out);
-    }
-    globfree (&g);
-  }
-}
 
 int
 main (void)
 {
-  PATCH_APPLY apply = NULL;
-  for (UINTN i = 0; i < kUniversalPatchesCount; ++i) {
-    if (strcmp (kUniversalPatches[i].Name, "patch1-efisp-recursion") == 0) {
-      apply = kUniversalPatches[i].Apply;
-      break;
-    }
-  }
-  assert (apply != NULL && "patch1-efisp-recursion not found in kUniversalPatches");
-
-  const char *exts[] = { ".efi", ".bin", ".img" };
-  int ran = 0, ok = 0;
-  for (size_t i = 0; i < sizeof (exts) / sizeof (exts[0]); ++i) {
-    glob_extension (apply, TEST_FIXTURES_DIR, exts[i], &ran, &ok);
-  }
-
-  if (ran == 0) {
-    printf ("SKIP: test_patch1 — no fixtures found in %s\n", TEST_FIXTURES_DIR);
-    return 0;
-  }
-  /* PATCH_MISS is legal per-fixture (e.g. raw FV wrappers where the inner
-     PE is compressed and the byte scan can't see "efisp"), so report OK/MISS
-     counts honestly rather than imply ALL_PASS when nothing was actually
-     rewritten. The idempotency / "efisp gone, nulls present" asserts inside
-     the PATCH_OK branch are the real regression checks. */
-  if (ok == 0) {
-    printf ("WARN: test_patch1 — %d fixture%s loaded but ZERO produced "
-            "PATCH_OK (all MISS). Likely all fixtures are compressed FV "
-            "wrappers; commit extracted PEs to TEST_FIXTURES_DIR for real "
-            "coverage.\n",
-            ran, ran == 1 ? "" : "s");
-    return 0;
-  }
-  printf ("EXERCISED (%d fixture%s loaded, %d PATCH_OK, %d MISS)\n",
-          ran, ran == 1 ? "" : "s", ok, ran - ok);
+  printf ("SKIP: test_patch1 — patch1-efisp-recursion retired "
+          "(engine-rework Task 10); BlockIoHook EFISP gate covers this case\n");
   return 0;
 }
