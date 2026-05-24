@@ -1,5 +1,55 @@
 # Changelog
 
+## v2.3.4 — 2026-05-24
+
+Highlights:
+
+- **Engine rework — one EFI for every install profile.** The three per-mode
+  base EFIs (`mode-0.efi`, `mode-1.efi`, `mode-2.efi`) collapse into a
+  single `gbl-chainload.efi`. Mode-N selection is now a runtime GBLP1
+  manifest bit (`WantFakelockHook` 0x0001, `WantProfileSpoof` 0x0002) read
+  by the loader instead of a per-binary compile flag (`GBL_MODE`).
+  DynamicPatchLib restructured by intent: `abl_permissive/` (always-on,
+  mandatory), `oem/oplus/` (host-only, fail-safe), `retired/`. Patch1's
+  EFISP recursion guard retires in favour of a runtime `BlockIoHook` that
+  refuses reads/writes on EFISP partitions outright.
+- **Rust tooling consolidation.** The seven C host tools (`fv-unwrap`,
+  `abl-patcher`, `gbl-pack`, `gbl-commit`, `vbmeta-graft`, `mode2-profile`,
+  `gblp1-inspect`) collapse into a single Rust multicall `gbl` binary with
+  subcommand dispatch (`gbl <unwrap|patch|pack|commit|avb|mode2|inspect>`).
+  Core libraries (PE sanity, GBLP1 parser, AVB walk, DynamicPatchLib's
+  always-on `abl_permissive` set, mode-2 profile codec) are now Rust
+  crates linked into both the EFI staticlib and the host multicall.
+- **`gbl-chainload.efi` is now a release artifact.** Releases ship the
+  firmware payload alongside the installer ZIPs and host-tool bundles, so
+  fastboot `stage` + `oem boot-efi` testing no longer requires a local
+  build.
+- **Release confidence checks.** CI now verifies parity between
+  freshly-built and zip-vendored artifacts (EFI + recovery `gbl`), plus
+  submodule pointer reachability from each submodule's `origin/main`.
+  Catches stale vendored artifacts and unpushed submodule commits before
+  they ship.
+- **One-command release prep.** `scripts/release.sh X.Y.Z` orchestrates
+  the VERSION bump, CHANGELOG scaffold, zip submodule refresh, and
+  branch + PR creation. Author fills in highlights, merges, pushes tag.
+
+Fixes:
+
+- `gbl commit` now reads the destination back through an uncached
+  (`posix_fadvise(POSIX_FADV_DONTNEED)`) path before declaring success.
+  Catches blocked writes from kernel write guards (e.g. Baseband Guard
+  LSM) that otherwise mask non-persisting writes with cache hits.
+
+Upgrade notes:
+
+- The `--no-mode1` flag and `GBL_MODE=N` build flag are removed; pick the
+  install profile via the ZIP (mode-0/1/2-install).
+- Host tools: `gbl <sub>` replaces seven binaries. Old per-tool argv shape
+  is preserved 1:1 (each subcommand keeps the original CLI / exit codes).
+- Test fixtures: `tests/host/goldens/` removed — the Rust impl is
+  authoritative post-migration; tests now use parser/roundtrip/schema
+  regression checks instead of byte-identity parity.
+
 ## v2.2.2 — 2026-06-21
 
 Highlights:
