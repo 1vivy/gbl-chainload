@@ -39,13 +39,17 @@ around it.
 
 Work happens on feature branches; landing on `main` is via PR.
 
-- Never commit to or push `main` directly.
-- Branch+PR applies to all changes, but the ceremony scales with the
-  change. Single-commit PRs are fine for small fixes; multi-commit
-  feature branches are fine for larger work — iterate freely on the
-  branch, the PR grows new commits as feedback comes in.
-- **Version bumps (`VERSION` + `CHANGELOG.md`) land as their own focused
-  PR — explicit on main, no bundling with feature work.** Use
+- Ceremony scales with the change. Use the lightest workflow that fits:
+  - **Direct commit to `main`** is fine for a single-commit trivial fix —
+    a typo, a one-line shell fix, a comment-only doc tweak — where the
+    diff is self-evidently safe. Push directly; no PR.
+  - **Single-commit PR** for anything touching multiple files or changing
+    behavior in a non-obvious way, even when small.
+  - **Multi-commit feature branch + PR** for larger work — iterate freely
+    on the branch, the PR grows new commits as feedback comes in.
+- Never force-push `main`, even for a typo fix. Push a follow-up commit.
+- **Version bumps (`VERSION` + `CHANGELOG.md`) always land as their own
+  focused PR — explicit on main, no bundling with feature work.** Use
   `scripts/release.sh X.Y.Z` to scaffold the branch + PR.
 
 This applies regardless of mode. Auto mode does not opt out.
