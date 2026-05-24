@@ -1,0 +1,15 @@
+{
+  "planPath": "docs/superpowers/plans/2026-05-23-release-confidence-and-parity-cleanup.md",
+  "lastUpdated": "2026-05-23T01:30:00Z",
+  "tasks": [
+    {"id": "33", "subject": "Task 0: Commit pre-staged workflow + RELEASE_README changes", "status": "completed"},
+    {"id": "34", "subject": "Task 1: Retire all parity-contract goldens", "status": "completed"},
+    {"id": "35", "subject": "Task 2: build-efi job — EFI + recovery-gbl parity checks vs zip", "status": "completed", "blockedBy": ["33"]},
+    {"id": "36", "subject": "Task 3: verify-job — submodule pointer reachability", "status": "completed", "blockedBy": ["33"]},
+    {"id": "37", "subject": "Task 4: scripts/release.sh — one-command release prep", "status": "completed"},
+    {"id": "38", "subject": "Task 5: Cargo registry + git cache (ci.yml only)", "status": "completed", "blockedBy": ["33"]},
+    {"id": "39", "subject": "Task 6: Concurrency groups in all workflows", "status": "completed", "blockedBy": ["33"]},
+    {"id": "40", "subject": "Task 7: CLAUDE.md — single-commit-PR flexibility + version bumps explicit", "status": "completed"},
+    {"id": "41", "subject": "Task 8: Finalize PR #46 — retitle, rebody, force-push", "status": "completed", "blockedBy": ["33", "34", "35", "36", "37", "38", "39", "40"]}
+  ]
+}

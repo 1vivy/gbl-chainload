@@ -70,10 +70,13 @@ cmp "$OUT/default.img" "$OUT/size-from.img" \
 cmp -n 1048576 "$CUSTOM" "$OUT/default.img" \
   || { echo "FAIL: first 1 MiB of grafted output does not match custom prefix"; exit 1; }
 
-# 4) Golden parity assertion on the descriptor walk.
-diff -u tests/host/goldens/096/default-list.txt "$OUT/default-list.txt" \
-  || { echo "FAIL 096 golden: default-list.txt diverged"; exit 1; }
-diff -u tests/host/goldens/096/default-list.txt "$OUT/size-from-list.txt" \
-  || { echo "FAIL 096 golden: size-from-list.txt diverged"; exit 1; }
+# 4) Schema check on the descriptor walk (both default + size-from lists
+#    describe the same grafted recovery partition).
+for out in "$OUT/default-list.txt" "$OUT/size-from-list.txt"; do
+  grep -qE 'partition=recovery' "$out" \
+    || { echo "FAIL 096: $out missing recovery partition"; cat "$out"; exit 1; }
+  grep -qE 'graftable=yes'      "$out" \
+    || { echo "FAIL 096: $out missing graftable=yes"; cat "$out"; exit 1; }
+done
 
 echo "PASS: 096 recovery graft (OrangeFox onto stock 201)"

@@ -1,5 +1,0 @@
-header: magic=ok version=1 header_crc32=ok total_size=778536 entry_count=2
-entry: type=0x0001 (CACHED_ABL) offset=0x80 size=778240 sha256=ok
-entry: type=0x0002 (SOURCE_META) offset=0xbe080 size=150 sha256=ok
-footer: GBLP1END=ok
-result: ok

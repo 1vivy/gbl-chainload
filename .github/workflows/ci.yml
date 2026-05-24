@@ -4,6 +4,13 @@ on:
     branches: [main]
   pull_request:
 
+concurrency:
+  # Force-pushes to feature branches cancel any in-flight run.
+  # Main is excluded so every commit landing on main records a full
+  # CI history (never cancelled by a subsequent commit).
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -13,6 +20,21 @@ jobs:
         with:
           submodules: recursive
           lfs: true
+      - name: Cache cargo registry + git db
+        # tests/runall.sh invokes `cargo build` for the gbl multicall and
+        # crate parity tests. Caching the registry index + crate cache +
+        # git db avoids re-downloading the dep graph on every run. NOT
+        # caching target/ — workspace member sources change often and
+        # target invalidation is finicky; registry is the slow part.
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
       - name: Install build deps
         run: sudo apt-get update && sudo apt-get install -y liblzma-dev shellcheck
       - name: Run all tests

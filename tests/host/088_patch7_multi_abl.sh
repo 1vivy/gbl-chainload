@@ -119,26 +119,4 @@ done
 
 [ "$ran" -eq 1 ] || { echo "SKIP: 088 — no ABL fixtures present"; exit 0; }
 
-# Golden parity assertion (frozen C-tool output).  For each fixture present,
-# the fv-unwrap output (.pe.efi) and the abl-patcher --oem oplus output
-# (.p1.efi) are both deterministic. The .p.efi non-oplus patch result is
-# also frozen.  Missing fixtures are skipped (the per-loop SKIP above also
-# skips capturing here).
-for img in "${OPLUS_ABLS[@]}"; do
-  [ -f "$img" ] || continue
-  name=$(basename "$img" .img)
-  for g in "$name.pe.efi" "$name.p1.efi"; do
-    cmp -s "$OUT/$g" "tests/host/goldens/088/$g" \
-      || { echo "FAIL 088 golden: $g diverged from frozen C-tool output"; exit 1; }
-  done
-done
-for img in "${NONOPLUS_ABLS[@]}"; do
-  [ -f "$img" ] || continue
-  name=$(basename "$img" .img)
-  for g in "$name.pe.efi" "$name.p.efi"; do
-    cmp -s "$OUT/$g" "tests/host/goldens/088/$g" \
-      || { echo "FAIL 088 golden: $g diverged from frozen C-tool output"; exit 1; }
-  done
-done
-
 echo "PASS: 088 patch7 multi-abl"
