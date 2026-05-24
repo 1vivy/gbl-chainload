@@ -107,7 +107,8 @@ jobs:
           set -euo pipefail
           ver="${{ needs.verify.outputs.version }}"
           mkdir -p release-stage
-          tools="fv-unwrap abl-patcher gbl-pack gbl-commit vbmeta-graft mode2-profile gblp1-inspect"
+          # PR2 collapsed the seven C tools into a single `gbl` multicall
+          # (`gbl <unwrap|patch|pack|commit|avb|mode2|inspect>`).
           for plat in linux windows macos; do
             stage="release-stage/gbl-chainload-tools-${plat}-v${ver}"
             mkdir -p "$stage/bin"
@@ -115,18 +116,16 @@ jobs:
             # with bin/-relative paths so `sha256sum -c SHA256SUMS` works from
             # the bundle root as documented in RELEASE_README.md).
             find "dist/${plat}" -maxdepth 1 -type f ! -name SHA256SUMS -exec cp {} "$stage/bin/" \;
-            # Fail fast if the expected tools didn't land:
-            for t in $tools; do
-              if [ "$plat" = windows ]; then
-                if [ ! -f "$stage/bin/${t}.exe" ]; then
-                  echo "::error::missing $stage/bin/${t}.exe"; exit 1
-                fi
-              else
-                if [ ! -f "$stage/bin/${t}" ]; then
-                  echo "::error::missing $stage/bin/${t}"; exit 1
-                fi
+            # Fail fast if the expected multicall didn't land:
+            if [ "$plat" = windows ]; then
+              if [ ! -f "$stage/bin/gbl.exe" ]; then
+                echo "::error::missing $stage/bin/gbl.exe"; exit 1
               fi
-            done
+            else
+              if [ ! -f "$stage/bin/gbl" ]; then
+                echo "::error::missing $stage/bin/gbl"; exit 1
+              fi
+            fi
             cp tools/RELEASE_README.md "$stage/README.md"
             cp VERSION "$stage/VERSION"
             cp scripts/efisp-package.py "$stage/"
@@ -166,8 +165,39 @@ jobs:
           path: release-stage/*.zip
           retention-days: 1
 
+  build-efi:
+    # Build the firmware payload (dist/gbl-chainload.efi) inside the same
+    # build image, so users can stage + boot-efi without a local toolchain.
+    needs: [verify, prep-image]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-image
+          path: /tmp
+      - name: Load docker image
+        run: docker load -i /tmp/image.tar
+      - name: Build EFI payload (firmware staticlibs + EDK2 link)
+        run: bash scripts/build.sh --no-recovery --no-host
+      - name: Rename + checksum
+        run: |
+          set -euo pipefail
+          ver="${{ needs.verify.outputs.version }}"
+          mkdir -p release-stage
+          cp dist/gbl-chainload.efi "release-stage/gbl-chainload-v${ver}.efi"
+          (cd release-stage && sha256sum "gbl-chainload-v${ver}.efi" > "gbl-chainload-v${ver}.efi.sha256")
+          ls -la release-stage/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: efi-payload
+          path: release-stage/gbl-chainload-v*.efi*
+          retention-days: 1
+
   release:
-    needs: [verify, build-host-tools, build-zips]
+    needs: [verify, build-host-tools, build-zips, build-efi]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -179,10 +209,18 @@ jobs:
         with:
           name: installer-zips
           path: assets
+      - uses: actions/download-artifact@v4
+        with:
+          name: efi-payload
+          path: assets
       - name: Compute top-level SHA256SUMS
         run: |
+          set -euo pipefail
           cd assets
-          sha256sum *.zip > SHA256SUMS
+          # Drop the per-EFI .sha256 sidecar — its hash is folded into the
+          # top-level SHA256SUMS below.
+          rm -f gbl-chainload-v*.efi.sha256
+          sha256sum *.zip gbl-chainload-v*.efi > SHA256SUMS
           cat SHA256SUMS
       - name: Build release notes
         env:
@@ -226,4 +264,4 @@ jobs:
             --draft \
             --title "gbl-chainload v${ver}" \
             --notes-file release-notes.md \
-            assets/*.zip assets/SHA256SUMS
+            assets/*.zip assets/gbl-chainload-v*.efi assets/SHA256SUMS
