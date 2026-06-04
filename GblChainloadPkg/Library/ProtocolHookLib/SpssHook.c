@@ -145,22 +145,27 @@ InstallSpssHook (VOID)
   }
 
   Status = gBS->LocateProtocol (&gEfiSPSSProtocolGuid, NULL, (VOID **)&Spss);
-  if (Status == EFI_NOT_FOUND || (Status == EFI_SUCCESS && Spss == NULL)) {
+  if (Status == EFI_NOT_FOUND) {
     /* No SPSS protocol on this chipset. This is the BSP's own
      * "this chipset doesn't have support for sharing keymint info" path
      * (QcomModulePkg KeymasterClient.c ShareKeyMintInfoWithSPU): the ABL
      * simply does not mirror KeyMaster RoT/BootState/Vbh to an SPU. Observed
-     * on sm8845/macan, where SPU is not brought up. With no SPU enforcement
-     * domain, the KeyMaster/QSEECOM overlay is authoritative for both fakelock
-     * and profile-spoof — there is nothing here to hook. Report NOT_FOUND so
-     * InstallAll treats it as a benign capability gap, not a failure. */
+     * on sm8845/macan, where SPU is not brought up. Report NOT_FOUND so the
+     * caller can decide policy: benign for observation-only modes, but still
+     * fatal under profile-spoof on an SPU-backed target (see InstallAll). */
     GBL_INFO ("SpssHook: SPSS protocol absent on this chipset "
-              "(no SPU keymint mirror) — KM/QSEECOM overlay is authoritative\n");
+              "(no SPU keymint mirror)\n");
     return EFI_NOT_FOUND;
   }
-  if (EFI_ERROR (Status)) {
-    Print (L"SpssHook: LocateProtocol failed: %r\n", Status);
-    return Status;
+  if (EFI_ERROR (Status) || Spss == NULL) {
+    /* A real failure — keep it distinct from honest NOT_FOUND so it is never
+     * mistaken for "this SoC has no SPU". Per the UEFI contract LocateProtocol
+     * returns EFI_SUCCESS only with a non-NULL interface; EFI_SUCCESS + NULL is
+     * a corrupt/invalid published-handle state, surfaced here as a device
+     * error rather than swallowed. */
+    EFI_STATUS RetStatus = EFI_ERROR (Status) ? Status : EFI_DEVICE_ERROR;
+    Print (L"SpssHook: LocateProtocol failed: %r (spss=%p)\n", RetStatus, Spss);
+    return RetStatus;
   }
 
   if (Spss->SPSSDxe_ShareKeyMintInfo == NULL) {

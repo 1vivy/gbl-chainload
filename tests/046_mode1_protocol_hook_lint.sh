@@ -93,11 +93,12 @@ grep -q 'FakelockOverlay_ShouldDropKmDeviceStateWrite' "$PHL/QseecomHook.c" \
 grep -q 'gKeymasterHandle' "$PHL/QseecomHook.c" \
   || { echo "FAIL: QseecomHook.c must track gKeymasterHandle to gate the KM device-state drop"; exit 1; }
 
-# 12. SPSS-absent must be benign for profile-spoof (mode-2) on chipsets without
-#     an SPU (sm8845/macan): InstallAll must special-case EFI_NOT_FOUND so it
-#     does not fatally abort the chain-load. A bare `if (gManifest.WantProfileSpoof)`
-#     FATAL with no NOT_FOUND guard would brick mode-2 on such chipsets.
-grep -q 'EFI_NOT_FOUND' "$PHL/InstallAll.c" \
-  || { echo "FAIL: InstallAll.c must treat SPSS EFI_NOT_FOUND as benign (no-SPU chipsets like sm8845)"; exit 1; }
+# 12. SPSS absence stays fail-closed under profile-spoof. NOT_FOUND is ambiguous
+#     (no-SPU SoC vs SPU-backed target whose SPSS DXE failed to publish), so
+#     mode-2 must keep aborting rather than boot a half-spoof with the SPU
+#     KeyMint mirror unhooked. Assert the WantProfileSpoof FATAL gate on the
+#     SPSS install path is intact.
+grep -q 'FATAL — SPSS install failed' "$PHL/InstallAll.c" \
+  || { echo "FAIL: InstallAll.c must keep SPSS install fatal under WantProfileSpoof (fail-closed on no SPU mirror)"; exit 1; }
 
 echo "ok 046_mode1_protocol_hook_lint"

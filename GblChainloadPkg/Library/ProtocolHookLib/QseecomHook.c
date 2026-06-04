@@ -570,6 +570,16 @@ HookedSendCmd (
       Handle == gKeymasterHandle && Handle != (UINT32)-1) {
     EFI_STATUS FakeStatus;
     if (FakelockOverlay_ShouldDropKmDeviceStateWrite (CmdId, &FakeStatus)) {
+      /* Synthesize a success TA response. The KM response struct's word 0 is
+         the TA status (0 == success); an ABL that checks the TA response in
+         addition to the QSEECOM transport status would otherwise read stale
+         RspBuf bytes after our swallow and treat the synthetic success as a KM
+         failure. Zeroing the whole response buffer guarantees status word 0
+         and an empty body, which is the correct shape for a write that
+         produced no payload. */
+      if (RspBuf != NULL && RspLen > 0) {
+        ZeroMem (RspBuf, RspLen);
+      }
       HookLeave (&gQseecomSendGuard);
       return FakeStatus;
     }
