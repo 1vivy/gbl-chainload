@@ -88,7 +88,20 @@ ProtocolHook_InstallAll (
         overlay needs the ShareKeyMintInfo mutator); otherwise optional
         observation-only. */
   Status = InstallSpssHook ();
-  if (EFI_ERROR (Status)) {
+  if (Status == EFI_NOT_FOUND) {
+    /* SPSS protocol genuinely absent on this chipset (sm8845/macan-class): the
+       ABL does not mirror KeyMaster state to an SPU, so there is no SPU
+       enforcement domain to spoof. This is NOT a failure even under
+       profile-spoof — the KeyMaster/QSEECOM overlay (ProfileOverlay_RewriteKmSend)
+       is authoritative on such chipsets. Expect 0 slots; do not abort. */
+    GBL_INFO ("ProtocolHookLib: SPSS absent on this chipset — KM/QSEECOM overlay "
+              "authoritative (no SPU mirror)\n");
+    Result->SpssInstalledSlots = 0;
+    Result->SpssExpectedSlots  = 0;
+  } else if (EFI_ERROR (Status)) {
+    /* A real failure (protocol present but slot NULL / locate error). On a
+       chipset that DOES publish SPSS, profile-spoof needs the mirror hooked,
+       so this remains fatal under WantProfileSpoof. */
     if (gManifest.WantProfileSpoof) {
       Print (L"ProtocolHookLib: FATAL — SPSS install failed (%r), aborting chain-load\n",
              Status);
@@ -97,10 +110,11 @@ ProtocolHook_InstallAll (
     Print (L"ProtocolHookLib: SPSS install failed (%r) - continuing (observation-only)\n",
            Status);
     Result->SpssInstalledSlots = 0;
+    Result->SpssExpectedSlots  = 1;
   } else {
     Result->SpssInstalledSlots = 1;
+    Result->SpssExpectedSlots  = 1;
   }
-  Result->SpssExpectedSlots = 1;
 
   /* 5. BlockIo -- required for Oplus reserve preservation.  This hook
         observes partition reads/writes and swallows oplusreserve1 writes. */

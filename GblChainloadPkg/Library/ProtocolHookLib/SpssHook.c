@@ -145,7 +145,20 @@ InstallSpssHook (VOID)
   }
 
   Status = gBS->LocateProtocol (&gEfiSPSSProtocolGuid, NULL, (VOID **)&Spss);
-  if (EFI_ERROR (Status) || Spss == NULL) {
+  if (Status == EFI_NOT_FOUND || (Status == EFI_SUCCESS && Spss == NULL)) {
+    /* No SPSS protocol on this chipset. This is the BSP's own
+     * "this chipset doesn't have support for sharing keymint info" path
+     * (QcomModulePkg KeymasterClient.c ShareKeyMintInfoWithSPU): the ABL
+     * simply does not mirror KeyMaster RoT/BootState/Vbh to an SPU. Observed
+     * on sm8845/macan, where SPU is not brought up. With no SPU enforcement
+     * domain, the KeyMaster/QSEECOM overlay is authoritative for both fakelock
+     * and profile-spoof — there is nothing here to hook. Report NOT_FOUND so
+     * InstallAll treats it as a benign capability gap, not a failure. */
+    GBL_INFO ("SpssHook: SPSS protocol absent on this chipset "
+              "(no SPU keymint mirror) — KM/QSEECOM overlay is authoritative\n");
+    return EFI_NOT_FOUND;
+  }
+  if (EFI_ERROR (Status)) {
     Print (L"SpssHook: LocateProtocol failed: %r\n", Status);
     return Status;
   }

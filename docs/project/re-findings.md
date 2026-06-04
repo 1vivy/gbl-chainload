@@ -63,6 +63,29 @@ Evidence to preserve:
 - QSEE/KM call-slot mapping and SPSS/Secretkeeper follow-ups were investigated enough to guide mode-2 planning, but mode-2 still needs profile lifecycle work before it becomes a usable mode.
 - Preserve future notes as profile evidence: command IDs, payload shapes, and OTA/profile coupling should be stored here instead of in session transcripts.
 
+## Device: macan / sm8845 (OnePlus 15R ≈ OnePlus Ace 6T)
+
+Source: mode-0 diag bundle `gbl-chainload-diag-20260604-000513` (slot a active, recovery boot). Identity is from hard partition/firmware evidence, not recovery props:
+
+- ABL string `OPLUS SM8845 Attestation`; `ro.board.platform=sm8845`; `ro.product.device=macan`; `ro.product.model=OnePlus 15R`; SoC internal `Molokai`/`Kaanapali`; OEM ID `0x51`. (The phone was labelled "Ace 6T / canoe / sm8850" — the bundle is unambiguously **macan / sm8845**; Ace 6T is the CN marketing name for the macan device, canoe/sm8850 is a different SoC.)
+- The build still bakes `-DPRODUCT_NAME="canoe"` (dev-project label, cosmetic getvar string). Not load-bearing; left as-is.
+
+### KM device-state RPMB persistence — mode-1 brick path (FIXED)
+
+macan persists KeyMaster device-state to RPMB via an **OEM-added** KM command `WRITE_KM_DEVICE_STATE` (cmd `0x203`, `KEYMASTER_UTILS_CMD_ID + 3`) that is **absent from the open QcomModulePkg BSP** (only the enum exists; no caller). Runtime evidence (`logfs.img`): the second `0x203` is bracketed by `VB: RWDeviceState: Succeed using rpmb!`. The BSP `KeyMasterSetRotAndBootState` sends only SET_ROT (`0x201`) + SET_BOOT_STATE (`0x208`) and never calls `0x203`, so the RoT/boot-state sends do **not** themselves persist — `0x203` is the sole RPMB commit point.
+
+mode-0 baseline is honest ORANGE/unlocked: SET_ROT digest = `4bf5122f…` = `SHA256(0x01)` = `SHA256(IsUnlocked=1)` (matches BSP ORANGE branch); SET_BOOT_STATE `isUnlocked=1`, `pubKey=0…0`. Under **mode-1 fakelock** the ABL flips to GREEN/YELLOW → RoT `SHA256(PublicKey‖IsUnlocked=0)` + boot-state `isUnlocked=0`, and `0x203` commits that **locked** state to RPMB. Reverting to stock then leaves KeyMaster's RPMB RoT permanently disagreeing with the real bootloader — the reported "mode-1 locked status propagated to RPMB" brick.
+
+The pre-existing fakelock suppressed three RPMB lock-state paths (VB `WRITE_CONFIG` swallow, VB reset swallow, OplusSec `0x0A write_rpmb_boot_info` drop); `0x203` was the unguarded **fourth**, new on macan. Fix: `FakelockOverlay_ShouldDropKmDeviceStateWrite` swallows `0x203` (return EFI_SUCCESS, no forward) under `WantFakelockHook`, gated to the keymaster TA handle in `QseecomHook`. The current-boot attestation context (set via `0x201`/`0x208`, RAM-only) is unaffected — only the RPMB commit is dropped, so fakelock still *reports* locked while never *persisting* it. Universal under fakelock (correct on any device; a no-op where `0x203` isn't issued), so no per-SoC gate was added.
+
+keymaster-handle attribution: keymaster is loaded by `LoadSecureApps` (AppId `0xFFFF0001`) before our QseecomStartApp hook, so the first `0x203` we intercept precedes the StartApp tag. `QseecomHook` pins `gKeymasterHandle` lazily from the first cmd in the `0x200–0x2FF` `KEYMASTER_UTILS` space (no other hooked TA uses that range), which lands in time to gate that first write; the StartApp `"keymaster"` tag is a redundant confirmation.
+
+### SPSS absent on sm8845 — expected, not a bug (FIXED handling)
+
+`SpssHook: LocateProtocol(gEfiSPSSProtocolGuid) → Not Found` on macan, and the SPSS subsystem itself fails to come up earlier (`SPSSLib_LoadSPSS … PMIC clients failed: 0xE`). This is the BSP's own documented path: `ShareKeyMintInfoWithSPU` (QcomModulePkg `KeymasterClient.c`) treats `EFI_NOT_FOUND` as *"this chipset doesn't have support for sharing keymint info"* and returns success — macan does **not** mirror KeyMaster RoT/BootState/Vbh to an SPU, so there is **no SPU enforcement domain to spoof**. The KeyMaster/QSEECOM overlay (`ProfileOverlay_RewriteKmSend`) is authoritative for both fakelock and profile-spoof on this SoC.
+
+Bug this exposed: `InstallAll` treated SPSS install failure as **FATAL** whenever `WantProfileSpoof` was set, so mode-2 on macan would have aborted the chain-load at LocateProtocol. Fix: `InstallSpssHook` returns `EFI_NOT_FOUND` with a benign `GBL_INFO`, and `InstallAll` special-cases `EFI_NOT_FOUND` (expected=0 slots, no abort). A *real* SPSS failure on a chipset that **does** publish the protocol (canoe/infiniti-class) stays fatal under profile-spoof — that mirror must be hooked there.
+
 ## LogFs and logging
 
 - Earlier LogFs mount failures came from staged EFI ordering and `ConnectController` assumptions.

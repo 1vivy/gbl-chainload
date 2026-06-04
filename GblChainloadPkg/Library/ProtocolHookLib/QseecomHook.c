@@ -42,6 +42,15 @@ HOOK_REENTRY_DEFINE (gQseecomStartGuard);
 STATIC UINT32 gPhoenixHandle  = (UINT32)-1;
 STATIC UINT32 gOplusSecHandle = (UINT32)-1;
 
+/* Track the keymaster TA handle so the mode-1 fakelock policy can target the
+ * KeyMaster device-state persist (cmd 0x203) precisely. KeyMaster occupies the
+ * 0x200-0x2FF KEYMASTER_UTILS_CMD_ID command space (BSP KeymasterClient.c) that
+ * no other hooked TA uses, so the handle is pinned by either QseecomStartApp
+ * ("keymaster"/"keymaster64") or the first cmd we see in that range — the
+ * latter matters because keymaster is loaded by LoadSecureApps before our
+ * StartApp hook installs (AppId 0xFFFF0001 on macan/sm8845). -1U == unknown. */
+STATIC UINT32 gKeymasterHandle = (UINT32)-1;
+
 /* OplusSec TA is identified at QseecomStartApp by 16-byte EFI_GUID rather
  * than ASCII name (Ghidra G1 on LinuxLoader_infiniti.efi mem:0007f1e0).
  * GUID literal: {E11DDA6A-651B-4AB4-B8C5-30B352B472E2} → little-endian
@@ -461,6 +470,19 @@ HookedStartApp (
                 AppNameAscii, OutHandle);
     }
 
+    /* KeyMaster TA handle — used by the mode-1 fakelock policy to target the
+     * KM device-state persist (cmd 0x203). QseecomStartApp is idempotent and
+     * re-references the LoadSecureApps-preloaded app, so this fires even though
+     * keymaster started before our hook. HookedSendCmd also pins this lazily
+     * from the first 0x200-0x2FF cmd, covering the preload window. */
+    if (HasAsciiName &&
+        (AsciiStrCmp (AppNameAscii, "keymaster")   == 0 ||
+         AsciiStrCmp (AppNameAscii, "keymaster64") == 0)) {
+      gKeymasterHandle = OutHandle;
+      GBL_INFO ("qsee-start: tagged \"%a\" h=%u as KeyMaster\n",
+                AppNameAscii, OutHandle);
+    }
+
     /* OplusSec: AppName is a 16-byte EFI_GUID, not ASCII (Ghidra G1).
      * Gate the 16-byte CompareMem behind byte-by-byte prefix checks.
      * A u32 cast on a CHAR8* would (a) issue an unaligned load on
@@ -509,12 +531,43 @@ HookedSendCmd (
     CopyMem (&CmdId, SendBuf, sizeof (CmdId));
   }
 
+  /* Pin the keymaster handle lazily from the first cmd in the KEYMASTER_UTILS
+     0x200-0x2FF space (BSP KeymasterClient.c). keymaster is loaded by
+     LoadSecureApps before our StartApp hook, so on macan/sm8845 the first KM
+     traffic we intercept (an early cmd 0x203) precedes the StartApp tag — this
+     pins the handle in time to gate that very write. No other hooked TA uses
+     this cmd range, so the attribution is exact. */
+  if (gKeymasterHandle == (UINT32)-1 &&
+      CmdId >= 0x00000200u && CmdId <= 0x000002FFu) {
+    gKeymasterHandle = Handle;
+  }
+
   /* Fakelock policy: drop certain OplusSec commands before forwarding,
      including reentrant calls. */
   if (gManifest.WantFakelockHook &&
       Handle == gOplusSecHandle && Handle != (UINT32)-1) {
     EFI_STATUS FakeStatus;
     if (FakelockOverlay_ShouldDropQseeOplusSec (CmdId, &FakeStatus)) {
+      HookLeave (&gQseecomSendGuard);
+      return FakeStatus;
+    }
+  }
+
+  /* Fakelock policy: refuse the KeyMaster device-state persist (cmd 0x203,
+     WRITE_KM_DEVICE_STATE) so a spoofed locked RoT/boot-state is never
+     committed to RPMB. This is an OEM-added KM command (absent from the open
+     QcomModulePkg BSP) that macan/sm8845 uses to round-trip KM device-state
+     through RPMB — a fourth lock-state persistence path that the VB-layer
+     WRITE_CONFIG swallow, VB reset swallow, and OplusSec-0x0A drop do not
+     cover. Without this guard, mode-1 fakelock makes the ABL believe it is
+     locked and drive a locked device-state into RPMB; reverting to stock then
+     leaves KeyMaster's RoT permanently disagreeing with the real bootloader.
+     Gated to the keymaster TA handle and to fakelock builds only, so mode-0
+     (honest) and mode-2 (profile-spoof, no fakelock) are untouched. */
+  if (gManifest.WantFakelockHook &&
+      Handle == gKeymasterHandle && Handle != (UINT32)-1) {
+    EFI_STATUS FakeStatus;
+    if (FakelockOverlay_ShouldDropKmDeviceStateWrite (CmdId, &FakeStatus)) {
       HookLeave (&gQseecomSendGuard);
       return FakeStatus;
     }

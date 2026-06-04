@@ -29,7 +29,8 @@ for sym in \
     FakelockOverlay_OnVbDeviceInit_PrePost \
     FakelockOverlay_OnVbWriteConfig \
     FakelockOverlay_OnVbReset \
-    FakelockOverlay_ShouldDropQseeOplusSec; do
+    FakelockOverlay_ShouldDropQseeOplusSec \
+    FakelockOverlay_ShouldDropKmDeviceStateWrite; do
   grep -q "$sym" "$PHL/FakelockOverlay.h" \
     || { echo "FAIL: FakelockOverlay.h missing public declaration $sym"; exit 1; }
 done
@@ -81,5 +82,22 @@ fi
 grep -q 'ProtocolHook_InstallAll (&HookRes)' \
   GblChainloadPkg/Application/GblChainload/BootFlow.c \
   || { echo "FAIL: BootFlow.c must install protocol hooks"; exit 1; }
+
+# 11. macan/sm8845 KM device-state RPMB persistence guard: QseecomHook must
+#     route cmd 0x203 (WRITE_KM_DEVICE_STATE) through the fakelock overlay,
+#     gated on the keymaster TA handle. This closes the fourth RPMB lock-state
+#     persistence path (VB WRITE_CONFIG / VB reset / OplusSec 0x0A are the
+#     other three) that bricked a mode-1 install on macan.
+grep -q 'FakelockOverlay_ShouldDropKmDeviceStateWrite' "$PHL/QseecomHook.c" \
+  || { echo "FAIL: QseecomHook.c must call FakelockOverlay_ShouldDropKmDeviceStateWrite (macan RPMB guard)"; exit 1; }
+grep -q 'gKeymasterHandle' "$PHL/QseecomHook.c" \
+  || { echo "FAIL: QseecomHook.c must track gKeymasterHandle to gate the KM device-state drop"; exit 1; }
+
+# 12. SPSS-absent must be benign for profile-spoof (mode-2) on chipsets without
+#     an SPU (sm8845/macan): InstallAll must special-case EFI_NOT_FOUND so it
+#     does not fatally abort the chain-load. A bare `if (gManifest.WantProfileSpoof)`
+#     FATAL with no NOT_FOUND guard would brick mode-2 on such chipsets.
+grep -q 'EFI_NOT_FOUND' "$PHL/InstallAll.c" \
+  || { echo "FAIL: InstallAll.c must treat SPSS EFI_NOT_FOUND as benign (no-SPU chipsets like sm8845)"; exit 1; }
 
 echo "ok 046_mode1_protocol_hook_lint"

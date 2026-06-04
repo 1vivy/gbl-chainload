@@ -21,6 +21,7 @@
 #include <Library/DeviceInfo.h>
 
 #define OPLUSSEC_CMD_WRITE_RPMB_BOOT_INFO  0x0AU
+#define KM_CMD_WRITE_KM_DEVICE_STATE       0x00000203U
 
 /* --------------------------------------------------------------------------
  * Internal helpers (mirrors dirty VbOffsetOf* / VbForceDeviceInfoBufferLocked)
@@ -133,6 +134,22 @@ FakelockOverlay_ShouldDropQseeOplusSec (
   if (CmdId == OPLUSSEC_CMD_WRITE_RPMB_BOOT_INFO) {
     *FakeStatus = EFI_SUCCESS;
     GBL_INFO ("qsee-oplussec | cmd=0x%02x(write_rpmb_boot_info) | DROPPED (mode-1)\n",
+              CmdId);
+    return TRUE;
+  }
+  return FALSE;
+}
+
+BOOLEAN
+FakelockOverlay_ShouldDropKmDeviceStateWrite (
+  IN  UINT32       CmdId,
+  OUT EFI_STATUS  *FakeStatus
+  )
+{
+  if (CmdId == KM_CMD_WRITE_KM_DEVICE_STATE) {
+    *FakeStatus = EFI_SUCCESS;
+    GBL_INFO ("qsee-km | cmd=0x%08x(WRITE_KM_DEVICE_STATE) | DROPPED "
+              "(mode-1: refuse RPMB lock-state persist)\n",
               CmdId);
     return TRUE;
   }
