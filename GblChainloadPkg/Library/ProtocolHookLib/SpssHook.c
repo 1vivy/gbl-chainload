@@ -146,15 +146,18 @@ InstallSpssHook (VOID)
 
   Status = gBS->LocateProtocol (&gEfiSPSSProtocolGuid, NULL, (VOID **)&Spss);
   if (Status == EFI_NOT_FOUND) {
-    /* No SPSS protocol on this chipset. This is the BSP's own
-     * "this chipset doesn't have support for sharing keymint info" path
-     * (QcomModulePkg KeymasterClient.c ShareKeyMintInfoWithSPU): the ABL
-     * simply does not mirror KeyMaster RoT/BootState/Vbh to an SPU. Observed
-     * on sm8845/macan, where SPU is not brought up. Report NOT_FOUND so the
-     * caller can decide policy: benign for observation-only modes, but still
-     * fatal under profile-spoof on an SPU-backed target (see InstallAll). */
-    GBL_INFO ("SpssHook: SPSS protocol absent on this chipset "
-              "(no SPU keymint mirror)\n");
+    /* SPSS protocol not published this boot — the ABL's SPU keymint mirror is
+     * unavailable. This is the BSP's "doesn't have support for sharing keymint
+     * info" path (QcomModulePkg KeymasterClient.c ShareKeyMintInfoWithSPU).
+     * NOT_FOUND is ambiguous: it can mean the SoC has no SPU, OR an SPU-backed
+     * SoC whose SPSS DXE failed to come up this boot. sm8845/macan IS
+     * SPU-backed (StrongBox; ABL carries the SPSS GUID + ShareKeyMintInfoWithSPU),
+     * and the one observed macan unit hit the latter — its SPU failed PMIC
+     * init. Report NOT_FOUND so the caller decides policy: benign for
+     * observation-only modes, but fatal under profile-spoof (see InstallAll) —
+     * we must not ship a half-spoof that leaves an SPU mirror unhooked. */
+    GBL_INFO ("SpssHook: SPSS protocol not published — SPU keymint mirror "
+              "unavailable this boot\n");
     return EFI_NOT_FOUND;
   }
   if (EFI_ERROR (Status) || Spss == NULL) {

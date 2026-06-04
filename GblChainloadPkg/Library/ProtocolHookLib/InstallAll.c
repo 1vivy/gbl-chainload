@@ -89,16 +89,18 @@ ProtocolHook_InstallAll (
         observation-only. */
   Status = InstallSpssHook ();
   if (EFI_ERROR (Status)) {
-    /* Includes EFI_NOT_FOUND (no SPU on this chipset, e.g. sm8845/macan).
-       Under profile-spoof this stays FATAL: NOT_FOUND is ambiguous — it is the
-       same return whether the SoC genuinely lacks an SPU or an SPU-backed
-       target's SPSS DXE failed to publish gEfiSPSSProtocolGuid this boot. On a
-       chipset that DOES have an SPU (canoe/infiniti), continuing would leave
-       the SPU KeyMint mirror unhooked and the spoof incomplete, so we fail
-       closed (abort chain-load -> FastbootLib) rather than boot a half-spoof.
-       Enabling mode-2 on a known-no-SPU SoC needs a positive capability signal
-       (future manifest flag), not a blanket NOT_FOUND pass. Observation-only
-       modes (mode-0/1, WantProfileSpoof clear) continue as before. */
+    /* Includes EFI_NOT_FOUND — the SPU keymint mirror is unavailable this boot.
+       Under profile-spoof this stays FATAL. NOT_FOUND is ambiguous (no-SPU SoC
+       vs an SPU-backed SoC whose SPSS DXE failed to publish), but every SoC we
+       target IS SPU-backed: canoe/infiniti publish SPSS, and sm8845/macan is
+       also SPU-backed (StrongBox; its ABL carries the SPSS GUID +
+       ShareKeyMintInfoWithSPU). The one observed macan unit simply had its SPU
+       fail PMIC init. Continuing would leave the SPU KeyMint mirror unhooked
+       and the spoof incomplete, so we fail closed (abort -> FastbootLib) rather
+       than ship a half-spoof. (If a genuinely no-SPU SoC ever appears, gate a
+       benign path behind a positive capability signal — NOT a blanket
+       NOT_FOUND pass.) Observation-only modes (mode-0/1, WantProfileSpoof
+       clear) continue as before. */
     if (gManifest.WantProfileSpoof) {
       Print (L"ProtocolHookLib: FATAL — SPSS install failed (%r), aborting chain-load\n",
              Status);
