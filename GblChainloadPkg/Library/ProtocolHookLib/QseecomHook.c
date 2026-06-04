@@ -554,14 +554,16 @@ HookedSendCmd (
   }
 
   /* Fakelock policy: refuse the KeyMaster device-state persist (cmd 0x203,
-     WRITE_KM_DEVICE_STATE) so a spoofed locked RoT/boot-state is never
+     WRITE_KM_DEVICE_STATE) so a spoofed locked RoT/boot-state cannot be
      committed to RPMB. This is an OEM-added KM command (absent from the open
-     QcomModulePkg BSP) that macan/sm8845 uses to round-trip KM device-state
-     through RPMB — a fourth lock-state persistence path that the VB-layer
-     WRITE_CONFIG swallow, VB reset swallow, and OplusSec-0x0A drop do not
-     cover. Without this guard, mode-1 fakelock makes the ABL believe it is
-     locked and drive a locked device-state into RPMB; reverting to stock then
-     leaves KeyMaster's RoT permanently disagreeing with the real bootloader.
+     QcomModulePkg BSP) present on macan/sm8845 and absent on infiniti.
+     Evidence: infiniti's *validated* mode-1 drives a locked RoT/boot-state
+     (SET_ROT/SET_BOOT_STATE isUnlocked=0) every boot and does NOT brick,
+     issuing 0x203 zero times — the locked state stays ephemeral. macan adds
+     0x203, the one KM device-state writer infiniti lacks; suppressing it makes
+     macan mode-1 converge onto infiniti's safe behavior. (0x203 -> RPMB is
+     inferred from the command name + the reported brick, not yet confirmed by
+     disassembly; see docs/project/re-findings.md "Device: macan / sm8845".)
      Gated to the keymaster TA handle and to fakelock builds only, so mode-0
      (honest) and mode-2 (profile-spoof, no fakelock) are untouched. */
   if (gManifest.WantFakelockHook &&
