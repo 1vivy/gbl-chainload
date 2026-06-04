@@ -93,12 +93,17 @@ grep -q 'FakelockOverlay_ShouldDropKmDeviceStateWrite' "$PHL/QseecomHook.c" \
 grep -q 'gKeymasterHandle' "$PHL/QseecomHook.c" \
   || { echo "FAIL: QseecomHook.c must track gKeymasterHandle to gate the KM device-state drop"; exit 1; }
 
-# 12. SPSS absence stays fail-closed under profile-spoof. NOT_FOUND is ambiguous
-#     (no-SPU SoC vs SPU-backed target whose SPSS DXE failed to publish), so
-#     mode-2 must keep aborting rather than boot a half-spoof with the SPU
-#     KeyMint mirror unhooked. Assert the WantProfileSpoof FATAL gate on the
-#     SPSS install path is intact.
-grep -q 'FATAL — SPSS install failed' "$PHL/InstallAll.c" \
-  || { echo "FAIL: InstallAll.c must keep SPSS install fatal under WantProfileSpoof (fail-closed on no SPU mirror)"; exit 1; }
+# 12. SPSS is best-effort / observation-only and its absence is NEVER fatal —
+#     including under profile-spoof. The SPU keymint enforcement domain is dead
+#     on every target (PIL never loads on infiniti; protocol absent on macan),
+#     so an unhooked mirror is not a half-spoof and must not abort the boot to
+#     FastbootLib. Assert (a) the old WantProfileSpoof FATAL gate is GONE and
+#     (b) the SPSS install failure path forwards to the log and continues.
+if grep -q 'FATAL — SPSS install failed' "$PHL/InstallAll.c"; then
+  echo "FAIL: InstallAll.c must NOT fail-closed on SPSS install (SPU domain is dead on all targets; mirror is best-effort)"
+  exit 1
+fi
+grep -q 'SPSS install failed (%r) - continuing' "$PHL/InstallAll.c" \
+  || { echo "FAIL: InstallAll.c must continue (best-effort) when SPSS install fails"; exit 1; }
 
 echo "ok 046_mode1_protocol_hook_lint"

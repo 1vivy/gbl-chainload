@@ -1,11 +1,13 @@
 /** @file InstallAll.c -- universal + capability-gated hook dispatcher.
 
     Returns EFI_SUCCESS only if all required slot wrappers installed.
-    Required-status for VerifiedBoot, Qseecom, and SPSS is derived from
-    the runtime gManifest capability bits (WantFakelockHook,
-    WantProfileSpoof). On required errors, caller must abort chain-load
-    and fall through to FastbootLib; optional observation-only hooks may
-    fail open.
+    Required-status for VerifiedBoot and Qseecom is derived from the
+    runtime gManifest capability bits (WantFakelockHook, WantProfileSpoof).
+    On required errors, caller must abort chain-load and fall through to
+    FastbootLib; optional observation-only hooks may fail open. SPSS is
+    always best-effort: the SPU keymint enforcement domain is dead on every
+    target (PIL never loads on infiniti; protocol absent on macan), so its
+    mirror is observation-only and its absence is never fatal.
 
     SCM and BlockIo are always required (safety baseline: SCM provides
     TZ_BLOW_SW_FUSE drop, BlockIo provides oplusreserve preservation).
@@ -84,30 +86,32 @@ ProtocolHook_InstallAll (
   }
   Result->QseecomExpectedSlots  = 1;
 
-  /* 4. SPSS -- required iff profile-spoof cap is set (KM/SPSS attestation
-        overlay needs the ShareKeyMintInfo mutator); otherwise optional
-        observation-only. */
+  /* 4. SPSS -- always best-effort / observation-only. Install the
+        ShareKeyMintInfo mutator when the protocol is published (keeps the SPU
+        keymint mirror coherent under profile-spoof if a healthy SPU is up), but
+        a failure to install is NEVER fatal — including under profile-spoof.
+
+        Why this is not a half-spoof: on every device we target the SPU keymint
+        *enforcement* domain is dead, so there is no second domain for a
+        KM/QSEECOM-side spoof to be inconsistent with.
+          - infiniti (validated): SPSS protocol publishes and this hook installs
+            (spss=1/1), but the SPU PIL image never loads — the bootloader log
+            shows `pil-SPSS Failed to load metadata` /
+            `SPSSLib_LoadSPSS ProcessPilImageExt = Load Error`. The mirror is
+            shared into a protocol whose backing SPU image is absent.
+          - macan/sm8845: SPSS protocol is not published at all (NOT_FOUND); its
+            SPU fails earlier still (PMIC init).
+        In both cases the KM/QSEECOM spoof IS the whole spoof; refusing the boot
+        because the dead SPU mirror is unhooked buys no security and would only
+        block macan mode-2. So forward the miss to the log and continue. (If a
+        device with a *live* SPU keymint domain ever turns up, revisit: there it
+        would be a genuine half-spoof and a positive capability signal should
+        gate strictness — but no such device is in evidence today.) */
   Status = InstallSpssHook ();
   if (EFI_ERROR (Status)) {
-    /* Includes EFI_NOT_FOUND — the SPU keymint mirror is unavailable this boot.
-       Under profile-spoof this stays FATAL. NOT_FOUND is ambiguous (no-SPU SoC
-       vs an SPU-backed SoC whose SPSS DXE failed to publish), but every SoC we
-       target IS SPU-backed: canoe/infiniti publish SPSS, and sm8845/macan is
-       also SPU-backed (StrongBox; its ABL carries the SPSS GUID +
-       ShareKeyMintInfoWithSPU). The one observed macan unit simply had its SPU
-       fail PMIC init. Continuing would leave the SPU KeyMint mirror unhooked
-       and the spoof incomplete, so we fail closed (abort -> FastbootLib) rather
-       than ship a half-spoof. (If a genuinely no-SPU SoC ever appears, gate a
-       benign path behind a positive capability signal — NOT a blanket
-       NOT_FOUND pass.) Observation-only modes (mode-0/1, WantProfileSpoof
-       clear) continue as before. */
-    if (gManifest.WantProfileSpoof) {
-      Print (L"ProtocolHookLib: FATAL — SPSS install failed (%r), aborting chain-load\n",
-             Status);
-      return Status;
-    }
-    Print (L"ProtocolHookLib: SPSS install failed (%r) - continuing (observation-only)\n",
-           Status);
+    GBL_INFO ("ProtocolHookLib: SPSS install failed (%r) - continuing "
+              "(SPU keymint domain is dead on all targets; mirror is best-effort)\n",
+              Status);
     Result->SpssInstalledSlots = 0;
   } else {
     Result->SpssInstalledSlots = 1;

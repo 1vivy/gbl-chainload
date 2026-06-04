@@ -149,13 +149,13 @@ InstallSpssHook (VOID)
     /* SPSS protocol not published this boot — the ABL's SPU keymint mirror is
      * unavailable. This is the BSP's "doesn't have support for sharing keymint
      * info" path (QcomModulePkg KeymasterClient.c ShareKeyMintInfoWithSPU).
-     * NOT_FOUND is ambiguous: it can mean the SoC has no SPU, OR an SPU-backed
-     * SoC whose SPSS DXE failed to come up this boot. sm8845/macan IS
-     * SPU-backed (StrongBox; ABL carries the SPSS GUID + ShareKeyMintInfoWithSPU),
-     * and the one observed macan unit hit the latter — its SPU failed PMIC
-     * init. Report NOT_FOUND so the caller decides policy: benign for
-     * observation-only modes, but fatal under profile-spoof (see InstallAll) —
-     * we must not ship a half-spoof that leaves an SPU mirror unhooked. */
+     * Report NOT_FOUND; the caller (InstallAll) treats it as best-effort and
+     * continues. This is safe because the SPU keymint enforcement domain is
+     * dead on every target — on infiniti the protocol publishes but the SPU PIL
+     * image never loads (`pil-SPSS Failed to load metadata`); on macan/sm8845
+     * the protocol is absent (SPU fails PMIC init). With no live SPU domain,
+     * the KM/QSEECOM-side spoof is complete on its own, so an unhooked mirror is
+     * not a half-spoof. (See InstallAll.c step 4 for the full rationale.) */
     GBL_INFO ("SpssHook: SPSS protocol not published — SPU keymint mirror "
               "unavailable this boot\n");
     return EFI_NOT_FOUND;
