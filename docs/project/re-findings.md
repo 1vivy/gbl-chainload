@@ -100,6 +100,8 @@ mode-0 baseline on macan is honest ORANGE/unlocked: SET_ROT digest = `4bf5122f�
 
 The earlier policy *swallowed* VB `WRITE_CONFIG` too; it now **heals + forwards** so the canonical record self-heals toward unlocked on any write (enumerated or not). `0x203` and `0x0A` stay dropped (return `EFI_SUCCESS`, no forward) under `WantFakelockHook`, gated to their respective TA handles in `QseecomHook`. The current-boot attestation context (set via `0x201`/`0x208`, RAM-only) is unaffected — fakelock still *reports* locked while never *persisting* it. Universal under fakelock (a no-op where a path isn't exercised), so no per-SoC gate was added.
 
+**Why BOTH flags heal to unlocked (incl. `is_unlock_critical`) — user-recoverability, not just the read-spoof inverse.** The heal forces `is_unlock_critical=1` even though the device's *true* critical state may be 0. This is deliberate and is the primary safety rationale: if a user wipes EFISP (so the patched ABL can no longer be chain-loaded) and the device falls back to stock boot over unofficial images, a persisted *critical-locked* state lands them in a **RED** state with **no fastboot recourse — recoverable only via EDL**. Persisting critical-*unlocked* keeps `fastboot flashing` / partition recovery available so the user can self-recover without EDL. The over-statement toward unlocked is the invariant working as designed: the failure it guards against (RED + no fastboot + EDL-only) is far worse than persisting a more-permissive critical flag. (No evidence of an ABL/TZ fuse-vs-RPMB critical cross-check that would brick on the over-statement; the BSP treats the two flags independently.)
+
 **RE follow-up (open, for healing `0x203` instead of dropping):** recover the layout of the KM device-state struct that `0x203`'s `{addr_lo, addr_hi}` points at, from a macan mode-0/mode-1 `--debug --verbose` staged capture, so the persisted lock flags can be *healed to unlocked* (matching the VB `WRITE_CONFIG` policy) rather than dropped wholesale. Dropping is the safe interim; healing would additionally repair a previously-persisted locked record. No OplusSec `0x0A` RE is planned — it is an OS-facing TZ app, so dropping is the terminal policy there. Until then a fakelock **catch-net** (`QseecomHook` `KmIsRecognisedCmd` + `UNRECOGNISED KM cmd under fakelock` log) surfaces any un-characterised `0x200–0x2FF` command in `--debug` diags so a new hidden persist path appears as evidence instead of bricking silently.
 
 keymaster-handle attribution: keymaster is loaded by `LoadSecureApps` (AppId `0xFFFF0001`) before our QseecomStartApp hook, so the first `0x203` we intercept precedes the StartApp tag. `QseecomHook` pins `gKeymasterHandle` lazily from the first cmd in the `0x200–0x2FF` `KEYMASTER_UTILS` space (no other hooked TA uses that range), which lands in time to gate that first write; the StartApp `"keymaster"` tag is a redundant confirmation.
@@ -124,6 +126,26 @@ SPSSLib:: SPSSLib_LoadSPSS ProcessPilImageExt = Load Error
 ```
 
 — so the keymint mirror is shared into a protocol whose backing SPU subsystem is absent. macan fails earlier still (PMIC `0xE`, protocol never published). On **both** targets there is no live SPU domain for a KM/QSEECOM-side spoof to be inconsistent with: the KM/QSEECOM spoof IS the whole spoof. Refusing the boot because the dead SPU mirror is unhooked buys no security and only blocked macan mode-2. So `InstallAll` now treats SPSS as **best-effort / observation-only**: it installs the `ShareKeyMintInfo` mutator when the protocol is present (keeps the mirror coherent if a healthy SPU ever does come up) but **never** aborts the chain-load on its absence — including under `WantProfileSpoof`. `SpssHook` still distinguishes benign `NOT_FOUND` from the `EFI_SUCCESS`+NULL contract violation (`EFI_DEVICE_ERROR`) for log clarity; both are now non-fatal at the policy layer. (If a device with a genuinely *live* SPU keymint domain ever appears — PIL loads, mirror enforces — revisit: there an unhooked mirror would be a real half-spoof and a positive capability signal should gate strictness. No such device is in evidence today.)
+
+**No missing hook — macan uses the QSEECOM keymint transport, not the `AUTO_VIRT_ABL`/SMCI one (direct evidence).** A standing worry was that macan might set keymint info through the *other* `#ifdef`-gated path and bypass our hooks. `KeymasterClient.c` has exactly two mutually-exclusive transports:
+
+- **`#ifndef AUTO_VIRT_ABL`** (legacy): KM cmds via `QseecomSendCmd` (we hook), and `ShareKeyMintInfoWithSPU` → `SPSSDxe_ShareKeyMintInfo` via the SPSS protocol (we hook). This is the only branch that even *contains* `ShareKeyMintInfoWithSPU`.
+- **`#else /*SMCI*/`** (`AUTO_VIRT_ABL` defined): KM cmds via `IKMHal_sendCmd` (smcinvoke / `CKMHal_UID`), and **no `ShareKeyMintInfoWithSPU` at all**.
+
+The macan diag bundle's own captured hook log (`logfs.img` from a mode-0 staged boot) settles which branch macan compiled — every KM op is decoded by *our QSEECOM hook*:
+
+```
+qsee-km | cmd=0x00000201(SET_ROT) | offset=12 | size=32 | rotDigest=4bf5122f… | st=Success
+qsee-km | cmd=0x00000208(SET_BOOT_STATE) | isUnlocked=1 | pubKey=0…0 | st=Success
+qsee-km | cmd=0x00000211(SET_VBH) | vbh=879ceaee… | st=Success      → "KeyMasterSetRotAndBootState Set Boot State success"
+qsee-km | cmd=0x00000203(WRITE_KM_DEVICE_STATE) | addr=0x2000_D0D16000 | st=Success   (×2)
+qsee-km | cmd=0x00000204(MILESTONE_CALL) | st=Success
+SPSSLib:: SPSSLib_LoadSPSS Creating PMIC clients failed: 0xE
+SpssHook: LocateProtocol failed: Not Found
+ProtocolHookLib: SPSS install failed (Not Found) - continuing (observation-only)   (spss=0/1)
+```
+
+If macan were the SMCI/`IKMHal_sendCmd` build, **zero** `qsee-km` lines would appear (KM traffic wouldn't touch QSEECOM). They all appear — including `SET_VBH (0x211)`, which is emitted by `SetVerifiedBootHash`, the *only* caller of `ShareKeyMintInfoWithSPU`. So macan is unambiguously the `#ifndef AUTO_VIRT_ABL` world: same transport infiniti uses, fully covered by our QSEECOM + SPSS hooks. The transport is a compile-time choice baked into the binary, so this holds for every macan unit regardless of whether its SPU happens to init. There is no third keymint-info channel (only one `SPSSDxe_ShareKeyMintInfo` call exists in the BSP; no spcom/other SPU write path). **Conclusion: soft-fail cannot leave a half-spoof** — when SPSS is absent nothing reaches the SPU (ABL's own `ShareKeyMintInfoWithSPU` returns `EFI_SUCCESS` on `NOT_FOUND`), and when SPSS is present `LocateProtocol` succeeds so our hook installs and the spoof applies.
 
 **Open question for device test (no code impact):** does a macan unit whose SPU *does* init behave any differently? Given infiniti's SPU never enforces despite publishing, the expectation is no. Have the owner run mode-2 staged on macan and report `spss=1/1` vs `spss=0/1`; either way mode-2 now proceeds.
 

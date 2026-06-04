@@ -184,7 +184,19 @@ FakelockOverlay_OnVbWriteConfig (
 
   /* Heal toward the TRUE (unlocked) state: 1 == unlocked (read-side spoof
      clears these to 0). Forwarding the healed buffer means the last
-     device-state write to land in RPMB leaves the device recoverable. */
+     device-state write to land in RPMB leaves the device recoverable.
+
+     BOTH flags are forced to unlocked (incl. is_unlock_critical), deliberately,
+     for user-recoverability: if a user wipes EFISP (so the patched ABL can no
+     longer be chain-loaded) and the device falls back to stock boot over
+     unofficial images, a persisted *critical-locked* state lands them in a RED
+     state with no fastboot recourse — recoverable only via EDL. Persisting
+     critical-UNLOCKED keeps `fastboot flashing`/partition recovery available,
+     so the user can self-recover without EDL. This intentionally over-states
+     toward unlocked vs a possibly critical-locked true state; that is the
+     invariant ("only ever move toward unlocked") working as designed, chosen
+     because the failure it guards (RED + no fastboot + EDL-only) is far worse
+     than persisting a more-permissive critical flag. */
   OldUnlocked       = B[IsUnlockedOff]       ? TRUE : FALSE;
   OldUnlockCritical = B[IsUnlockCriticalOff] ? TRUE : FALSE;
   B[IsUnlockedOff]       = 1;
