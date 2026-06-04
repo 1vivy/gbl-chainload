@@ -106,4 +106,28 @@ fi
 grep -q 'SPSS install failed (%r) - continuing' "$PHL/InstallAll.c" \
   || { echo "FAIL: InstallAll.c must continue (best-effort) when SPSS install fails"; exit 1; }
 
+# 13. Brick-safety invariant: VB WRITE_CONFIG is HEALED toward unlocked and
+#     FORWARDED, not swallowed. The canonical DeviceInfo record must end
+#     unlocked in RPMB so the last write to land leaves the device recoverable.
+#     (a) The overlay must rewrite the lock flags toward unlocked (heal), not
+#         just return a swallow status.
+grep -q 'healed->unlocked' "$PHL/FakelockOverlay.c" \
+  || { echo "FAIL: FakelockOverlay_OnVbWriteConfig must heal the record toward unlocked"; exit 1; }
+#     (b) OnVbWriteConfig must expose the heal-or-swallow contract (BOOLEAN:
+#         TRUE=forward healed buffer, FALSE=fail-safe swallow).
+grep -qE 'BOOLEAN[[:space:]]+EFIAPI[[:space:]]*$' "$PHL/FakelockOverlay.c" \
+  && grep -q 'FakelockOverlay_OnVbWriteConfig' "$PHL/FakelockOverlay.c" \
+  || { echo "FAIL: FakelockOverlay_OnVbWriteConfig must return BOOLEAN (heal-or-swallow contract)"; exit 1; }
+#     (c) The VB hook must forward the healed buffer (fall through), swallowing
+#         only when the overlay reports it could not heal.
+grep -q 'forward the healed (unlocked) buffer' "$PHL/VerifiedBootHook.c" \
+  || { echo "FAIL: VerifiedBootHook must forward the healed WRITE_CONFIG buffer (not swallow unconditionally)"; exit 1; }
+
+# 14. Fakelock catch-net: every un-recognised KM-space cmd must be surfaced so a
+#     new RPMB lock-state persist path (the 0x203 class) cannot brick silently.
+grep -q 'UNRECOGNISED KM cmd under fakelock' "$PHL/QseecomHook.c" \
+  || { echo "FAIL: QseecomHook.c must log un-recognised KM-space cmds under fakelock (catch-net)"; exit 1; }
+grep -q 'KmIsRecognisedCmd' "$PHL/QseecomHook.c" \
+  || { echo "FAIL: QseecomHook.c must define KmIsRecognisedCmd for the catch-net"; exit 1; }
+
 echo "ok 046_mode1_protocol_hook_lint"

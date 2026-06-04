@@ -28,13 +28,21 @@ FakelockOverlay_OnVbDeviceInit_PrePost (
   IN     BOOLEAN           IsPre
   );
 
-/** Fakelock policy for VBRwDeviceState(WRITE_CONFIG). Returns EFI_SUCCESS and
-    does NOT forward to the original. **/
-EFI_STATUS EFIAPI
+/** Fakelock policy for VBRwDeviceState(WRITE_CONFIG): HEAL the canonical
+    DeviceInfo record toward the device's TRUE (unlocked) state rather than
+    swallowing it. Rewrites is_unlocked and is_unlock_critical to unlocked in
+    place so the LAST device-state write to land in RPMB always leaves the
+    device recoverable — even on a later boot where our chainload is absent.
+
+    Returns TRUE  → buffer healed to unlocked; caller MUST forward it.
+    Returns FALSE → flags could not be located (NULL / buffer too small); caller
+                    MUST swallow (never forward an un-healed, possibly-locked
+                    record to persistence). Fail-safe default. **/
+BOOLEAN EFIAPI
 FakelockOverlay_OnVbWriteConfig (
-  IN UINT32  Op,
-  IN VOID   *Buf,
-  IN UINT32  BufLen
+  IN     UINT32  Op,
+  IN OUT VOID   *Buf,
+  IN     UINT32  BufLen
   );
 
 /** Fakelock policy for VBDeviceResetState. Returns EFI_SUCCESS without

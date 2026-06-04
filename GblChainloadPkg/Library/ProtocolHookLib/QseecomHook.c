@@ -409,6 +409,27 @@ KmDecodeKnownCmd (
   }
 }
 
+/* TRUE iff CmdId is a KEYMASTER_UTILS cmd we have a decoded understanding of.
+   Used by the fakelock catch-net to flag everything else in the 0x200-0x2FF
+   space as an un-characterised candidate that could be a hidden RPMB-persist
+   path (the class that bricked macan via 0x203). Keep in sync with
+   KmDecodeKnownCmd's switch. */
+STATIC BOOLEAN
+KmIsRecognisedCmd (
+  IN UINT32 CmdId
+  )
+{
+  switch (CmdId) {
+    case 0x00000200: case 0x00000201: case 0x00000202:
+    case 0x00000203: case 0x00000204: case 0x00000207:
+    case 0x00000208: case 0x00000211: case 0x00000218:
+    case 0x00000219:
+      return TRUE;
+    default:
+      return FALSE;
+  }
+}
+
 STATIC EFI_STATUS EFIAPI
 HookedStartApp (
   IN  QCOM_QSEECOM_PROTOCOL *This,
@@ -621,11 +642,26 @@ HookedSendCmd (
     DumpChunked (Handle, "r", RspBuf,  RspLen,  192);
   }
 
-  /* T1.5: KeyMaster cmd-id structured decoder. Emits one extra
-   * qsee-km line for documented cmds (0x200/0x201/0x208/0x211/0x219);
-   * silent for everything else. The generic qsee line above is the
-   * source-of-truth for raw bytes; this is interpretation. */
+  /* T1.5: KeyMaster cmd-id structured decoder. Emits one extra qsee-km line
+   * for documented cmds (0x200/0x201/0x202/0x203/0x204/0x207/0x208/0x211/
+   * 0x218/0x219 — kept in sync with KmIsRecognisedCmd); silent for everything
+   * else. The generic qsee line above is the source-of-truth for raw bytes;
+   * this is interpretation. */
   KmDecodeKnownCmd (CmdId, Handle, SendBuf, SendLen, RspBuf, RspLen, Status);
+
+  /* Fakelock catch-net: surface any KM-space command we don't explicitly
+     recognise so a new RPMB lock-state persist path (the class that bricked
+     macan via 0x203) can never slip through silently. It shows up in --debug
+     diags as an un-guarded device-state write candidate for RE rather than
+     persisting a fake-locked record unobserved. Log-only — no behavior change. */
+  if (gManifest.WantFakelockHook &&
+      Handle == gKeymasterHandle && Handle != (UINT32)-1 &&
+      CmdId >= 0x00000200u && CmdId <= 0x000002FFu &&
+      !KmIsRecognisedCmd (CmdId)) {
+    GBL_INFO ("qsee-km | cmd=0x%08x | h=%u | UNRECOGNISED KM cmd under fakelock "
+              "— candidate un-guarded device-state write (RE) | sl=%u | st=%r\n",
+              CmdId, Handle, SendLen, Status);
+  }
 
   /* OplusSec cmd-id decoder, gated by handle (Ghidra G1).
    * Cmd-ids occupy a low integer space and would collide with KeyMaster
