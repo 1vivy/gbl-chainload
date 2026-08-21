@@ -101,6 +101,9 @@ Fastboot screen additions:
 - `OEM UNLOCK ALLOWED - yes/no` state line.
 - `AVB WARNING - ...` warning line when lightweight vbmeta probing detects a risky state.
 - `Enable OEM unlock` menu action.
+- `Unlock bootloader` menu action. It requires the OEM-unlock-allowed bit and
+  opens Qualcomm's physical-button confirmation page; this fork does not wipe
+  userdata automatically, so custom recovery must handle any required format.
 - `Escape` menu action.
 
 There is also an untested `Boot ESP` menu option intended for directly booting operating systems from USB.
