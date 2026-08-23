@@ -198,8 +198,14 @@ fn derive_to_string(vbmeta_path: &Path) -> Result<String, GblError> {
     let src_sha_hex = hex64(&src_sha);
 
     // Walk descriptors for the two property strings we care about.
-    let mut os_ver_str: Option<String> = None;
-    let mut spl_str: Option<String> = None;
+    // The classic boot.* keys are preferred; GKI-era vbmetas (e.g. Xiaomi
+    // sm8850) may carry only the init_boot.* equivalents, so those fill in
+    // when boot.* is absent. Mirrors crates/mode2-profile-core derive()
+    // and scripts/mode2-profile.py cmd_derive().
+    let mut os_boot: Option<String> = None;
+    let mut os_init_boot: Option<String> = None;
+    let mut spl_boot: Option<String> = None;
+    let mut spl_init_boot: Option<String> = None;
     for d in vbm.descriptors().flatten() {
         if let avb_parse::Descriptor::Property { bytes } = d {
             // Property body: at offset +16 of the raw bytes,
@@ -221,26 +227,29 @@ fn derive_to_string(vbmeta_path: &Path) -> Result<String, GblError> {
             }
             let key = &bytes[body_off..body_off + klen];
             let val = &bytes[body_off + klen + 1..body_off + klen + 1 + vlen];
+            let val = || std::str::from_utf8(val).ok().map(|s| s.to_string());
             if key == b"com.android.build.boot.os_version" {
-                if let Ok(s) = std::str::from_utf8(val) {
-                    os_ver_str = Some(s.to_string());
-                }
+                os_boot = val();
             } else if key == b"com.android.build.boot.security_patch" {
-                if let Ok(s) = std::str::from_utf8(val) {
-                    spl_str = Some(s.to_string());
-                }
+                spl_boot = val();
+            } else if key == b"com.android.build.init_boot.os_version" {
+                os_init_boot = val();
+            } else if key == b"com.android.build.init_boot.security_patch" {
+                spl_init_boot = val();
             }
         }
     }
-    let os_ver_str = os_ver_str.ok_or_else(|| {
+    let os_ver_str = os_boot.or(os_init_boot).ok_or_else(|| {
         GblError::runtime(
-            "error: vbmeta has no com.android.build.boot.os_version property"
+            "error: vbmeta has no com.android.build.boot.os_version \
+             (or init_boot.os_version) property"
                 .to_string(),
         )
     })?;
-    let spl_str = spl_str.ok_or_else(|| {
+    let spl_str = spl_boot.or(spl_init_boot).ok_or_else(|| {
         GblError::runtime(
-            "error: vbmeta has no com.android.build.boot.security_patch property"
+            "error: vbmeta has no com.android.build.boot.security_patch \
+             (or init_boot.security_patch) property"
                 .to_string(),
         )
     })?;

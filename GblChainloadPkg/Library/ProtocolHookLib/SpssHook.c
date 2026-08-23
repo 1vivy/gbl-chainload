@@ -145,9 +145,15 @@ InstallSpssHook (VOID)
   }
 
   Status = gBS->LocateProtocol (&gEfiSPSSProtocolGuid, NULL, (VOID **)&Spss);
+  if (Status == EFI_NOT_FOUND) {
+    /* No SPSS protocol on this platform (no SPU mirror path).
+       InstallAll treats this as degrade-to-QSEE-KM-only, not fatal. */
+    GBL_INFO ("SpssHook: SPSS protocol not present\n");
+    return EFI_NOT_FOUND;
+  }
   if (EFI_ERROR (Status) || Spss == NULL) {
     Print (L"SpssHook: LocateProtocol failed: %r\n", Status);
-    return Status;
+    return EFI_ERROR (Status) ? Status : EFI_NOT_READY;
   }
 
   if (Spss->SPSSDxe_ShareKeyMintInfo == NULL) {

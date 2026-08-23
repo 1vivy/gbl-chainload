@@ -63,6 +63,19 @@ Evidence to preserve:
 - QSEE/KM call-slot mapping and SPSS/Secretkeeper follow-ups were investigated enough to guide mode-2 planning, but mode-2 still needs profile lifecycle work before it becomes a usable mode.
 - Preserve future notes as profile evidence: command IDs, payload shapes, and OTA/profile coupling should be stored here instead of in session transcripts.
 
+## Xiaomi myron (sm8850) mode-2 port
+
+Facts verified against the stock OS3.0.23 images (committed as `tests/images/xi-myron-OS3.0.23-abl.img` + `vbmeta-myron-OS3.0.23.img`):
+
+- The myron ABL is the standard Qualcomm arm32-ELF→FV→LZMA(GUID-defined)→nested-FV→PE32 form (FVH at 0x1028, same as xi17-pudding); `gbl unwrap` and firmware `AblUnwrapLib` handle it unchanged.
+- The mandatory `abl_permissive` contract holds on the myron ABL: all four patch6 refusal strings and the patch10 libavb anchor present exactly once; both apply. patch7 (oplus warning string) is absent → clean MISS. Locked in by test 088.
+- QSEECOM (`a74862ce-680f-4fe1-…`) and SPSS (`a322ff2c-6d1a-44de-…`) protocol GUIDs are both present in the myron ABL PE (at file offsets 0xcb314 / 0xcb294) — the mode-2 hooks have install targets on this OEM.
+- The myron ABL contains the UTF-16 `efisp` partition-name entry — same GBL/EFISP load mechanism as canoe. EFISP deployment was proven on this device by the user's gbl_root_canoe unlockmodefix flash (a patched stock ABL flashed to EFISP).
+- Myron's stock vbmeta (avbtool 1.3.0, RSA4096, SPL 2026-01-01, OS "16") carries GKI-era property descriptors only: `init_boot.*`, `vendor.*`, `vendor_boot`, `dtbo`, `mi_ext`, `odm`, `pvmfw`, `system_dlkm`, `vendor_dlkm` — **no `com.android.build.boot.*`**. `gbl mode2 derive` therefore falls back to `init_boot.{os_version,security_patch}` (boot.* preferred when both exist; identical output on OPlus fixtures verified byte-for-byte).
+- Firmware relaxations made for non-oplus devices: `InstallBlockIoHook` no longer fails when no `oplusreserve1`/`opporeserve1` partition exists (reserve preservation is inactive there; the EFISP read/write refusal gate remains mandatory), and a missing SPSS protocol (`LocateProtocol` → `EFI_NOT_FOUND`) degrades to QSEE-KM-only spoof instead of aborting.
+- Residual risk: the KM/SPSS wire offsets in `ProfileRewrite.c` were cross-checked against canoe's `keymaster_wire.h` only — no myron BSP `KeymasterClient.h` was available in the reference drop. The exact-length gate makes a mismatch degrade to no-rewrite (honest values, visible in logs) rather than corruption.
+- The gbl_root_canoe-2.0 "unlockmodefix" reference (5 static patches: efisp→nulls, ADRL unlocked→locked, boot-state color force, LDRB→MOV #1 IsUnlocked spoof, STRB sink→WZR) is intentionally NOT ported — mode 2 replaces that whole approach and the user explicitly does not want the orange-state-hiding patch.
+
 ## LogFs and logging
 
 - Earlier LogFs mount failures came from staged EFI ordering and `ConnectController` assumptions.

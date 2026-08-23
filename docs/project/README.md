@@ -8,6 +8,7 @@ This folder is the source of truth for project documentation, reverse-engineerin
 - [`next-milestone.md`](next-milestone.md) — current milestone objectives, explicit de-scope list, and acceptance criteria.
 - [`re-findings.md`](re-findings.md) — distilled reverse-engineering facts that should survive beyond session notes.
 - [`decisions.md`](decisions.md) — durable decisions and rejected paths.
+- [`myron-mode2.md`](myron-mode2.md) — Xiaomi myron (sm8850) mode-2 bring-up runbook: build, package, flash, on-device checkpoints.
 
 ## Documentation policy
 

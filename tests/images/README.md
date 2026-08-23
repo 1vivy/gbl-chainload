@@ -13,6 +13,9 @@ are the curated test pool.)
 - `op15-infiniti-703-abl.img` — OnePlus 15 (infiniti) build 16.0.5.703
 - `op15t-fairlady-201-abl.img` — OnePlus 15T (fairlady)
 - `xi17-pudding-44-abl.img` — Xiaomi 17 (pudding / K90 Pro Max)
+- `xi-myron-OS3.0.23-abl.img` — Redmi myron (K90-family, sm8850) HyperOS
+  OS3.0.23 / Android 16 — the myron mode-2 port target; ELF-wrapped abl
+  image (same FV→LZMA→PE32 form as the partition dumps above)
 
 Extracted PEs (post-unwrap) sit alongside as
 `<phone>-<codename>-<build-tail>-LinuxLoader.efi` (`.efi` extension), produced
@@ -33,6 +36,16 @@ in PR2 Task 8).
 | `060`/`061`/`062`/`064`/`067`/`069`/`081`/`083`/`084` | `pe/infiniti-EU-16.0.5.703.efi` | unwrapped stock infiniti PE |
 | `074`/`085` | `grafted-recovery.img` (LFS) | stock-vbmeta-grafted custom recovery |
 | `079`/`082` | `vbmeta-infiniti-IN-16.0.7.201.img` | stock IN 16.0.7.201 vbmeta |
+| `088` | `xi17-pudding-44-abl.img`, `xi-myron-OS3.0.23-abl.img` (non-oplus list) | patch6+patch10 OK, patch7 MISS on Xiaomi ABLs |
+| `097` | `xi-myron-OS3.0.23-abl.img` + `vbmeta-myron-OS3.0.23.img` | myron mode-2 profile derive + efisp-package end-to-end |
+
+Stock-vbmeta fixtures for profile derivation (consumed by
+`gbl mode2 derive`/`build` — myron's carries only GKI-era
+`init_boot.*` property descriptors, which the derive fallback handles):
+
+- `vbmeta-infiniti-IN-16.0.7.201.img` — OnePlus infiniti IN 16.0.7.201
+- `vbmeta-myron-OS3.0.23.img` — Redmi myron HyperOS OS3.0.23
+  (avbtool 1.3.0, RSA4096, SPL 2026-01-01)
 
 ## Storage notes
 

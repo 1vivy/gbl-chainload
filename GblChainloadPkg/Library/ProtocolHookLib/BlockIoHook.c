@@ -2,9 +2,12 @@
 
   Hooks partition BlockIo ReadBlocks/WriteBlocks slots so every mode can
   preserve OPPO/OnePlus DeepTest state in `oplusreserve1` while still reporting
-  success to ABL callers.  The hook also emits compact verbose read/write
-  telemetry for partition-level BlockIo traffic; this is intentionally general
-  knowledge for later manual scope expansion.
+  success to ABL callers.  On devices without oplus/oppo reserve partitions
+  (e.g. Xiaomi) the reserve policy is simply inactive — install degrades to
+  the EFISP read/write refusal plus telemetry instead of failing.  The hook
+  also emits compact verbose read/write telemetry for partition-level BlockIo
+  traffic; this is intentionally general knowledge for later manual scope
+  expansion.
 **/
 
 #include <Uefi.h>
@@ -401,9 +404,12 @@ InstallBlockIoHook (VOID)
     }
 
     if (Pass == 0 && ReserveInstalled == 0) {
-      gBS->FreePool (Handles);
-      DEBUG ((DEBUG_ERROR, "BlockIoHook: no oplus/oppo reserve1 BlockIo slot installed\n"));
-      return EFI_NOT_FOUND;
+      /* Non-oplus device (Xiaomi, etc.) or a GPT without reserve
+         partitions: the oplus reserve-preservation policy has no
+         target here. Degrade loudly instead of aborting — the EFISP
+         read/write refusal (the load-bearing recursion guard) and the
+         partition telemetry below stay active either way. */
+      GBL_INFO ("BlockIoHook: no oplus/oppo reserve1 partition — reserve preservation inactive\n");
     }
   }
 

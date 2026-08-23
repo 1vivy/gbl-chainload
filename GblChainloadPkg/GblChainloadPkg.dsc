@@ -19,7 +19,13 @@
   SKUID_IDENTIFIER               = DEFAULT
 
   # Canoe board defaults — mirror gbl_root_canoe build_hooks_generic target.
-  DEFINE BOARD_BOOTLOADER_PRODUCT_NAME    = canoe
+  # Board product name: overridden at build time via -D GBL_BOARD (and the
+  # mirrored BOARD_BOOTLOADER_PRODUCT_NAME) from scripts/build.sh --board /
+  # scripts/build-inside-docker.sh. PRODUCT_NAME feeds fastboot getvar
+  # product + devinfo version strings only — known boards: canoe
+  # (OnePlus/Oppo sm8850), myron (Xiaomi sm8850).
+  DEFINE GBL_BOARD                        = canoe
+  DEFINE BOARD_BOOTLOADER_PRODUCT_NAME    = $(GBL_BOARD)
   DEFINE VERIFIED_BOOT_ENABLED            = 1
   DEFINE VERIFIED_BOOT_LE                 = 0
   DEFINE AB_RETRYCOUNT_DISABLE            = 0

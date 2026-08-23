@@ -12,7 +12,9 @@
 # Post engine-rework: abl-patcher always applies abl_permissive (patch6 +
 # patch10); the OEM group is opt-in via `--oem`.  patch6 and patch10 anchor on
 # AOSP strings that are shared with non-oplus Qcom builds, so they apply on
-# Xiaomi too — that is expected and asserted below.
+# Xiaomi too — that is expected and asserted below.  This is the load-bearing
+# guarantee for the myron (Redmi, sm8850) mode-2 port: the mandatory
+# abl_permissive contract must hold on its ABL.
 #
 # Pass-2 idempotency note: only patch7 is designed to detect an already-
 # patched anchor and return PATCH_OK.  patch10 and patch6 do not have an
@@ -43,6 +45,7 @@ OPLUS_ABLS=(
 # non-oplus ABL: patch7 must cleanly miss (no false positive).
 NONOPLUS_ABLS=(
   tests/images/xi17-pudding-44-abl.img
+  tests/images/xi-myron-OS3.0.23-abl.img
 )
 
 ran=0

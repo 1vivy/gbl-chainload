@@ -2,6 +2,12 @@
 
 Milestone marker: **companion module/tooling suite + mode taxonomy cleanup**.
 
+Landed mid-milestone: **Xiaomi myron (sm8850) mode-2 host-side support** —
+`--board myron` build, `init_boot.*` derive fallback, non-oplus firmware
+tolerance, fixtures + tests 088/097, runbook at
+[`myron-mode2.md`](myron-mode2.md). On-device validation pending the user
+run.
+
 ## Objectives kept for this milestone
 
 ### 1. Recovery graft

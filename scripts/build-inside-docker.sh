@@ -6,6 +6,9 @@
 #   GBL_AUTO    — 0/1 (default 0)
 #   GBL_DEBUG   — 0/1 (default 0)
 #   GBL_VERBOSE — 0/1 (default 0)
+#   GBL_BOARD   — board id (default canoe) overriding the DSC's
+#                 BOARD_BOOTLOADER_PRODUCT_NAME (PRODUCT_NAME define:
+#                 fastboot getvar product + devinfo version strings)
 #
 # Engine rework (Task 11): GBL_MODE is gone. One EFI for every profile;
 # activation is driven by the runtime GBLP1 manifest, not compile flags.
@@ -18,6 +21,7 @@ ARCH="${ARCH:-AARCH64}"
 GBL_AUTO="${GBL_AUTO:-0}"
 GBL_DEBUG="${GBL_DEBUG:-0}"
 GBL_VERBOSE="${GBL_VERBOSE:-0}"
+GBL_BOARD="${GBL_BOARD:-canoe}"
 
 if [[ -z "${GBL_CHAINLOAD_VERSION:-}" ]]; then
   echo "error: GBL_CHAINLOAD_VERSION not set (must come from host VERSION file)" >&2
@@ -30,6 +34,10 @@ fi
 # (display), and LogFsLib (banner).
 if [[ -z "${GBL_BUILD_NAME:-}" ]]; then
   GBL_BUILD_NAME_SUFFIX=""
+  # Non-default boards fold in right after "gbl-chainload" (matches
+  # build.sh's artifact naming); the default board keeps the historical
+  # build names untouched.
+  if [[ "$GBL_BOARD" != "canoe" ]]; then GBL_BUILD_NAME_SUFFIX+="-${GBL_BOARD}"; fi
   if [[ $GBL_AUTO    -eq 1 ]]; then GBL_BUILD_NAME_SUFFIX+="-auto";    fi
   if [[ $GBL_DEBUG   -eq 1 ]]; then GBL_BUILD_NAME_SUFFIX+="-debug";   fi
   if [[ $GBL_VERBOSE -eq 1 ]]; then GBL_BUILD_NAME_SUFFIX+="-verbose"; fi
@@ -106,7 +114,7 @@ cargo build --release --target aarch64-unknown-none -p patch-engine --no-default
 echo ">>> cargo build: crates/avb-parse (aarch64-unknown-none ELF staticlib)"
 cargo build --release --target aarch64-unknown-none -p avb-parse --no-default-features
 
-echo ">>> build: $TOOLCHAIN_TAG / $ARCH / $BUILD_TARGET / name=$GBL_BUILD_NAME auto=$GBL_AUTO debug=$GBL_DEBUG verbose=$GBL_VERBOSE"
+echo ">>> build: $TOOLCHAIN_TAG / $ARCH / $BUILD_TARGET / name=$GBL_BUILD_NAME board=$GBL_BOARD auto=$GBL_AUTO debug=$GBL_DEBUG verbose=$GBL_VERBOSE"
 build \
   -p GblChainloadPkg/GblChainloadPkg.dsc \
   -a "$ARCH" \
@@ -115,6 +123,8 @@ build \
   -D GBL_AUTO="$GBL_AUTO" \
   -D GBL_DEBUG="$GBL_DEBUG" \
   -D GBL_VERBOSE="$GBL_VERBOSE" \
+  -D GBL_BOARD="$GBL_BOARD" \
+  -D BOARD_BOOTLOADER_PRODUCT_NAME="$GBL_BOARD" \
   -D GBL_BUILD_NAME="$GBL_BUILD_NAME" \
   -D GBL_CHAINLOAD_VERSION="$GBL_CHAINLOAD_VERSION"
 

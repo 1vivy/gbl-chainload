@@ -25,10 +25,11 @@
 # is manifest-driven at runtime, so one EFI handles every install
 # profile.
 #
-# Usage: scripts/build.sh [--auto] [--debug] [--verbose] [--no-recovery] [--no-host]
+# Usage: scripts/build.sh [--board NAME] [--auto] [--debug] [--verbose]
+#                         [--no-recovery] [--no-host]
 #
 # Outputs:
-#   dist/gbl-chainload[-suffix].efi   (firmware; suffix from --auto/--debug/--verbose)
+#   dist/gbl-chainload[-suffix].efi   (firmware; suffix from --board/--auto/--debug/--verbose)
 #   dist/recovery/gbl                  (aarch64-linux-android multicall)
 #   dist/host/gbl                      (native multicall; pass --no-host to skip)
 set -euo pipefail
@@ -41,6 +42,7 @@ DEBUG=0
 VERBOSE=0
 DO_RECOVERY=1
 DO_HOST=1
+BOARD="canoe"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -49,9 +51,14 @@ while [[ $# -gt 0 ]]; do
     --verbose)      VERBOSE=1;       shift ;;
     --no-recovery)  DO_RECOVERY=0;   shift ;;
     --no-host)      DO_HOST=0;       shift ;;
+    --board)
+      [[ $# -ge 2 ]] || { echo "error: --board requires a value" >&2; exit 2; }
+      BOARD="$2"; shift 2 ;;
+    --board=*)
+      BOARD="${1#--board=}"; shift ;;
     -h|--help)
       cat <<EOF
-Usage: $0 [--auto] [--debug] [--verbose] [--no-recovery] [--no-host]
+Usage: $0 [--board NAME] [--auto] [--debug] [--verbose] [--no-recovery] [--no-host]
 
 Orchestrates the full four-phase gbl-chainload build:
 
@@ -62,6 +69,13 @@ Orchestrates the full four-phase gbl-chainload build:
   4. host gbl multicall     (cargo host native; emits dist/host/gbl).
                              Skip with --no-host.
 
+--board NAME overrides the EDK2 BOARD_BOOTLOADER_PRODUCT_NAME define
+(default: canoe). Same-SoC boards share one binary shape; the name feeds
+PRODUCT_NAME (fastboot getvar product, devinfo version strings) and, when
+not "canoe", the artifact / build name (dist/gbl-chainload-<board>.efi,
+getvar gbl-chainload_build). Known: canoe (OnePlus/Oppo sm8850),
+myron (Xiaomi sm8850).
+
 Activation of fakelock / profile-spoof behavior is driven by the runtime
 GBLP1 manifest baked into the EFISP overlay, not by compile flags. Build
 once; the same firmware binary runs every install profile.
@@ -71,11 +85,19 @@ EOF
   esac
 done
 
+if [[ ! "$BOARD" =~ ^[a-z0-9][a-z0-9_-]*$ ]]; then
+  echo "error: --board '$BOARD' must be a lowercase board id (e.g. canoe, myron)" >&2
+  exit 2
+fi
+
 # Artifact name reflects active build flags. This same string is also passed
 # to the in-container build as GBL_BUILD_NAME so the EFI publishes it via
 # getvar gbl-chainload_build — scripts can identify what's running on device
-# without parsing the binary or filename.
+# without parsing the binary or filename. The default board (canoe) keeps
+# the historical names; any other board folds in as -<board> right after
+# "gbl-chainload" (e.g. gbl-chainload-myron-auto-debug.efi).
 SUFFIX=""
+if [[ "$BOARD" != "canoe" ]]; then SUFFIX+="-${BOARD}"; fi
 if [[ $AUTO    -eq 1 ]]; then SUFFIX+="-auto";    fi
 if [[ $DEBUG   -eq 1 ]]; then SUFFIX+="-debug";   fi
 if [[ $VERBOSE -eq 1 ]]; then SUFFIX+="-verbose"; fi
@@ -116,7 +138,7 @@ rm -rf Build/
 
 mkdir -p dist Build
 
-echo "==> [1/4 + 2/4] Building firmware staticlibs + $ARTIFACT (auto=$AUTO debug=$DEBUG verbose=$VERBOSE)"
+echo "==> [1/4 + 2/4] Building firmware staticlibs + $ARTIFACT (board=$BOARD auto=$AUTO debug=$DEBUG verbose=$VERBOSE)"
 
 # Phases 1 + 2: run in-container. build-inside-docker.sh cargo-builds
 # every aarch64-unknown-none staticlib that the firmware actually links
@@ -136,6 +158,7 @@ echo "==> [1/4 + 2/4] Building firmware staticlibs + $ARTIFACT (auto=$AUTO debug
   -e GBL_AUTO="$AUTO" \
   -e GBL_DEBUG="$DEBUG" \
   -e GBL_VERBOSE="$VERBOSE" \
+  -e GBL_BOARD="$BOARD" \
   -e GBL_BUILD_NAME="$BUILD_NAME" \
   -e GBL_CHAINLOAD_VERSION="$GBL_CHAINLOAD_VERSION" \
   "$IMAGE_TAG" \

@@ -47,6 +47,11 @@ tests/*/.omc/
 !/images/.gitkeep
 !/images/README.md
 
+# Local myron reference drop (gbl_root_canoe-2.0 tree + stock images).
+# Curated copies of the test-relevant fixtures live in tests/images/
+# (xi-myron-OS3.0.23-abl.img, vbmeta-myron-OS3.0.23.img).
+/myron/
+
 # host-tool cross-compile artifacts
 tools/*/*.exe
 tools/*/*.pdb

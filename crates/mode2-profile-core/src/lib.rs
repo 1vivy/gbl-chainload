@@ -357,7 +357,10 @@ fn read_u64_be(b: &[u8]) -> u64 {
 /// - `vbh = SHA256(vbmeta[0..header+auth+aux])`
 /// - `system_version` / `system_spl` encoded from the
 ///   `com.android.build.boot.os_version` and
-///   `com.android.build.boot.security_patch` property descriptors.
+///   `com.android.build.boot.security_patch` property descriptors, falling
+///   back to the `init_boot.*` equivalents when the vbmeta carries only
+///   those (GKI-era vbmetas, e.g. Xiaomi sm8850). `boot.*` wins when both
+///   are present.
 ///
 /// `is_unlocked` defaults to 0, `color` defaults to 0 (GREEN) — matches
 /// the Python reference (`tools/mode2-profile/mode2-profile.py
@@ -437,8 +440,13 @@ pub fn derive(vbmeta: &[u8]) -> Result<Profile, DeriveError> {
     let aux_block_start = aux_off as usize;
     let mut cursor = desc_off as usize;
     let walk_end = (desc_off + desc_size) as usize;
-    let mut os_ver_str: Option<&str> = None;
-    let mut spl_str: Option<&str> = None;
+    // os_version / security_patch sources. The classic boot.* keys are
+    // preferred; GKI-era vbmetas (e.g. Xiaomi sm8850) may carry only the
+    // init_boot.* equivalents, so those fill in when boot.* is absent.
+    let mut os_boot: Option<&str> = None;
+    let mut os_init_boot: Option<&str> = None;
+    let mut spl_boot: Option<&str> = None;
+    let mut spl_init_boot: Option<&str> = None;
 
     // Descriptor header: tag(u64 BE), num_bytes_following(u64 BE).
     while cursor + 16 <= walk_end {
@@ -473,11 +481,19 @@ pub fn derive(vbmeta: &[u8]) -> Result<Profile, DeriveError> {
                     let val = &body[16 + klen + 1..16 + klen + 1 + vlen];
                     if key == b"com.android.build.boot.os_version" {
                         if let Ok(s) = core::str::from_utf8(val) {
-                            os_ver_str = Some(s);
+                            os_boot = Some(s);
                         }
                     } else if key == b"com.android.build.boot.security_patch" {
                         if let Ok(s) = core::str::from_utf8(val) {
-                            spl_str = Some(s);
+                            spl_boot = Some(s);
+                        }
+                    } else if key == b"com.android.build.init_boot.os_version" {
+                        if let Ok(s) = core::str::from_utf8(val) {
+                            os_init_boot = Some(s);
+                        }
+                    } else if key == b"com.android.build.init_boot.security_patch" {
+                        if let Ok(s) = core::str::from_utf8(val) {
+                            spl_init_boot = Some(s);
                         }
                     }
                 }
@@ -486,8 +502,12 @@ pub fn derive(vbmeta: &[u8]) -> Result<Profile, DeriveError> {
         cursor = body_end;
     }
 
-    let os_ver_str = os_ver_str.ok_or(DeriveError::NoOsVersionProperty)?;
-    let spl_str = spl_str.ok_or(DeriveError::NoSecurityPatchProperty)?;
+    let os_ver_str = os_boot
+        .or(os_init_boot)
+        .ok_or(DeriveError::NoOsVersionProperty)?;
+    let spl_str = spl_boot
+        .or(spl_init_boot)
+        .ok_or(DeriveError::NoSecurityPatchProperty)?;
     let system_version = encode_os_version(os_ver_str)?;
     let system_spl = encode_spl(spl_str)?;
 
@@ -691,5 +711,109 @@ mod tests {
         assert_eq!(encode_spl("2026-13-01"), Err(DeriveError::SplOutOfRange));
         // Malformed
         assert_eq!(encode_spl("notadate"), Err(DeriveError::SplMalformed));
+    }
+
+    // ---- derive ----
+
+    /// Minimal synthetic vbmeta: 256-byte header, empty auth block, aux
+    /// block = property descriptors followed by a 32-byte dummy public key
+    /// (key placed after the descriptors, mirroring avbtool's layout).
+    fn synth_vbmeta(props: &[(&str, &str)]) -> Vec<u8> {
+        fn write_u64_be(v: &mut [u8], off: usize, x: u64) {
+            v[off..off + 8].copy_from_slice(&x.to_be_bytes());
+        }
+        fn prop_desc(key: &str, val: &str) -> Vec<u8> {
+            let mut body = Vec::new();
+            body.extend_from_slice(&(key.len() as u64).to_be_bytes());
+            body.extend_from_slice(&(val.len() as u64).to_be_bytes());
+            body.extend_from_slice(key.as_bytes());
+            body.push(0);
+            body.extend_from_slice(val.as_bytes());
+            body.push(0);
+            while body.len() % 8 != 0 {
+                body.push(0);
+            }
+            let mut d = Vec::new();
+            d.extend_from_slice(&AVB_DESC_TAG_PROPERTY.to_be_bytes());
+            d.extend_from_slice(&(body.len() as u64).to_be_bytes());
+            d.extend_from_slice(&body);
+            d
+        }
+
+        let mut descs = Vec::new();
+        for (k, v) in props {
+            descs.extend_from_slice(&prop_desc(k, v));
+        }
+        const KEY: [u8; 32] = [0xA5; 32];
+        let aux_size = descs.len() + KEY.len();
+
+        let mut v = vec![0u8; AVB_VBMETA_HEADER_SIZE];
+        v[0..4].copy_from_slice(&AVB_VBMETA_MAGIC[..]);
+        write_u64_be(&mut v, 12, 0); // auth block size
+        write_u64_be(&mut v, 20, aux_size as u64);
+        write_u64_be(&mut v, 64, descs.len() as u64); // public key offset (aux-relative)
+        write_u64_be(&mut v, 72, KEY.len() as u64); // public key size
+        write_u64_be(&mut v, 96, 0); // descriptors offset (aux-relative)
+        write_u64_be(&mut v, 104, descs.len() as u64); // descriptors size
+        v.extend_from_slice(&descs);
+        v.extend_from_slice(&KEY);
+        v
+    }
+
+    #[test]
+    fn derive_boot_keys_preferred_over_init_boot() {
+        // Classic OnePlus-style vbmeta: both key families present; boot.*
+        // must win regardless of descriptor order.
+        let v = synth_vbmeta(&[
+            ("com.android.build.init_boot.os_version", "1"),
+            ("com.android.build.init_boot.security_patch", "2026-01-01"),
+            ("com.android.build.boot.os_version", "16.0.7"),
+            ("com.android.build.boot.security_patch", "2026-05-05"),
+        ]);
+        let p = derive(&v).unwrap();
+        assert_eq!(p.system_version, encode_os_version("16.0.7").unwrap());
+        assert_eq!(p.system_spl, encode_spl("2026-05-05").unwrap());
+        assert_eq!(p.is_unlocked, 0);
+        assert_eq!(p.color, 0);
+    }
+
+    #[test]
+    fn derive_init_boot_fallback() {
+        // GKI-era Xiaomi-style vbmeta: only init_boot.* keys exist.
+        let v = synth_vbmeta(&[
+            ("com.android.build.init_boot.os_version", "1"),
+            ("com.android.build.init_boot.security_patch", "2026-01-01"),
+            ("com.android.build.vendor.os_version", "1"),
+            ("com.android.build.vendor.security_patch", "2025-12-01"),
+        ]);
+        let p = derive(&v).unwrap();
+        assert_eq!(p.system_version, encode_os_version("1").unwrap());
+        assert_eq!(p.system_spl, encode_spl("2026-01-01").unwrap());
+    }
+
+    #[test]
+    fn derive_mixed_key_families() {
+        // boot.os_version + init_boot.security_patch only — the two
+        // fallbacks are independent.
+        let v = synth_vbmeta(&[
+            ("com.android.build.boot.os_version", "16"),
+            ("com.android.build.init_boot.security_patch", "2026-01-01"),
+        ]);
+        let p = derive(&v).unwrap();
+        assert_eq!(p.system_version, encode_os_version("16").unwrap());
+        assert_eq!(p.system_spl, encode_spl("2026-01-01").unwrap());
+    }
+
+    #[test]
+    fn derive_no_known_property_keys() {
+        // Neither boot.* nor init_boot.* — derive must fail closed.
+        let v = synth_vbmeta(&[
+            ("com.android.build.vendor.os_version", "1"),
+            ("com.android.build.vendor.security_patch", "2026-01-01"),
+        ]);
+        assert!(matches!(derive(&v), Err(DeriveError::NoOsVersionProperty)));
+
+        let v = synth_vbmeta(&[("com.android.build.boot.os_version", "16")]);
+        assert!(matches!(derive(&v), Err(DeriveError::NoSecurityPatchProperty)));
     }
 }

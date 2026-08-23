@@ -163,14 +163,24 @@ def cmd_derive(args) -> int:
     pubkey_digest = hashlib.sha256(pubkey).digest()
     vbh = _compute_vbh(blob, avbtool)
 
+    # os_version / security_patch sources: the classic boot.* keys are
+    # preferred; GKI-era vbmetas (e.g. Xiaomi sm8850) may carry only the
+    # init_boot.* equivalents, so those fill in when boot.* is absent.
+    # Mirrors crates/mode2-profile-core derive().
     os_ver_str = props.get("com.android.build.boot.os_version")
+    if os_ver_str is None:
+        os_ver_str = props.get("com.android.build.init_boot.os_version")
     spl_str = props.get("com.android.build.boot.security_patch")
+    if spl_str is None:
+        spl_str = props.get("com.android.build.init_boot.security_patch")
     if os_ver_str is None:
         raise SystemExit(
-            "error: vbmeta has no com.android.build.boot.os_version property")
+            "error: vbmeta has no com.android.build.boot.os_version "
+            "(or init_boot.os_version) property")
     if spl_str is None:
         raise SystemExit(
-            "error: vbmeta has no com.android.build.boot.security_patch property")
+            "error: vbmeta has no com.android.build.boot.security_patch "
+            "(or init_boot.security_patch) property")
     os_ver = _encode_os_version(os_ver_str)
     spl = _encode_spl(spl_str)
 

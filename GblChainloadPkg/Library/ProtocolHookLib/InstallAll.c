@@ -8,7 +8,9 @@
     fail open.
 
     SCM and BlockIo are always required (safety baseline: SCM provides
-    TZ_BLOW_SW_FUSE drop, BlockIo provides oplusreserve preservation).
+    TZ_BLOW_SW_FUSE drop, BlockIo provides the EFISP I/O refusal gate plus
+    oplusreserve preservation where those partitions exist — on non-oplus
+    devices the reserve policy is inactive by design).
     Universal-baseline policies live in the slot wrappers themselves.
 
     EbsHook is declared in HookCommon.h but not yet implemented; it is not
@@ -86,9 +88,15 @@ ProtocolHook_InstallAll (
 
   /* 4. SPSS -- required iff profile-spoof cap is set (KM/SPSS attestation
         overlay needs the ShareKeyMintInfo mutator); otherwise optional
-        observation-only. */
+        observation-only.  Exception: EFI_NOT_FOUND means the platform
+        simply has no SPSS protocol installed (no SPU mirror path to
+        rewrite) -- the QSEE KM spoof remains active, so degrade loudly
+        instead of aborting. */
   Status = InstallSpssHook ();
-  if (EFI_ERROR (Status)) {
+  if (Status == EFI_NOT_FOUND) {
+    Print (L"ProtocolHookLib: SPSS protocol not present - continuing, SPU mirror spoof inactive\n");
+    Result->SpssInstalledSlots = 0;
+  } else if (EFI_ERROR (Status)) {
     if (gManifest.WantProfileSpoof) {
       Print (L"ProtocolHookLib: FATAL — SPSS install failed (%r), aborting chain-load\n",
              Status);

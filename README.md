@@ -1,10 +1,10 @@
 # gbl-chainload
 
-EFI System Partition (EFISP) chainloader for OnePlus/Oppo devices using Qualcomm's GBL/EFISP load mechanism. Patches the active-slot ABL in memory, installs targeted protocol hooks, and hands off to the patched ABL.
+EFI System Partition (EFISP) chainloader for OnePlus/Oppo devices (and, for mode 2, Xiaomi myron — same sm8850 SoC) using Qualcomm's GBL/EFISP load mechanism. Patches the active-slot ABL in memory, installs targeted protocol hooks, and hands off to the patched ABL.
 
 ## Status
 
-v2 shim is usable for mode-0 and mode-1. Project documentation, reverse-engineering findings, and the current milestone marker live in [`docs/project/`](docs/project/).
+v2 shim is usable for mode-0 and mode-1. Mode 2 ships host-side for Xiaomi myron (sm8850) — see [`docs/project/myron-mode2.md`](docs/project/myron-mode2.md). Project documentation, reverse-engineering findings, and the current milestone marker live in [`docs/project/`](docs/project/).
 
 Working artifacts: `dist/mode-0.efi` (unlocked observation + universal preservation build) and `dist/mode-1.efi` (protocol-hook fakelock via `QCOM_VERIFIEDBOOT_PROTOCOL` mutation; KM/Oplus see locked/green when stock images verify cleanly).
 
@@ -14,7 +14,7 @@ Mode-1 supports the "stock recovery + custom system" use case by default. Custom
 
 - **mode-0** — unlocked observation + universal preservation build. Installs protocol hooks for logging and for the narrow preservation baseline: drop TZ soft-fuse advancement and swallow `oplusreserve1` / `opporeserve1` writes. VB lock-state and OplusSec writes pass through so stock ABL can run the real relock procedure.
 - **mode-1** — protocol-hook fakelock. ABL sees locked DeviceInfo and builds KM SET_ROT/SET_BOOT_STATE off that view.
-- **mode-2** — TA-payload spoof at QSEE/SPSS boundaries (custom-ROM mode); ABL stays honest; per-OTA typed-struct profile injected via `GblPayloadLib`.
+- **mode-2** — TA-payload spoof at QSEE/SPSS boundaries (custom-ROM mode); ABL stays honest; per-OTA typed-struct profile injected via `GblPayloadLib`. Host-side flow works on canoe-family and Xiaomi myron (sm8850; profile derive falls back to `init_boot.*` vbmeta property descriptors) — bring-up runbook in [`docs/project/myron-mode2.md`](docs/project/myron-mode2.md).
 
 ## Build
 
