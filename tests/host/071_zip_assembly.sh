@@ -15,7 +15,11 @@ for e in META-INF/com/google/android/update-binary \
          META-INF/com/google/android/updater-script \
          core/ui.sh core/env.sh core/ota.sh core/busybox.sh core/partition.sh core/safety.sh \
          modes/SELECTED modes/diag.conf modes/diag.sh SHA256SUMS; do
-  unzip -l "$ZIP" | grep -q "[ /]$e\$" \
+  # No grep -q: it exits at the first match, which can SIGPIPE unzip
+  # mid-listing (141 under pipefail) when the matched name sorts near the
+  # top of the archive — a pure scheduling race. Reading to EOF via
+  # >/dev/null keeps the pipeline's exit status deterministic.
+  unzip -l "$ZIP" | grep "[ /]$e\$" >/dev/null \
     || { echo "FAIL: $ZIP missing $e"; exit 1; }
 done
 
