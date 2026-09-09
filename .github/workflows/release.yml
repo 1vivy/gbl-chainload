@@ -2,11 +2,11 @@ name: release
 
 on:
   push:
-    tags: ['v*']
+    tags: ['release-*']
   workflow_dispatch:
     inputs:
-      version:
-        description: 'Release version (X.Y.Z, no leading v)'
+      tag:
+        description: 'Existing release-X.Y.Z tag (no tag is created)'
         required: true
         type: string
 
@@ -34,22 +34,23 @@ jobs:
           fetch-depth: 0
       - name: Resolve version
         id: resolve
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           set -euo pipefail
-          if [[ "${{ github.event_name }}" == "push" ]]; then
-            ver="${GITHUB_REF_NAME#v}"
-          else
-            ver="${{ inputs.version }}"
+          if [[ ! "$RELEASE_TAG" =~ ^release-([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            echo "::error::use an existing release-X.Y.Z tag"; exit 1
           fi
-          if [[ ! "$ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::version '$ver' is not X.Y.Z"; exit 1
-          fi
+          ver="${BASH_REMATCH[1]}"
+          sha=$(git rev-parse --verify "refs/tags/${RELEASE_TAG}^{commit}")
+          git checkout --detach "$sha"
+          git submodule update --init --recursive
           file_ver=$(tr -d '[:space:]' < VERSION)
           if [[ "$ver" != "$file_ver" ]]; then
             echo "::error::version '$ver' != VERSION '$file_ver'"; exit 1
           fi
           echo "version=$ver" >> "$GITHUB_OUTPUT"
-          echo "sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
       - name: Check CHANGELOG section
         run: |
           set -euo pipefail
@@ -96,6 +97,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.verify.outputs.sha }}
       - uses: docker/setup-buildx-action@v3
       - name: Build image
         uses: docker/build-push-action@v5
@@ -118,6 +121,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ needs.verify.outputs.sha }}
           submodules: false
       - uses: actions/download-artifact@v4
         with:
@@ -173,6 +177,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ needs.verify.outputs.sha }}
           submodules: recursive
       - name: Build all five installer ZIPs
         run: |
@@ -204,6 +209,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ needs.verify.outputs.sha }}
           submodules: recursive
       - name: Stage EFI from zip submodule
         run: |
@@ -223,6 +229,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.verify.outputs.sha }}
       - uses: actions/download-artifact@v4
         with:
           name: host-tool-zips
@@ -259,7 +267,7 @@ jobs:
           ' CHANGELOG.md > prologue.md
           # Auto-generated PR list:
           gh api -X POST "repos/${{ github.repository }}/releases/generate-notes" \
-            -f tag_name="v${ver}" \
+            -f tag_name="release-${ver}" \
             -f target_commitish="${sha}" \
             --jq .body > autonotes.md
           {
@@ -276,13 +284,8 @@ jobs:
           set -euo pipefail
           ver="${{ needs.verify.outputs.version }}"
           sha="${{ needs.verify.outputs.sha }}"
-          if [[ "${{ github.event_name }}" == "push" ]]; then
-            tag_arg="v${ver}"
-          else
-            tag_arg="v${ver} --target ${sha}"
-          fi
-          # shellcheck disable=SC2086
-          gh release create $tag_arg \
+          gh release create "release-${ver}" \
+            --verify-tag \
             --draft \
             --title "gbl-chainload v${ver}" \
             --notes-file release-notes.md \

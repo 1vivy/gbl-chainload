@@ -9,13 +9,13 @@
 # Does the dance: bumps VERSION, scaffolds a CHANGELOG section, refreshes
 # the zip submodule's vendored artifacts via zip/update-tools.sh, bumps
 # the parent's zip pointer, commits, pushes the release branch, and opens
-# a PR. After merge, you push the tag (`git push origin vX.Y.Z`) and
+# a PR. After merge, you push the tag (`git push origin release-X.Y.Z`) and
 # release.yml drafts the GitHub release.
 #
 # Hard requirements before invocation:
 #   · clean working tree on main, up to date with origin/main
 #   · X.Y.Z is valid semver
-#   · vX.Y.Z is not already a tag
+#   · release-X.Y.Z is not already a tag
 #   · gh CLI authenticated; zip submodule initialized
 
 set -euo pipefail
@@ -30,7 +30,8 @@ Usage: scripts/release.sh [--dry-run] X.Y.Z
 Prep a release branch + PR for version X.Y.Z. After this script:
   1. Review the PR (CHANGELOG highlights are stubbed — fill them in).
   2. Merge it.
-  3. git push origin vX.Y.Z   (triggers release.yml → draft release)
+  3. Update local main to the merged commit, then git tag release-X.Y.Z
+  4. git push origin release-X.Y.Z   (triggers release.yml → draft release)
 
 Options:
   --dry-run    Print commands without executing.
@@ -83,8 +84,8 @@ if [ "$DRY_RUN" -eq 0 ]; then
   git fetch --quiet origin main
   [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" ] \
     || { echo "error: local main not at origin/main"; exit 1; }
-  if git rev-parse "v$VER" >/dev/null 2>&1; then
-    echo "error: tag v$VER already exists"; exit 1
+  if git rev-parse --verify "refs/tags/release-$VER" >/dev/null 2>&1; then
+    echo "error: tag release-$VER already exists"; exit 1
   fi
 fi
 
@@ -152,7 +153,7 @@ echo "==> pushing branch + opening PR"
 run "git push -u origin '$BRANCH'"
 run "gh pr create --base main --head '$BRANCH' \
   --title 'release: $VER' \
-  --body 'Single-purpose release PR for v$VER. After merge, push tag v$VER to trigger the draft release.'"
+  --body 'Single-purpose release PR for v$VER. After merge, create and push tag release-$VER to trigger the draft release.'"
 
 CREATED_BRANCH=0  # success — disarm rollback
 
@@ -161,6 +162,7 @@ cat <<EOF
 ==> done. Next steps:
   1. Review the PR (CHANGELOG highlights are stubbed — fill them in).
   2. Merge the PR.
-  3. git push origin v$VER
+  3. Update local main to the merged commit, then git tag release-$VER
+  4. git push origin release-$VER
      (release.yml will draft the GitHub release after CI is green.)
 EOF

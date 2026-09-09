@@ -122,3 +122,12 @@ build:
 `GBL: intercepted reserve token zeroing on oplusreserve1 LBA 1114; token preserved`
 
 That line appears when the relock path attempts to zero the token block.
+
+## Release convention
+
+Development and CI use `main`. Releases use an existing `release-X.Y.Z` tag
+matching `VERSION`; the release workflow checks and builds that exact commit,
+then creates a draft for review. Manual dispatch takes the same existing tag
+and does not create one. Historical `v...` tags and b4 checkpoints remain
+available, but do not trigger new releases. Artifact filenames and changelog
+version headings retain their existing version format.
