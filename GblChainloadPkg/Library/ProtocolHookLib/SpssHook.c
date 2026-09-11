@@ -145,9 +145,30 @@ InstallSpssHook (VOID)
   }
 
   Status = gBS->LocateProtocol (&gEfiSPSSProtocolGuid, NULL, (VOID **)&Spss);
+  if (Status == EFI_NOT_FOUND) {
+    /* SPSS protocol not published this boot — the ABL's SPU keymint mirror is
+     * unavailable. This is the BSP's "doesn't have support for sharing keymint
+     * info" path (QcomModulePkg KeymasterClient.c ShareKeyMintInfoWithSPU).
+     * Report NOT_FOUND; the caller (InstallAll) treats it as best-effort and
+     * continues. This is safe because the SPU keymint enforcement domain is
+     * dead on every target — on infiniti the protocol publishes but the SPU PIL
+     * image never loads (`pil-SPSS Failed to load metadata`); on macan/sm8845
+     * the protocol is absent (SPU fails PMIC init). With no live SPU domain,
+     * the KM/QSEECOM-side spoof is complete on its own, so an unhooked mirror is
+     * not a half-spoof. (See InstallAll.c step 4 for the full rationale.) */
+    GBL_INFO ("SpssHook: SPSS protocol not published — SPU keymint mirror "
+              "unavailable this boot\n");
+    return EFI_NOT_FOUND;
+  }
   if (EFI_ERROR (Status) || Spss == NULL) {
-    Print (L"SpssHook: LocateProtocol failed: %r\n", Status);
-    return Status;
+    /* A real failure — keep it distinct from honest NOT_FOUND so it is never
+     * mistaken for "this SoC has no SPU". Per the UEFI contract LocateProtocol
+     * returns EFI_SUCCESS only with a non-NULL interface; EFI_SUCCESS + NULL is
+     * a corrupt/invalid published-handle state, surfaced here as a device
+     * error rather than swallowed. */
+    EFI_STATUS RetStatus = EFI_ERROR (Status) ? Status : EFI_DEVICE_ERROR;
+    Print (L"SpssHook: LocateProtocol failed: %r (spss=%p)\n", RetStatus, Spss);
+    return RetStatus;
   }
 
   if (Spss->SPSSDxe_ShareKeyMintInfo == NULL) {

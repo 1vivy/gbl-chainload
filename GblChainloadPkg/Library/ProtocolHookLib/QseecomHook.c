@@ -42,6 +42,15 @@ HOOK_REENTRY_DEFINE (gQseecomStartGuard);
 STATIC UINT32 gPhoenixHandle  = (UINT32)-1;
 STATIC UINT32 gOplusSecHandle = (UINT32)-1;
 
+/* Track the keymaster TA handle so the mode-1 fakelock policy can target the
+ * KeyMaster device-state persist (cmd 0x203) precisely. KeyMaster occupies the
+ * 0x200-0x2FF KEYMASTER_UTILS_CMD_ID command space (BSP KeymasterClient.c) that
+ * no other hooked TA uses, so the handle is pinned by either QseecomStartApp
+ * ("keymaster"/"keymaster64") or the first cmd we see in that range — the
+ * latter matters because keymaster is loaded by LoadSecureApps before our
+ * StartApp hook installs (AppId 0xFFFF0001 on macan/sm8845). -1U == unknown. */
+STATIC UINT32 gKeymasterHandle = (UINT32)-1;
+
 /* OplusSec TA is identified at QseecomStartApp by 16-byte EFI_GUID rather
  * than ASCII name (Ghidra G1 on LinuxLoader_infiniti.efi mem:0007f1e0).
  * GUID literal: {E11DDA6A-651B-4AB4-B8C5-30B352B472E2} → little-endian
@@ -400,6 +409,27 @@ KmDecodeKnownCmd (
   }
 }
 
+/* TRUE iff CmdId is a KEYMASTER_UTILS cmd we have a decoded understanding of.
+   Used by the fakelock catch-net to flag everything else in the 0x200-0x2FF
+   space as an un-characterised candidate that could be a hidden RPMB-persist
+   path (the class that bricked macan via 0x203). Keep in sync with
+   KmDecodeKnownCmd's switch. */
+STATIC BOOLEAN
+KmIsRecognisedCmd (
+  IN UINT32 CmdId
+  )
+{
+  switch (CmdId) {
+    case 0x00000200: case 0x00000201: case 0x00000202:
+    case 0x00000203: case 0x00000204: case 0x00000207:
+    case 0x00000208: case 0x00000211: case 0x00000218:
+    case 0x00000219:
+      return TRUE;
+    default:
+      return FALSE;
+  }
+}
+
 STATIC EFI_STATUS EFIAPI
 HookedStartApp (
   IN  QCOM_QSEECOM_PROTOCOL *This,
@@ -461,6 +491,19 @@ HookedStartApp (
                 AppNameAscii, OutHandle);
     }
 
+    /* KeyMaster TA handle — used by the mode-1 fakelock policy to target the
+     * KM device-state persist (cmd 0x203). QseecomStartApp is idempotent and
+     * re-references the LoadSecureApps-preloaded app, so this fires even though
+     * keymaster started before our hook. HookedSendCmd also pins this lazily
+     * from the first 0x200-0x2FF cmd, covering the preload window. */
+    if (HasAsciiName &&
+        (AsciiStrCmp (AppNameAscii, "keymaster")   == 0 ||
+         AsciiStrCmp (AppNameAscii, "keymaster64") == 0)) {
+      gKeymasterHandle = OutHandle;
+      GBL_INFO ("qsee-start: tagged \"%a\" h=%u as KeyMaster\n",
+                AppNameAscii, OutHandle);
+    }
+
     /* OplusSec: AppName is a 16-byte EFI_GUID, not ASCII (Ghidra G1).
      * Gate the 16-byte CompareMem behind byte-by-byte prefix checks.
      * A u32 cast on a CHAR8* would (a) issue an unaligned load on
@@ -509,12 +552,55 @@ HookedSendCmd (
     CopyMem (&CmdId, SendBuf, sizeof (CmdId));
   }
 
+  /* Pin the keymaster handle lazily from the first cmd in the KEYMASTER_UTILS
+     0x200-0x2FF space (BSP KeymasterClient.c). keymaster is loaded by
+     LoadSecureApps before our StartApp hook, so on macan/sm8845 the first KM
+     traffic we intercept (an early cmd 0x203) precedes the StartApp tag — this
+     pins the handle in time to gate that very write. No other hooked TA uses
+     this cmd range, so the attribution is exact. */
+  if (gKeymasterHandle == (UINT32)-1 &&
+      CmdId >= 0x00000200u && CmdId <= 0x000002FFu) {
+    gKeymasterHandle = Handle;
+  }
+
   /* Fakelock policy: drop certain OplusSec commands before forwarding,
      including reentrant calls. */
   if (gManifest.WantFakelockHook &&
       Handle == gOplusSecHandle && Handle != (UINT32)-1) {
     EFI_STATUS FakeStatus;
     if (FakelockOverlay_ShouldDropQseeOplusSec (CmdId, &FakeStatus)) {
+      HookLeave (&gQseecomSendGuard);
+      return FakeStatus;
+    }
+  }
+
+  /* Fakelock policy: refuse the KeyMaster device-state persist (cmd 0x203,
+     WRITE_KM_DEVICE_STATE) so a spoofed locked RoT/boot-state cannot be
+     committed to RPMB. This is an OEM-added KM command (absent from the open
+     QcomModulePkg BSP) present on macan/sm8845 and absent on infiniti.
+     Evidence: infiniti's *validated* mode-1 drives a locked RoT/boot-state
+     (SET_ROT/SET_BOOT_STATE isUnlocked=0) every boot and does NOT brick,
+     issuing 0x203 zero times — the locked state stays ephemeral. macan adds
+     0x203, the one KM device-state writer infiniti lacks; suppressing it makes
+     macan mode-1 converge onto infiniti's safe behavior. (0x203 -> RPMB is
+     inferred from the command name + the reported brick, not yet confirmed by
+     disassembly; see docs/project/re-findings.md "Device: macan / sm8845".)
+     Gated to the keymaster TA handle and to fakelock builds only, so mode-0
+     (honest) and mode-2 (profile-spoof, no fakelock) are untouched. */
+  if (gManifest.WantFakelockHook &&
+      Handle == gKeymasterHandle && Handle != (UINT32)-1) {
+    EFI_STATUS FakeStatus;
+    if (FakelockOverlay_ShouldDropKmDeviceStateWrite (CmdId, &FakeStatus)) {
+      /* Synthesize a success TA response. The KM response struct's word 0 is
+         the TA status (0 == success); an ABL that checks the TA response in
+         addition to the QSEECOM transport status would otherwise read stale
+         RspBuf bytes after our swallow and treat the synthetic success as a KM
+         failure. Zeroing the whole response buffer guarantees status word 0
+         and an empty body, which is the correct shape for a write that
+         produced no payload. */
+      if (RspBuf != NULL && RspLen > 0) {
+        ZeroMem (RspBuf, RspLen);
+      }
       HookLeave (&gQseecomSendGuard);
       return FakeStatus;
     }
@@ -556,11 +642,26 @@ HookedSendCmd (
     DumpChunked (Handle, "r", RspBuf,  RspLen,  192);
   }
 
-  /* T1.5: KeyMaster cmd-id structured decoder. Emits one extra
-   * qsee-km line for documented cmds (0x200/0x201/0x208/0x211/0x219);
-   * silent for everything else. The generic qsee line above is the
-   * source-of-truth for raw bytes; this is interpretation. */
+  /* T1.5: KeyMaster cmd-id structured decoder. Emits one extra qsee-km line
+   * for documented cmds (0x200/0x201/0x202/0x203/0x204/0x207/0x208/0x211/
+   * 0x218/0x219 — kept in sync with KmIsRecognisedCmd); silent for everything
+   * else. The generic qsee line above is the source-of-truth for raw bytes;
+   * this is interpretation. */
   KmDecodeKnownCmd (CmdId, Handle, SendBuf, SendLen, RspBuf, RspLen, Status);
+
+  /* Fakelock catch-net: surface any KM-space command we don't explicitly
+     recognise so a new RPMB lock-state persist path (the class that bricked
+     macan via 0x203) can never slip through silently. It shows up in --debug
+     diags as an un-guarded device-state write candidate for RE rather than
+     persisting a fake-locked record unobserved. Log-only — no behavior change. */
+  if (gManifest.WantFakelockHook &&
+      Handle == gKeymasterHandle && Handle != (UINT32)-1 &&
+      CmdId >= 0x00000200u && CmdId <= 0x000002FFu &&
+      !KmIsRecognisedCmd (CmdId)) {
+    GBL_INFO ("qsee-km | cmd=0x%08x | h=%u | UNRECOGNISED KM cmd under fakelock "
+              "— candidate un-guarded device-state write (RE) | sl=%u | st=%r\n",
+              CmdId, Handle, SendLen, Status);
+  }
 
   /* OplusSec cmd-id decoder, gated by handle (Ghidra G1).
    * Cmd-ids occupy a low integer space and would collide with KeyMaster

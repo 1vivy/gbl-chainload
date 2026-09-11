@@ -22,11 +22,14 @@
   slot via SCM/QSEECOM.
 
   When the fakelock-hook cap is set in gManifest, READ_CONFIG and
-  VBDeviceInit mutate ABL's downstream view to locked/non-critical-locked,
-  while WRITE_CONFIG and VBDeviceResetState are swallowed so the fakelock
-  overlay cannot persist lock-state experiments back to RPMB.  When the
-  cap is clear, this hook only observes and passes through VB lock-state
-  traffic unchanged.
+  VBDeviceInit mutate ABL's downstream view to locked/non-critical-locked.
+  WRITE_CONFIG is HEALED toward unlocked and forwarded — the canonical
+  DeviceInfo record is rewritten so the last write to land in RPMB leaves the
+  device recoverable (brick-safety invariant: persistence may only move toward
+  unlocked, never toward locked). VBDeviceResetState is swallowed (no payload
+  to heal; a reset could only re-assert a locked default). When the cap is
+  clear, this hook only observes and passes through VB lock-state traffic
+  unchanged.
 **/
 
 #include <Uefi.h>
@@ -131,9 +134,16 @@ HookedVBRwDeviceState (
     return EFI_NOT_READY;
   }
   if (gManifest.WantFakelockHook && Op == WRITE_CONFIG) {
-    Status = FakelockOverlay_OnVbWriteConfig ((UINT32)Op, Buf, BufLen);
-    HookLeave (&gVbGuard);
-    return Status;
+    /* Heal the canonical device-state record toward unlocked, then forward it,
+       so the last write to land in RPMB leaves the device recoverable even if
+       our chain-load is absent on the next boot. If the buffer can't be healed
+       (NULL / too small) the overlay returns FALSE and we fail safe by
+       swallowing — never forward a record we can't prove is unlocked. */
+    if (!FakelockOverlay_OnVbWriteConfig ((UINT32)Op, Buf, BufLen)) {
+      HookLeave (&gVbGuard);
+      return EFI_SUCCESS;
+    }
+    /* fall through: forward the healed (unlocked) buffer to persistence. */
   }
 
   if (!First) {
@@ -141,6 +151,10 @@ HookedVBRwDeviceState (
     /* Fakelock policy enforced on reentry too — same as first-entry path. */
     if (gManifest.WantFakelockHook && Op == READ_CONFIG) {
       FakelockOverlay_OnVbReadConfig_Post (Status, Buf, BufLen);
+    }
+    if (gManifest.WantFakelockHook && Op == WRITE_CONFIG && EFI_ERROR (Status)) {
+      GBL_INFO ("vb-fakelock | WRITE_CONFIG | healed forward FAILED (%r) — RPMB "
+                "self-heal did not land (reentry)\n", Status);
     }
     HookLeave (&gVbGuard);
     return Status;
@@ -157,6 +171,10 @@ HookedVBRwDeviceState (
 
   if (gManifest.WantFakelockHook && Op == READ_CONFIG) {
     FakelockOverlay_OnVbReadConfig_Post (Status, Buf, BufLen);
+  }
+  if (gManifest.WantFakelockHook && Op == WRITE_CONFIG && EFI_ERROR (Status)) {
+    GBL_INFO ("vb-fakelock | WRITE_CONFIG | healed forward FAILED (%r) — RPMB "
+              "self-heal did not land this write\n", Status);
   }
 
   if (Op != WRITE_CONFIG) {
