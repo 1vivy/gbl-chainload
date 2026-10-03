@@ -1,4 +1,4 @@
-//! Host-only Mode 2 patch: make both ABL BCC population paths use Normal DICE mode.
+//! Host ABL patch: make both BCC population paths use Normal DICE mode.
 //!
 //! The source has three choices in `PopulateBccParams` and a separate Debug
 //! assignment in `SetDummyBccParams`. In the supported ABL PEs the former is
