@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Host ABL patching now forces both BCC DICE mode paths to Normal for every
+  prepared image, using unique code anchors. Unknown or ambiguous ABLs fail
+  closed; the firmware on-device dynamic patch table is unchanged.
+
 ## v2.3.4 — 2026-05-24
 
 Highlights:

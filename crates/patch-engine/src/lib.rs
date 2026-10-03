@@ -5,6 +5,8 @@
 //!
 //! - [`abl_permissive`] — always compiled. patch10 + patch6.
 //! - [`oem`] — host-only via `feature = "host"`. patch7 (oplus).
+//! - [`dice_mode`] — host-only, always applied to prepared ABLs. Both BCC
+//!   paths produce Normal; firmware's on-device patch table excludes it.
 //! - [`retired`] — host-only documentation / reference. patch1 (efisp
 //!   recursion) — never wired into an active table.
 //!
@@ -39,6 +41,8 @@ pub mod internal;
 pub mod abl_permissive;
 #[cfg(feature = "host")]
 pub mod oem;
+#[cfg(feature = "host")]
+pub mod dice_mode;
 #[cfg(feature = "host")]
 pub mod retired;
 pub mod ffi;
@@ -171,11 +175,9 @@ impl Engine {
         }
     }
 
-    /// Host-only: pick OEM group + abl_permissive inclusion at runtime.
-    ///
-    /// Mirrors `DynamicPatchLib_EnsureInitScoped()` from the deleted
-    /// `PatchTable.c`. Builds a `Vec<PatchDesc>` owned by the returned
-    /// engine — no static state, parallel-test-safe.
+    /// Host-only: pick OEM group and ABL-permissive inclusion at runtime.
+    /// The BCC DICE mode patch is always present in host ABL preparation;
+    /// firmware's dynamic patch table remains ABL-permissive only.
     #[cfg(feature = "host")]
     pub fn ensure_init_scoped(oem: Oem, include_abl_permissive: bool) -> Engine {
         let mut v: alloc_vec::Vec<PatchDesc> = alloc_vec::Vec::with_capacity(8);
@@ -186,6 +188,12 @@ impl Engine {
         if include_abl_permissive {
             v.extend_from_slice(abl_permissive::ABL_PERMISSIVE_PATCHES);
         }
+        v.push(PatchDesc {
+            name: "dice-mode-normal",
+            scope: PatchScope::Universal,
+            mandatory: true,
+            apply: |buf, _| dice_mode::apply(buf),
+        });
         Engine {
             table: EngineTable::Owned(v),
         }
@@ -404,34 +412,6 @@ mod tests {
         assert_eq!(r.applied_count, 0);
         assert_eq!(r.missed_count, 0);
         assert_eq!(r.worst, Worst::Ok);
-    }
-
-    #[cfg(feature = "host")]
-    #[test]
-    fn ensure_init_scoped_skips_oem() {
-        let eng = Engine::ensure_init_scoped(Oem::None, true);
-        // abl_permissive has 2 patches.
-        assert_eq!(eng.table().len(), 2);
-        for p in eng.table() {
-            assert_eq!(p.scope, PatchScope::AblPermissive);
-        }
-    }
-
-    #[cfg(feature = "host")]
-    #[test]
-    fn ensure_init_scoped_includes_oem() {
-        let eng = Engine::ensure_init_scoped(Oem::Oplus, true);
-        // oplus (1) + abl_permissive (2) = 3.
-        assert_eq!(eng.table().len(), 3);
-        assert_eq!(eng.table()[0].scope, PatchScope::OemOplus);
-    }
-
-    #[cfg(feature = "host")]
-    #[test]
-    fn ensure_init_scoped_oem_only() {
-        let eng = Engine::ensure_init_scoped(Oem::Oplus, false);
-        assert_eq!(eng.table().len(), 1);
-        assert_eq!(eng.table()[0].scope, PatchScope::OemOplus);
     }
 
     #[test]

@@ -154,8 +154,8 @@ def main():
         # 1. unwrap the ABL PE out of the partition image
         run([gbl_bin, "unwrap", args.abl, extracted], "gbl unwrap")
 
-        # 2. patch — abl_permissive is always applied; --oem is passed
-        # through for any mode (decoupled from --mode post-Task-13).
+        # 2. patch — abl_permissive and DICE Normal apply for every mode;
+        # --oem adds the selected OEM group independently of mode.
         patch_argv = [gbl_bin, "patch", "--in", extracted, "--out", patched]
         if args.oem:
             patch_argv += ["--oem", args.oem]

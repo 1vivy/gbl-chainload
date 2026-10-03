@@ -5,13 +5,15 @@ SoC family as the canoe/OPlus targets), HyperOS OS3.0.23 / Android 16,
 SPL 2026-01-01. This is the first non-OPlus mode-2 target.
 
 What mode 2 gives myron: **custom firmware with stock-looking
-attestation**. The ABL stays honest (unlocked, real verification results —
-no orange-state-hiding patch, by design), while the QSEE/SPSS hooks
-rewrite the KeyMaster / SPU payloads in flight with values derived from
-the stock vbmeta (`is_unlocked=0`, color GREEN, stock ROT/public-key/VBH
-digests). The stock bootloader flow that the user previously validated
-via the gbl_root_canoe "unlockmodefix" static patch only worked on stock
-firmware; mode 2 is the custom-ROM path.
+attestation inputs**. The ABL remains unlocked and retains its unlocked
+warning (no orange-state-hiding patch), but its BCC DICE mode is forced
+to Normal. The QSEE/SPSS hooks rewrite the KeyMaster / SPU payloads in
+flight with values derived from the stock vbmeta (`is_unlocked=0`, color
+GREEN, stock ROT/public-key/VBH digests). This is not proof that remote
+attestation or RKP will accept the resulting chain. The stock bootloader
+flow that the user previously validated via the gbl_root_canoe
+"unlockmodefix" static patch only worked on stock firmware; mode 2 is
+the custom-ROM path.
 
 Scope note: this is the **host-side flow** (build → package → flash by
 hand). The recovery-ZIP / on-device profile lifecycle remains deferred
@@ -76,8 +78,10 @@ Notes:
   test fixtures). When an OTA changes the ABL or vbmeta, re-run with the
   new stock images — the profile is per-OTA by design.
 - The chain run: `gbl unwrap` → `gbl patch` (abl_permissive: patch6 +
-  patch10) → `gbl mode2 derive+compile` (init_boot fallback) →
-  `gbl pack --manifest 0x02` → concat.
+  patch10, plus both BCC DICE paths forced to Normal on every host-patched
+  ABL) → `gbl mode2 derive+compile` (init_boot fallback) →
+  `gbl pack --manifest 0x02` → concat. A missing or ambiguous BCC
+  anchor aborts packaging without an output.
 
 Verify before flashing:
 

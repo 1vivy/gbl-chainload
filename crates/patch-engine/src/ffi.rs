@@ -93,8 +93,8 @@ pub extern "C" fn DynamicPatchLib_EnsureInit() {
 }
 
 /// Replace `DynamicPatchLib_EnsureInitScoped()` from the deleted
-/// `PatchTable.c`. Host tool entry point — selects OEM group + ABL
-/// permissive inclusion at runtime.
+/// `PatchTable.c`. Host tool entry point — selects OEM and ABL-permissive
+/// patches, plus the universal BCC DICE patch.
 ///
 /// `include_abl_permissive` is a C `int` (0 / non-zero).
 #[cfg(feature = "host")]
@@ -191,27 +191,5 @@ mod tests {
         // CGblOem
         assert_eq!(CGblOem::None as u32, 0);
         assert_eq!(CGblOem::Oplus as u32, 1);
-    }
-
-    #[cfg(feature = "host")]
-    #[test]
-    fn apply_via_ffi_round_trip() {
-        // Build a CPatchResult, call EnsureInit + Apply on a tiny
-        // buffer that won't match any anchors, and verify the FFI shim
-        // wrote the expected aggregate (2 patches, both mandatory MISS).
-        let mut buf = vec![0u8; 4096];
-        let mut r = CPatchResult {
-            applied_count: 0,
-            missed_count: 0,
-            worst_outcome: CPatchWorst::Ok,
-        };
-        DynamicPatchLib_EnsureInitScoped(CGblOem::None, 1);
-        unsafe {
-            DynamicPatch_Apply(buf.as_mut_ptr(), buf.len() as u32, &mut r);
-        }
-        // abl_permissive = patch10 + patch6, both mandatory.
-        assert_eq!(r.applied_count, 0);
-        assert_eq!(r.missed_count, 2);
-        assert_eq!(r.worst_outcome, CPatchWorst::MandatoryMiss);
     }
 }

@@ -177,14 +177,15 @@ recovery-graft ZIP, layered on top of the cache-ABL work.
   breaks FBE key wrapping is being investigated as a separate task; findings
   will land in `docs/project/fbe-set-seed-investigation.md`. Mode-2 does not
   mutate `0x218` regardless.
-- **DICE Mode debug-poison — deferred.** `AvbPopulateBccParams.c` sets the DICE
-  mode to `kDiceModeDebug` on the unlocked path at two sites — `PopulateBccParams`
-  (`:147`) and `SetDummyBccParams` (`:16`). This poisons the BCC/DICE chain that
-  feeds RKP. The `bcc_params->Mode` field is set in ABL code and does not travel
-  over the `0x219` wire, so it cannot be fixed by a protocol hook — it requires
-  an ABL code patch (`kDiceModeDebug` → `kDiceModeMaintenance` at both sites),
-  which would live in the host `abl-patcher`. Left out of v1; the exact patch is
-  recorded here so it can be added if attestation needs it.
+- **DICE mode handling (implemented after v1).** `AvbPopulateBccParams.c`
+  chooses Debug on the unlocked path in `PopulateBccParams` and separately
+  in `SetDummyBccParams`. The mode is set inside ABL, not on the `0x219`
+  wire. Host `gbl patch` anchors both compiled code sites by their BCC log
+  strings, forces Normal for the main selector, and makes the dummy
+  Normal-mode write unconditional after zeroing on every host-patched ABL.
+  Unknown or ambiguous builds fail closed. Firmware's on-device dynamic
+  patch table remains unchanged. Normal mode in an unlocked ABL does not
+  by itself establish authentic hardware attestation.
 - **Anti-rollback / version-set SCM SmcIds — closed.** Dropped universally by `UniversalBaseline.c`; see [`2026-05-20-universal-tz-rollback-drop-design.md`](2026-05-20-universal-tz-rollback-drop-design.md).
 - **No autonomous non-HLOS flashing.** The EFISP write stays a user-driven ZIP
   step, consistent with the project safety boundary.
@@ -225,7 +226,7 @@ Swept from `QcomModulePkg` (`KeymasterClient.c`, `AvbPopulateBccParams.c`,
 | SCM → TZ | `TZ_BLOW_SW_FUSE 0x02000801` | drop — universal baseline already does |
 | | `TZ_INFO_GET_SECURE_STATE 0x02000604` | observe only |
 | | `TZ_UPDATE_ROLLBACK_VERSION_ID 0x0200011E`, `TZ_UPDATE_ROLLBACK_VERSION_IF_AB_PARTITION_FEATURE_ENABLED_ID 0x32000110` | drop — universal baseline (UniversalBaseline.c) |
-| ABL internal code | DICE `Mode` (`AvbPopulateBccParams.c`, 2 sites) | deferred (§7) |
+| ABL internal code | DICE `Mode` (`AvbPopulateBccParams.c`, 2 sites) | universal host ABL patch (§7) |
 
 All other `IsUnlocked()`-gated divergences either feed a buffer the QSEE/SPSS
 hooks already rewrite (`VerifiedBoot.c` device-state, `KeymasterClient.c` RoT
